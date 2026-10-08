@@ -2275,5 +2275,24 @@ $('#instGo').onclick=async()=>{if(!INSTALAR)return;INSTALAR.prompt();try{await I
 $('#instNo').onclick=()=>{lsSet('cop-app-instalar-no',true);$('#instCard').hidden=true};
 if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127\.0\.0\.1)$/.test(location.hostname)))
   try{navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}
+// dudas: debajo de las 4 opciones, una caja para preguntar a Claude. Abre Claude (con el plan de Daniel) con la pregunta escrita
+// y el vehículo del COP abierto como contexto; la pregunta queda copiada por si Claude no la recoge del enlace
+{const st=document.createElement('style');
+  st.textContent='.dudas{margin-top:14px}.dudas textarea{width:100%;min-height:64px;margin-top:6px;padding:10px 12px;font:inherit;font-size:15px;border:0;border-radius:12px;background:var(--field,var(--bg));color:var(--ink);resize:vertical}.dudas .acts{display:flex;flex-wrap:wrap;gap:8px}.dudas .acts button{margin-top:4px}';
+  document.head.appendChild(st);
+  const c=document.createElement('div');c.className='curcard dudas';c.id='dudaCard';
+  c.innerHTML='<span class="k">¿Alguna duda?</span><b>Pregúntale a Claude</b><textarea id="dudaQ" rows="2" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?"></textarea><div class="acts"><button type="button" class="primary" id="dudaGo">Preguntar a Claude</button></div><span class="m">Se abre Claude con tu pregunta. Necesita internet.</span>';
+  $('#homeNote').before(c);}
+$('#dudaGo').onclick=async()=>{
+  const q=$('#dudaQ').value.trim();if(!q){$('#dudaQ').focus();return}
+  if(!navigator.onLine){showMsg('Para preguntar a Claude hace falta internet.',true);return}
+  const v=re=>{const s=findSlot(re);return s?String(state.v['s'+s.id]||'').replace(/\s+/g,' ').trim():''};
+  const veh=[v(/^Marca \(fase/i),v(/^Denominaci[oó]n comercial/i)].filter(Boolean).join(' '),cat=v(/^Categor[ií]a del veh/i);
+  const ctx=veh||cat?`\n\n(Estoy rellenando un control COP PRC-08.02${veh?' de un '+veh:''}${cat?', categoría '+cat:''}.)`:'';
+  const t=q+ctx;
+  try{await navigator.clipboard.writeText(t)}catch(e){}
+  window.open('https://claude.ai/new?q='+encodeURIComponent(t),'_blank','noopener');
+  showMsg('Abriendo Claude con tu pregunta. Si no sale escrita, mantén pulsado en el cuadro de Claude y pega: ya está copiada.');
+};
 </script>
 </body></html>
