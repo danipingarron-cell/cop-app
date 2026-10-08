@@ -2208,7 +2208,13 @@ readCoc=async function(files){
       OCR_AVISO=null;
     }
     const data=CocLector.leer(items);
-    if(!CocLector.cuantos(data)){showMsg(`No he encontrado datos del COC en «${nombre}». ${COC_FOTO?'Prueba con una foto más cerca y con buena luz, o con el PDF.':'Revisa que sea el COC del vehículo.'}`,true);return}
+    if(!CocLector.cuantos(data)){
+      const txt=items.map(i=>i.s).join(' ');
+      // la hoja de CO2 (información para el cliente) a veces llega en lugar del COC
+      if(/Kundeninformation|Customer\s+information|CO2[-\s]*Emissionen|CO2\s+emissions|informaci[oó]n\s+(para\s+el|al)\s+cliente/i.test(txt))
+        showMsg(`«${nombre}» no es el COC: es la hoja de emisiones de CO2 (información para el cliente). Hace falta el certificado de conformidad (COC), el que trae los puntos 0.1 Marca, 0.2 Tipo, 16.1 Masa máxima…`,true);
+      else showMsg(`No encuentro en «${nombre}» los puntos del COC (0.1 Marca, 0.2 Tipo, 16.1 Masa máxima…). Comprueba que sea el certificado de conformidad.${COC_FOTO?' Si lo es, prueba con una foto más cerca y con buena luz.':''}`,true);
+      return}
     showCoc(data,nombre);
     $('#msg').hidden=true;
   }catch(e){
