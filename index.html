@@ -1538,13 +1538,14 @@ Extrae estos datos y responde SOLO con un objeto JSON con exactamente estas clav
  "mmr_semirremolque": "masa remolcable máxima, semirremolque (punto 18.2), kg",
  "mmr_eje_central": "masa remolcable máxima, remolque de eje central (punto 18.3), kg",
  "mmr_sin_frenos": "masa remolcable máxima, remolque sin frenos (punto 18.4), kg",
- "capacidad_deposito": "capacidad del depósito de combustible, litros"}
+ "capacidad_deposito": "capacidad del depósito de combustible, litros",
+ "distancia_ejes": "array con la distancia entre ejes consecutivos en orden 1-2, 2-3, 3-4 (punto 4, o 4.1 si hay más de dos ejes), mm"}
 Los números van sin unidades ni separador de miles (26000, no "26.000 kg"). Si un punto da varios valores, usa el máximo técnicamente admisible. Los textos exactamente como aparecen (respeta mayúsculas y minúsculas).`;
 function cocTargets(){
   const ident=model.sections.find(s=>/IDENTIFICACI/.test(s.title)).title;
   const one=(re,extra)=>model.slots.find(s=>!s.hidden&&re.test(s.label)&&(!extra||extra(s)));
   const row=re=>model.slots.filter(s=>!s.hidden&&re.test(s.rowLabel||''));
-  const mm=row(/^MMTA en cada eje/), mr=row(/^MMR/);
+  const mm=row(/^MMTA en cada eje/), mr=row(/^MMR/), de=row(/^Distancia entre ejes/);
   const T=[
     ['marca','Marca',one(/^Marca \(fase/)],
     ['denominacion_comercial','Denominación comercial',one(/^Denominaci/,s=>s.sec===ident)],
@@ -1554,6 +1555,7 @@ function cocTargets(){
     ['categoria','Categoría',one(/^Categor/,s=>s.sec===ident)],
     ['homologacion','Nº de homologación fase anterior',one(/Homologaci[oó]n fase anterior/)],
     ['bastidor','Nº de bastidor',one(/bastidor/i,s=>s.sec===ident)],
+    ...de.map((s,i)=>[['distancia_ejes',i],`Distancia entre ejes ${s.label}`,s]),
     ['mmta_total','MMTA total',one(/^MMTA total$/)],
     ...mm.map((s,i)=>[['mmta_ejes',i],`MMTA eje ${i+1}`,s]),
     ['mmtc','MMTC',one(/^MMTC$/)],
@@ -2043,7 +2045,7 @@ const CocLector=(()=>{
     '0.10':[/identificaci[oó]n\s+del\s+veh[ií]culo\s*:/i,/Localizaci/i],
     '16.1':[/m[aá]xima\s+en\s+carga\s+t[eé]cnicamente/i,/prevista/i],'16.2':[/admisible\s+en\s+cada\s+eje/i,/prevista|grupo/i],
     '16.4':[/admisible\s+del\s+conjunto/i,/prevista/i],'18.1':[/barra\s*de\s*tracci[oó]n/i,/r[ií]gida/i],'18.2':[/(^|\s)Semirremolque\s*:/i],
-    '18.3':[/eje\s*central/i],'18.4':[/sin\s*frenos/i]};
+    '18.3':[/eje\s*central/i],'18.4':[/sin\s*frenos/i],'4.1':[/(Espacio|Separaci[oó]n)\s+entre\s+(los\s+)?ejes/i]};
   function campos(T){
     T=T.map(t=>t.replace(/[|\[\]{}]/g,' ').replace(/\s+/g,' ').trim());
     const pos=n=>{const re=new RegExp('^'+n.replace(/\./g,'\\.')+'\\.?\\s');let i=T.findIndex(t=>re.test(t));
@@ -2084,6 +2086,16 @@ const CocLector=(()=>{
     r.mmr_eje_central=kg(valor('18.3'),45000);
     r.mmr_sin_frenos=kg(valor('18.4'),3500);
     const dep=T.join('\n').match(/dep[oó]sito[^:\n]*:\s*\(?\s*l?\s*\)?\s*(\d{2,4})/i);r.capacidad_deposito=dep?+dep[1]:null;
+    // distancia entre ejes en mm (punto 4, o 4.1 con varios ejes: «1-2: 3900 2-3: 1370»), en orden 1-2, 2-3, 3-4
+    const dist=[],enRango=v=>v!==null&&v>=500&&v<=15000;
+    const i41=pos('4.1');
+    if(i41>=0){const b=[tras(T[i41]),...bloque(i41).slice(1)].join(' ');
+      for(const m of b.matchAll(/(?:^|\s)(\d)\s*[-–]\s*(\d)\s*[:=]?\s*(\d[ .]\d{3}|\d{3,5})(?!\d)/g)){const a=+m[1],v=num(m[3]);if(+m[2]===a+1&&a>=1&&a<=3&&enRango(v)&&!dist[a-1])dist[a-1]=v}
+      if(!dist.length)[...tras(T[i41]).matchAll(/(\d[ .]\d{3}|\d{3,5})(?!\d)/g)].map(m=>num(m[1])).filter(enRango).slice(0,3).forEach((v,k)=>dist[k]=v)}
+    if(!dist[0]){let i4=T.findIndex(t=>/^4\.?\s/.test(t)&&/ejes|wheel|axle|radstand|empattement/i.test(t));
+      if(i4<0)i4=T.findIndex(t=>/Distancia\s+entre\s+ejes/i.test(t)&&!/^4\.1/.test(t));
+      const v=i4<0?null:num(tras(T[i4]));if(enRango(v))dist[0]=v}
+    r.distancia_ejes=dist.length?Array.from(dist,v=>v===undefined?null:v):null;
     return r;
   }
   const leer=items=>campos(lineas(items));
