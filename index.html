@@ -279,7 +279,7 @@ button.linkb{align-self:center;border:0;background:none;box-shadow:none;color:va
   <section class="home" id="home" aria-label="Inicio">
     <div id="homeMain">
       <div class="swipe" id="curSwipe" hidden>
-        <button type="button" class="swdel" id="curDel" aria-label="Borrar este COP"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg><span>Borrar</span></button>
+        <button type="button" class="swdel" id="curDel" aria-label="Quitar este COP del inicio (sigue en Cargar COP)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg><span>Quitar</span></button>
         <div class="curcard" id="curCard" hidden>
           <span class="k">COP abierto</span>
           <b id="curVeh"></b>
@@ -1907,7 +1907,7 @@ $('#cocbtn').textContent='Añadir COC';
 /* ---------- botones ---------- */
 $('#toHome').onclick=()=>{flush();vista('inicio')};
 $('#curGo').onclick=()=>vista('cop',POS.id&&CUR&&POS.id===(CUR.id||CUR.prueba)?POS.y:0); // vuelve a donde estabas
-// borrar el COP abierto desde el inicio: deslizando la tarjeta a la izquierda o manteniéndola pulsada sale la papelera
+// quitar el COP abierto del inicio: deslizando la tarjeta a la izquierda o manteniéndola pulsada sale la papelera
 const SW={x:0,y:0,dx:0,on:false,mov:false,lp:null,ign:false};
 function cerrarSwipe(){const w=$('#curSwipe');w.classList.remove('open','drag');$('#curCard').style.transform=''}
 function abrirSwipe(){const w=$('#curSwipe');w.classList.remove('drag');w.classList.add('open');$('#curCard').style.transform='translateX(-96px)'}
@@ -1925,12 +1925,19 @@ function abrirSwipe(){const w=$('#curSwipe');w.classList.remove('drag');w.classL
   c.addEventListener('click',e=>{if(SW.ign){SW.ign=false;e.stopPropagation();e.preventDefault();return}
     if(w.classList.contains('open')){e.stopPropagation();e.preventDefault();cerrarSwipe()}},true);
   document.addEventListener('pointerdown',e=>{if(w.classList.contains('open')&&!w.contains(e.target))cerrarSwipe()});}
-$('#curDel').onclick=()=>{
-  if(!CUR){cerrarSwipe();return}
-  if(CUR.prueba){ask('Cerrar COP de prueba',`<p>Se cierra «${esc(CUR.prueba)}». Puedes volver a abrirla en «Cargar COP».</p>`,[['Cancelar',null,cerrarSwipe],['Cerrar','primary',()=>{CUR=null;curSave();state=vacio();_save();fillUI();renderHome()}]]);return}
-  const d={id:CUR.id,...infoCur()};
-  ask('Borrar COP',`<p>Se borra «${esc(titulo(d))}» de tu lista. No se puede deshacer.</p>`,[['Cancelar',null,cerrarSwipe],['Borrar','primary',async()=>{await borrarDoc(d);renderHome()}]]);
-};
+// la papelera solo quita el COP del inicio: sigue guardado y se vuelve a abrir desde «Cargar COP»
+async function quitarDelInicio(){
+  if(!CUR){cerrarSwipe();renderHome();return}
+  const nombre=CUR.prueba||titulo(infoCur());
+  if(!CUR.prueba){await flush();
+    if(DIRTY||SYNC_ERR){cerrarSwipe();showMsg('No se ha podido guardar este COP en «Cargar COP», así que sigue en el inicio. Vuelve a probar en un momento.',true);return}}
+  const c=$('#curCard');c.style.transform='translateX(-110%)';
+  await new Promise(r=>setTimeout(r,180));
+  CUR=null;DIRTY=false;curSave();state=vacio();_save();fillUI();renderHome();renderMis();
+  showMsg(`Quitado del inicio: ${nombre}. Lo tienes en «Cargar COP».`);
+}
+{let hecho=0;const b=$('#curDel'),go=e=>{e.preventDefault();e.stopPropagation();if(Date.now()-hecho<800)return;hecho=Date.now();quitarDelInicio()};
+  b.addEventListener('click',go);b.addEventListener('pointerup',e=>{if(e.pointerType!=='mouse')go(e)});} // en el móvil, al levantar el dedo
 $('#tNuevo').onclick=async()=>{
   await READY;const habia=!!CUR&&!CUR.prueba&&hasData(state);
   abrirEstado(vacio(),nuevoCur('nuevo'));
