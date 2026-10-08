@@ -247,6 +247,14 @@ button.linkb{align-self:center;border:0;background:none;box-shadow:none;color:va
 .cocnew{margin-top:12px;border-left-color:var(--ok,var(--accent))}
 .cocnew .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .cocnew .acts button{margin-top:0}
+/* COP abierto: deslizar a la izquierda o mantener pulsado enseña la papelera */
+.swipe{position:relative;border-radius:16px;overflow:hidden}
+.swipe[hidden]{display:none}
+.swipe .curcard{position:relative;transition:transform .2s ease;touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.swipe.drag .curcard{transition:none}
+.swdel{position:absolute;top:0;right:0;bottom:0;width:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:0;border:0;border-radius:0;background:var(--bad);color:#fff;font-size:13px;font-weight:600;visibility:hidden}
+.swipe.open .swdel,.swipe.drag .swdel{visibility:visible}
+.swdel svg{width:26px;height:26px}
 </style>
 <div class="wrap">
   <header class="bar">
@@ -270,11 +278,14 @@ button.linkb{align-self:center;border:0;background:none;box-shadow:none;color:va
   <div id="msg" class="msg" hidden></div>
   <section class="home" id="home" aria-label="Inicio">
     <div id="homeMain">
-      <div class="curcard" id="curCard" hidden>
-        <span class="k">COP abierto</span>
-        <b id="curVeh"></b>
-        <span class="m" id="curInfo"></span>
-        <button type="button" class="primary" id="curGo">Seguir rellenando</button>
+      <div class="swipe" id="curSwipe" hidden>
+        <button type="button" class="swdel" id="curDel" aria-label="Borrar este COP"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg><span>Borrar</span></button>
+        <div class="curcard" id="curCard" hidden>
+          <span class="k">COP abierto</span>
+          <b id="curVeh"></b>
+          <span class="m" id="curInfo"></span>
+          <button type="button" class="primary" id="curGo">Seguir rellenando</button>
+        </div>
       </div>
       <div class="curcard cocnew" id="cocNew" hidden>
         <span class="k">COC en el chat</span>
@@ -1863,7 +1874,7 @@ function abrirEstado(st,cur){
 }
 function renderHome(){
   const ab=!!CUR&&(!!CUR.prueba||hasData(state));
-  $('#curCard').hidden=!ab;
+  $('#curCard').hidden=!ab;$('#curSwipe').hidden=!ab;cerrarSwipe();
   if(ab){
     if(model)refresh();
     $('#curVeh').textContent=CUR.prueba||titulo(infoCur());
@@ -1896,6 +1907,30 @@ $('#cocbtn').textContent='Añadir COC';
 /* ---------- botones ---------- */
 $('#toHome').onclick=()=>{flush();vista('inicio')};
 $('#curGo').onclick=()=>vista('cop',POS.id&&CUR&&POS.id===(CUR.id||CUR.prueba)?POS.y:0); // vuelve a donde estabas
+// borrar el COP abierto desde el inicio: deslizando la tarjeta a la izquierda o manteniéndola pulsada sale la papelera
+const SW={x:0,y:0,dx:0,on:false,mov:false,lp:null,ign:false};
+function cerrarSwipe(){const w=$('#curSwipe');w.classList.remove('open','drag');$('#curCard').style.transform=''}
+function abrirSwipe(){const w=$('#curSwipe');w.classList.remove('drag');w.classList.add('open');$('#curCard').style.transform='translateX(-96px)'}
+{const c=$('#curCard'),w=$('#curSwipe');
+  c.addEventListener('pointerdown',e=>{if(e.button)return;SW.x=e.clientX;SW.y=e.clientY;SW.dx=0;SW.on=true;SW.mov=false;SW.ign=false;
+    clearTimeout(SW.lp);SW.lp=setTimeout(()=>{if(SW.on&&!SW.mov){SW.ign=true;abrirSwipe();try{navigator.vibrate&&navigator.vibrate(15)}catch(e){}}},550)});
+  c.addEventListener('pointermove',e=>{if(!SW.on)return;const dx=e.clientX-SW.x,dy=e.clientY-SW.y;
+    if(!SW.mov&&Math.hypot(dx,dy)>8){clearTimeout(SW.lp);if(Math.abs(dx)<=Math.abs(dy)){SW.on=false;return}SW.mov=true;w.classList.add('drag');try{c.setPointerCapture(e.pointerId)}catch(_){}}
+    if(SW.mov){const base=w.classList.contains('open')?-96:0;SW.dx=dx;c.style.transform=`translateX(${Math.max(-140,Math.min(0,base+dx))}px)`}});
+  const fin=()=>{clearTimeout(SW.lp);if(!SW.on)return;SW.on=false;
+    if(SW.mov){SW.ign=true;const base=w.classList.contains('open')?-96:0;(base+SW.dx< -48)?abrirSwipe():cerrarSwipe()}};
+  c.addEventListener('pointerup',fin);c.addEventListener('pointercancel',fin);
+  c.addEventListener('contextmenu',e=>e.preventDefault());
+  // tras deslizar o mantener pulsado no se abre el COP; con la papelera a la vista, tocar la tarjeta la esconde
+  c.addEventListener('click',e=>{if(SW.ign){SW.ign=false;e.stopPropagation();e.preventDefault();return}
+    if(w.classList.contains('open')){e.stopPropagation();e.preventDefault();cerrarSwipe()}},true);
+  document.addEventListener('pointerdown',e=>{if(w.classList.contains('open')&&!w.contains(e.target))cerrarSwipe()});}
+$('#curDel').onclick=()=>{
+  if(!CUR){cerrarSwipe();return}
+  if(CUR.prueba){ask('Cerrar COP de prueba',`<p>Se cierra «${esc(CUR.prueba)}». Puedes volver a abrirla en «Cargar COP».</p>`,[['Cancelar',null,cerrarSwipe],['Cerrar','primary',()=>{CUR=null;curSave();state=vacio();_save();fillUI();renderHome()}]]);return}
+  const d={id:CUR.id,...infoCur()};
+  ask('Borrar COP',`<p>Se borra «${esc(titulo(d))}» de tu lista. No se puede deshacer.</p>`,[['Cancelar',null,cerrarSwipe],['Borrar','primary',async()=>{await borrarDoc(d);renderHome()}]]);
+};
 $('#tNuevo').onclick=async()=>{
   await READY;const habia=!!CUR&&!CUR.prueba&&hasData(state);
   abrirEstado(vacio(),nuevoCur('nuevo'));
