@@ -1238,6 +1238,17 @@ function mkRun(doc,rPr,text){
   String(text).split('\n').forEach((ln,i)=>{if(i)r.appendChild(doc.createElementNS(W,'w:br'));const t=doc.createElementNS(W,'w:t');t.setAttributeNS(XMLNS,'xml:space','preserve');t.textContent=ln;r.appendChild(t)});
   return r;
 }
+// la plantilla trae espacios detrás de muchas etiquetas («1:                », «Tipo:» + espacios): el dato va pegado a la etiqueta,
+// como en sus COP, porque con los espacios delante salta a la línea de abajo
+function trimEndP(p){
+  for(let n=p.lastChild;n;n=n.previousSibling){
+    if(n.nodeType!==1||/^(bookmarkStart|bookmarkEnd|proofErr)$/.test(n.localName))continue;
+    if(n.localName!=='r')return;
+    const hs=Array.from(n.childNodes).filter(c=>c.nodeType===1&&c.localName!=='rPr');
+    if(hs.some(c=>c.localName!=='t'))return;
+    for(let j=hs.length-1;j>=0;j--){const t=hs[j],x=t.textContent.replace(/\s+$/,'');if(x===t.textContent)return;t.textContent=x;if(x)return}
+  }
+}
 function pRpr(p){const pPr=kids(p,'pPr')[0];return pPr&&kids(pPr,'rPr')[0]}
 function lastRpr(p){const rs=kids(p,'r');for(let i=rs.length-1;i>=0;i--){const x=kids(rs[i],'rPr')[0];if(x)return x}return pRpr(p)}
 function writeDoc(){
@@ -1278,7 +1289,7 @@ function writeDoc(){
       const ps=kids(tcs[s.tc],'p');const p=ps[s.p];
       if(s.target!==null&&s.target!==undefined){const tp=ps[s.target];tp.appendChild(mkRun(doc,pRpr(tp)||lastRpr(p),val))}
       else if(s.newPara){const np=doc.createElementNS(W,'w:p');const pPr=kids(p,'pPr')[0];if(pPr)np.appendChild(pPr.cloneNode(true));np.appendChild(mkRun(doc,lastRpr(p),val));p.parentNode.insertBefore(np,p.nextSibling)}
-      else p.appendChild(mkRun(doc,lastRpr(p),' '+val));
+      else{trimEndP(p);p.appendChild(mkRun(doc,lastRpr(p),' '+val))}
     }
     else if(s.kind==='mid'){
       const p=kids(tcs[s.tc],'p')[s.p];const ts=all(p,W,'t');const t=ts.find(t=>t.textContent.includes(':'));
