@@ -2315,16 +2315,26 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();INSTALAR=e;
 window.addEventListener('appinstalled',()=>{$('#instCard').hidden=true;showMsg('Instalada. Ya la tienes en la pantalla de inicio con el nombre «COP».')});
 $('#instGo').onclick=async()=>{if(!INSTALAR)return;INSTALAR.prompt();try{await INSTALAR.userChoice}catch(e){}INSTALAR=null;$('#instCard').hidden=true};
 $('#instNo').onclick=()=>{lsSet('cop-app-instalar-no',true);$('#instCard').hidden=true};
+// actualizaciones: al abrir la app y al volver a ella se mira si hay versión nueva; si llega nada más abrir (o estando en el inicio)
+// se recarga sola para usarla ya; si llega rellenando un COP, se recarga cuando se sale de la app (el COP está guardado)
 if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127\.0\.0\.1)$/.test(location.hostname)))
-  try{navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}
+  try{const sw=navigator.serviceWorker,habia=!!sw.controller,t0=Date.now();let rec=false;
+    const recargar=()=>{if(rec)return;rec=true;Promise.resolve(flush()).catch(()=>{}).then(()=>location.reload())};
+    sw.addEventListener('controllerchange',()=>{if(!habia||rec)return;
+      if(Date.now()-t0<20000||!document.documentElement.dataset.vista)recargar();
+      else document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')recargar()})});
+    sw.register('sw.js',{updateViaCache:'none'}).then(reg=>{
+      document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
+  }catch(e){}
 // dudas: debajo de las 4 opciones, una caja para preguntar a Claude. Abre Claude (con el plan de Daniel) con la pregunta escrita
 // y el vehículo del COP abierto como contexto; la pregunta queda copiada por si Claude no la recoge del enlace
 {const st=document.createElement('style');
-  st.textContent='.dudas{margin-top:14px}.dudas textarea{width:100%;min-height:64px;margin-top:6px;padding:10px 12px;font:inherit;font-size:15px;border:0;border-radius:12px;background:var(--field,var(--bg));color:var(--ink);resize:vertical}.dudas .acts{display:flex;flex-wrap:wrap;gap:8px}.dudas .acts button{margin-top:4px}';
+  st.textContent='.dudas{margin-top:14px}.dudas textarea{width:100%;min-height:64px;margin-top:6px;padding:10px 12px;font:inherit;font-size:15px;border:0;border-radius:12px;background:var(--field,var(--bg));color:var(--ink);resize:vertical}.dudas .acts{display:flex;flex-wrap:wrap;gap:8px}.dudas .acts button{margin-top:4px}.homever{text-align:center;font-size:12px;opacity:.7;margin-top:2px}';
   document.head.appendChild(st);
   const c=document.createElement('div');c.className='curcard dudas';c.id='dudaCard';
   c.innerHTML='<span class="k">¿Alguna duda?</span><b>Pregúntale a Claude</b><textarea id="dudaQ" rows="2" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?"></textarea><div class="acts"><button type="button" class="primary" id="dudaGo">Preguntar a Claude</button></div><span class="m">Se abre Claude con tu pregunta. Necesita internet.</span>';
-  $('#homeNote').before(c);}
+  $('#homeNote').before(c);
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 9 oct, 01:07';$('#homeNote').after(v);}
 $('#dudaGo').onclick=async()=>{
   const q=$('#dudaQ').value.trim();if(!q){$('#dudaQ').focus();return}
   if(!navigator.onLine){showMsg('Para preguntar a Claude hace falta internet.',true);return}
