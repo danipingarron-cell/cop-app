@@ -105,6 +105,17 @@ b.sd{color:var(--side-d)} b.si{color:var(--side-i)}
 .fld.sd input,.fld.sd select,.fld.si input,.fld.si select{border:1px solid var(--sidec);background:var(--panel)}
 .row.head{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding:6px 0 2px;border-bottom:0}
 .row.isbad{background:linear-gradient(90deg,var(--bad-soft),transparent 70%)}
+/* apartados numerados en banda oscura y cada punto en su ficha con su número (lo eligió Daniel, muestra 3, 9 oct) */
+details.sec>summary{display:grid;grid-template-columns:auto 1fr;column-gap:12px;row-gap:2px;align-items:center;background:var(--ink);color:var(--panel);border-radius:var(--secr,8px)} /* «inherit» no llega: el summary cuelga de un slot */
+details.sec[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0}
+details.sec>summary .snum{grid-row:1/3;display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:34px;padding:0 6px;border-radius:9px;background:var(--panel);color:var(--ink);font:800 16px var(--f-body)}
+details.sec>summary h2,details.sec>summary .count{grid-column:2}
+details.sec>summary .count{color:inherit;opacity:.75}
+.row.pt{background:var(--bg);border:0;border-radius:12px;padding:10px 10px 12px;margin:10px 0}
+.row.pt.isbad{background:linear-gradient(90deg,var(--bad-soft),var(--bg) 70%)}
+.row.pt>.lbl.first{order:-1;flex-basis:100%;font-weight:700} /* número y nombre del punto arriba, antes del dibujo */
+.row.pt input.t,.row.pt select,.row.pt textarea{background:var(--panel)}
+.pnum{display:inline-flex;align-items:center;justify-content:center;margin-right:8px;padding:2px 7px;border-radius:6px;background:var(--ink);color:var(--panel);font:700 12px var(--f-mono);vertical-align:1px}
 .lbl{min-width:0;font-size:14px}
 .lbl.first{flex:1 1 240px;font-weight:500}
 .lbl.lim{font-family:var(--f-mono);font-size:12px;color:var(--muted);background:var(--bg);border-radius:4px;padding:2px 6px}
@@ -168,7 +179,7 @@ header.bar{background:var(--hdr);-webkit-backdrop-filter:blur(12px);backdrop-fil
 button,.filebtn{border-radius:999px;border-color:transparent;background:var(--btn);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 button.primary{box-shadow:0 2px 8px rgba(79,70,229,.35)}
 .pick>button,.pick .filebtn,.pruebas button,.projlist button,.luzcard{border-radius:14px}
-details.sec{border:0;border-radius:16px;box-shadow:var(--shadow);margin-top:14px}
+details.sec{--secr:16px;border:0;border-radius:16px;box-shadow:var(--shadow);margin-top:14px}
 details.sec>summary{padding:16px}
 details.sec>summary h2{font-size:16px;letter-spacing:0}
 details.sec[open]>summary{border-bottom:1px solid var(--line)}
@@ -791,10 +802,11 @@ function load(){try{const s=JSON.parse(localStorage.getItem(STORE)||'null');if(s
 
 function render(){
   const f=$('#form');f.innerHTML='';RL=[];
+  let nSec=0;
   model.sections.forEach((sec,si)=>{
-    if(!sec.blocks.length||sec.off)return;
+    if(!sec.blocks.length||sec.off)return;nSec++;
     const d=document.createElement('details');d.className='sec';d.dataset.si=si; // todos cerrados al empezar: se abre el que elija
-    let h=`<summary><h2>${esc(sec.title)}</h2><span class="count" data-count="${si}"></span></summary><div class="secbody">`;
+    let h=`<summary><span class="snum">${nSec}</span><h2>${esc(sec.title)}</h2><span class="count" data-count="${si}"></span></summary><div class="secbody">`;
     h+=`<div class="sectools"><button type="button" data-fillsi="${si}">Marcar «Sí» en las casillas vacías</button></div>`;
     for(const b of sec.blocks){
       if(b.sub){h+=`<h3 class="sub">${esc(b.sub)}</h3>`;continue}
@@ -821,7 +833,7 @@ function render(){
       h+=`</div>`;
     }
     h+='</div>';d.innerHTML=h;f.appendChild(d);
-    groupParts(d.querySelector('.secbody'));
+    groupParts(d.querySelector('.secbody'));numPuntos(d,nSec);
   });
   // índices auxiliares
   CB_GROUP={};ROW_OF={};
@@ -859,6 +871,13 @@ function shortTitle(t){
   t=t.replace(/\s*APLICA:?\s*$/,'').split(':')[0].trim();
   return t.charAt(0)+t.slice(1).toLowerCase();
 }
+// cada punto (fila con casillas) lleva su número «apartado.punto» delante del nombre; solo en la app, el Word no cambia
+function numPuntos(d,n){let k=0;d.querySelectorAll('.row').forEach(r=>{
+  if(r.matches('.head,.band1,.band2')||!r.querySelector('[data-slot],.grp'))return;
+  const l=r.querySelector('.lbl.first');if(!l)return;k++;r.classList.add('pt');
+  const t=document.createElement('span');t.className='ptxt';while(l.firstChild)t.appendChild(l.firstChild);
+  const p=document.createElement('span');p.className='pnum';p.textContent=n+'.'+k;l.append(p,t)})}
+const lblTxt=l=>l?(l.querySelector('.ptxt')||l).textContent:''; // nombre del punto sin su número
 function groupParts(body){
   const els=[...body.children];let b1=null,b2=null,held=null;
   els.forEach((el,i)=>{
@@ -1357,7 +1376,7 @@ function badText(r){
   const b=r.closest('.blk');let ctx=b?b.dataset.title:'';
   if(!ctx){const d=r.closest('details');ctx=d?shortTitle(d.querySelector('summary h2').textContent):''}
   const ins=[...r.querySelectorAll('input[data-slot]')],first=ins[0],vals=(first?ins.filter(i=>i.dataset.slot===first.dataset.slot):[]).map(i=>i.value.trim()).filter(Boolean).join(' / ');
-  return (ctx?ctx+': ':'')+((r.querySelector('.lbl.first')||{}).textContent||labelFor(r.querySelector('input')||r)).trim()+(vals?' = '+vals:'');
+  return (ctx?ctx+': ':'')+(lblTxt(r.querySelector('.lbl.first'))||labelFor(r.querySelector('input')||r,true)).trim()+(vals?' = '+vals:'');
 }
 let LAST=null; // último Word generado
 async function generate(){
@@ -1420,7 +1439,7 @@ function ask(title,html,buttons){
   const hb=$('header.bar');d.style.scrollMarginTop=((hb?hb.offsetHeight:0)+8)+'px'; // que la cabecera fija no tape el panel
   try{d.scrollIntoView({block:'start',behavior:'smooth'})}catch(e){}
 }
-function labelFor(el){const row=el.closest('.row');const f=row&&row.querySelector('.lbl.first');const fl=el.closest('.fld')&&el.closest('.fld').querySelector('label');return [f&&f.textContent,fl&&fl.textContent].filter(Boolean).join(' · ')||'Campo'}
+function labelFor(el,sinNum){const row=el.closest('.row');const f=row&&row.querySelector('.lbl.first');const fl=el.closest('.fld')&&el.closest('.fld').querySelector('label');const pn=!sinNum&&f&&f.querySelector('.pnum');return [f&&((pn?pn.textContent+' ':'')+lblTxt(f)),fl&&fl.textContent].filter(Boolean).join(' · ')||'Campo'}
 $('#gen').onclick=()=>{
   refresh();
   if(!BAD.length&&!PEND.length)return generate();
@@ -2352,7 +2371,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 9 oct, 20:43';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 9 oct, 21:09';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
