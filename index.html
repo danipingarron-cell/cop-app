@@ -2334,7 +2334,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const c=document.createElement('div');c.className='curcard dudas';c.id='dudaCard';
   c.innerHTML='<span class="k">¿Alguna duda?</span><b>Pregúntale a Claude</b><textarea id="dudaQ" rows="2" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?"></textarea><div class="acts"><button type="button" class="primary" id="dudaGo">Preguntar a Claude</button></div><span class="m">Se abre Claude con tu pregunta. Necesita internet.</span>';
   $('#homeNote').before(c);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 9 oct, 01:07';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 9 oct, 20:06';$('#homeNote').after(v);}
 $('#dudaGo').onclick=async()=>{
   const q=$('#dudaQ').value.trim();if(!q){$('#dudaQ').focus();return}
   if(!navigator.onLine){showMsg('Para preguntar a Claude hace falta internet.',true);return}
