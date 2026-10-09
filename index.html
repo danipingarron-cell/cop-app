@@ -701,6 +701,15 @@ function applyPrefs(m,rels){
       if(b.row.items.some(i=>i.t==='slot'&&i.id===sup.id))after=true;
       else if(after&&!PLATE){const g=b.row.items.find(i=>i.t==='grp'&&i.opts.some(o=>/520/.test(o.label)));
         if(g){const o1=g.opts.find(o=>/520/.test(o.label)),o2=g.opts.find(o=>/340/.test(o.label));PLATE={sup:sup.id,inf:inf.id,cb:[[o1.cb,120],[o2.cb,240]]}}}}
+    // en la app (no en el Word) primero el tamaño de la placa, luego la altura superior y la inferior, que se calcula sola (lo pidió Daniel)
+    if(PLATE)for(const sec of m.sections){
+      const has=f=>sec.blocks.findIndex(b=>b.row&&f(b.row));
+      const iInf=has(r=>r.items.some(i=>i.t==='slot'&&i.id===inf.id)),iSup=has(r=>r.items.some(i=>i.t==='slot'&&i.id===sup.id)),iDim=has(r=>r.items.some(i=>i.t==='grp'&&i.opts.some(o=>o.cb===PLATE.cb[0][0])));
+      if(iInf<0||iSup<0||iDim<0)continue;
+      const bInf=sec.blocks[iInf],bSup=sec.blocks[iSup],bDim=sec.blocks[iDim];
+      sec.blocks=sec.blocks.filter(b=>b!==bDim&&b!==bSup);sec.blocks.splice(sec.blocks.indexOf(bInf),0,bDim,bSup);
+      inf.phApp='Se calcula sola';break;
+    }
   }
   // calculadora del Excel de luces: casillas del alumbrado trasero que rellena, y su panel antes de «ALUMBRADO TRASERO (FRENO)»
   const alu=m.sections.find(x=>/^INSTALACI[OÓ]N DE DISPOSITIVOS DE ALUMBRADO/.test(x.title)), anch=m.slots.find(s=>/^MASAS/.test(s.sec)&&/^Anchura total$/.test(s.label));
@@ -827,7 +836,7 @@ function render(){
           if(s.select){h+=`<span class="fld"><select class="t col" id="s${s.id}" data-slot="${s.id}" aria-label="${esc((s.rowLabel?s.rowLabel+' · ':'')+s.label)} · color"><option value="">Color…</option>${s.select.map(c=>`<option>${c}</option>`).join('')}</select></span>`;continue}
           // con el dato puesto el texto gris de la casilla desaparece: «Derecha», «Izquierda», «Nº»… van encima para saber siempre qué es cada número
           const top=s.kind!=='colon'&&s.ph&&(s.ph!=='Medición'||hasN)?s.ph:'';
-          h+=`<span class="fld${top?' stk':''}${sideCls(top||(s.kind==='colon'?s.label:''))}">${s.kind==='colon'?`<label for="s${s.id}">${esc(s.label)}</label>`:top?`<label for="s${s.id}">${esc(top)}</label>`:''}<input class="t${wide?' wide':''}" id="s${s.id}" data-slot="${s.id}" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="${esc(s.ph||'')}" aria-label="${esc((s.rowLabel?s.rowLabel+' · ':'')+s.label)}"></span>`}
+          h+=`<span class="fld${top?' stk':''}${sideCls(top||(s.kind==='colon'?s.label:''))}">${s.kind==='colon'?`<label for="s${s.id}">${esc(s.label)}</label>`:top?`<label for="s${s.id}">${esc(top)}</label>`:''}<input class="t${wide?' wide':''}" id="s${s.id}" data-slot="${s.id}" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="${esc(s.phApp||s.ph||'')}" aria-label="${esc((s.rowLabel?s.rowLabel+' · ':'')+s.label)}"></span>`}
         else if(it.t==='grp'){h+=`<span class="grp" role="group"${it.nofill?' data-nofill':''}>`+it.opts.map(o=>`<button type="button" class="v-${o.label.toLowerCase().replace(/[^a-z]/g,'')}" data-cb="${o.cb}" aria-pressed="false">${esc(o.label)}</button>`).join('')+`</span>`}
       }
       h+=`</div>`;
@@ -2371,7 +2380,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 9 oct, 21:09';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 9 oct, 21:22';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
