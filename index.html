@@ -115,6 +115,12 @@ details.sec>summary .count{color:inherit;opacity:.75}
 .row.pt.isbad{background:linear-gradient(90deg,var(--bad-soft),var(--bg) 70%)}
 .row.pt>.lbl.first{order:-1;flex-basis:100%;font-weight:700} /* número y nombre del punto arriba, antes del dibujo */
 .row.pt input.t,.row.pt select,.row.pt textarea{background:var(--panel)}
+/* longitud total: casilla calculada (va al Word) y la medida para comparar (solo en la app) */
+.fld.lt label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--muted)}
+.fld.ltc input{border:2px dashed var(--accent)!important}
+.ltdif{flex-basis:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;font-weight:600;font-size:14px}
+.ltdif.ok{background:var(--ok-soft);color:var(--ok)} .ltdif.mal{background:var(--warn-soft);color:var(--warn)}
+.ltnota{flex-basis:100%;font-size:12px;color:var(--muted);margin:-2px 0 0}
 .pnum{display:inline-flex;align-items:center;justify-content:center;margin-right:8px;padding:2px 7px;border-radius:6px;background:var(--ink);color:var(--panel);font:700 12px var(--f-mono);vertical-align:1px}
 .lbl{min-width:0;font-size:14px}
 .lbl.first{flex:1 1 240px;font-weight:500}
@@ -645,7 +651,7 @@ const COLOR_DEF=[[/marcha atr/i,'Blanco'],[/indicadora de direcci/i,'Amarillo au
   [/antiniebla trasera/i,'Rojo'],[/posici[oó]n trasera/i,'Rojo'],[/trasero no triangular/i,'Rojo'],[/trasero triangular/i,''],
   [/placa de trasera de matr/i,'Blanco'],[/g[aá]libo trasera/i,'Rojo'],[/Retro-reflectivo trasero/i,'Rojo'],[/vehículo largo/i,''],
   [/posici[oó]n lateral/i,'Amarillo'],[/Catadi[oó]ptrico lateral/i,'Amarillo'],[/Retro-reflectivo lateral/i,'']];
-let DEFAULTS={},MIRROR={},PLATE=null,LUZ=null;
+let DEFAULTS={},MIRROR={},PLATE=null,LUZ=null,LT=null;
 const LUZ_KEYS=['inf','sup','sep','izq','der'];
 function applyPrefs(m,rels){
   rels=rels||{};
@@ -711,6 +717,10 @@ function applyPrefs(m,rels){
       inf.phApp='Se calcula sola';break;
     }
   }
+  // longitud total = voladizo delantero + distancia entre ejes + voladizo trasero (lo pidió Daniel): casilla «Calculada» (va al Word) y «Medida» para comparar
+  {const ms=m.slots.filter(x=>/^MASAS/.test(x.sec)&&!x.hidden),one=re=>ms.find(x=>re.test(x.label));
+   const vd=one(/^Voladizo delantero$/),vt=one(/^Voladizo trasero$/),lt=one(/^Longitud total$/),ej=ms.filter(x=>x.rowLabel==='Distancia entre ejes');
+   if(vd&&vt&&lt&&ej.length){LT={vd:vd.id,vt:vt.id,ejes:ej.map(x=>x.id),out:lt.id};LT.parts=[LT.vd,LT.vt,...LT.ejes];lt.topApp='Calculada';lt.phApp='Se calcula sola';lt.ltOut=true}}
   // calculadora del Excel de luces: casillas del alumbrado trasero que rellena, y su panel antes de «ALUMBRADO TRASERO (FRENO)»
   const alu=m.sections.find(x=>/^INSTALACI[OÓ]N DE DISPOSITIVOS DE ALUMBRADO/.test(x.title)), anch=m.slots.find(s=>/^MASAS/.test(s.sec)&&/^Anchura total$/.test(s.label));
   if(typeof LUCES!=='undefined'&&alu&&anch){
@@ -731,6 +741,26 @@ function splitVal(sl,v){
 }
 function joinSplit(sl,vals){return vals.map((v,k)=>v.trim()?sl.split[k]+':'+v.trim():'').filter(Boolean).join('\n')}
 function applyDefaults(){for(const [k,v] of Object.entries(DEFAULTS))if(state.v[k]===undefined)state.v[k]=v}
+function ltCalc(){
+  if(!LT)return;
+  const n=id=>{const v=String(state.v['s'+id]||'').trim();return v?num(v.replace(/[^\d.,]/g,'')):NaN};
+  const vd=n(LT.vd),vt=n(LT.vt),ej=LT.ejes.map(n).filter(x=>!isNaN(x));
+  const ok=!isNaN(vd)&&!isNaN(vt)&&!isNaN(n(LT.ejes[0]));
+  const sum=ok?vd+vt+ej.reduce((a,b)=>a+b,0):NaN,val=ok?(Number.isInteger(sum)?String(sum):String(Math.round(sum*10)/10).replace('.',',')):'';
+  const cur=state.v['s'+LT.out]||'',prev=(state.auto&&state.auto.lt)||'';
+  if(!cur||cur===prev){ // si la ha cambiado a mano se respeta
+    state.auto=state.auto||{};state.auto.lt=val;state.v['s'+LT.out]=val;
+    const el=document.querySelector(`[data-slot="${LT.out}"]`);if(el){el.value=val;if(ROW_OF[LT.out])autoCumple(ROW_OF[LT.out])}
+  }
+  ltDif();
+}
+function ltDif(){ // cualquier diferencia, aunque sea de 2 mm, es «No coinciden» (Daniel lo ajusta luego a mano)
+  const box=document.querySelector('.ltdif');if(!box||!LT)return;
+  const a=num(String(state.v['s'+LT.out]||'').replace(/[^\d.,]/g,'')),b=num(String((state.lt&&state.lt.medida)||'').replace(/[^\d.,]/g,''));
+  if(isNaN(a)||isNaN(b)){box.hidden=true;return}
+  const d=Math.round((b-a)*10)/10,ok=d===0;
+  box.className='ltdif '+(ok?'ok':'mal');box.textContent=ok?'✓ Coinciden':`⚠ No coinciden: ${d>0?'+':''}${String(d).replace('.',',')} mm`;box.hidden=false;
+}
 function plateCalc(){
   if(!PLATE)return;
   const sup=num(String(state.v['s'+PLATE.sup]||'').replace(/[^\d.,]/g,''));const h=(PLATE.cb.find(([cb])=>state.v['c'+cb])||[])[1];
@@ -835,8 +865,9 @@ function render(){
           if(s.split){h+=s.split.map((lab,k)=>`<span class="fld${sideCls(lab)}"><label for="s${s.id}_${k}">${esc(lab)}</label><input class="t" id="s${s.id}_${k}" data-slot="${s.id}" data-part="${k}" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Medición" aria-label="${esc(s.label+' · '+lab)}"></span>`).join('');continue}
           if(s.select){h+=`<span class="fld"><select class="t col" id="s${s.id}" data-slot="${s.id}" aria-label="${esc((s.rowLabel?s.rowLabel+' · ':'')+s.label)} · color"><option value="">Color…</option>${s.select.map(c=>`<option>${c}</option>`).join('')}</select></span>`;continue}
           // con el dato puesto el texto gris de la casilla desaparece: «Derecha», «Izquierda», «Nº»… van encima para saber siempre qué es cada número
-          const top=s.kind!=='colon'&&s.ph&&(s.ph!=='Medición'||hasN)?s.ph:'';
-          h+=`<span class="fld${top?' stk':''}${sideCls(top||(s.kind==='colon'?s.label:''))}">${s.kind==='colon'?`<label for="s${s.id}">${esc(s.label)}</label>`:top?`<label for="s${s.id}">${esc(top)}</label>`:''}<input class="t${wide?' wide':''}" id="s${s.id}" data-slot="${s.id}" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="${esc(s.phApp||s.ph||'')}" aria-label="${esc((s.rowLabel?s.rowLabel+' · ':'')+s.label)}"></span>`}
+          const top=s.topApp||(s.kind!=='colon'&&s.ph&&(s.ph!=='Medición'||hasN)?s.ph:'');
+          h+=`<span class="fld${top?' stk':''}${s.ltOut?' lt ltc':''}${sideCls(top||(s.kind==='colon'?s.label:''))}">${s.kind==='colon'?`<label for="s${s.id}">${esc(s.label)}</label>`:top?`<label for="s${s.id}">${esc(top)}</label>`:''}<input class="t${wide?' wide':''}" id="s${s.id}" data-slot="${s.id}" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="${esc(s.phApp||s.ph||'')}" aria-label="${esc((s.rowLabel?s.rowLabel+' · ':'')+s.label)}"></span>`;
+          if(s.ltOut)h+=`<span class="fld stk lt"><label for="ltMedida">Medida</label><input class="t" id="ltMedida" data-extra="medida" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Medición" aria-label="Longitud total · medida"></span><div class="ltdif" hidden></div><p class="ltnota">Calculada = voladizo delantero + distancia entre ejes + voladizo trasero. En el Word, en «Longitud total», va la calculada (si la cambias a mano, va la que pongas).</p>`}
         else if(it.t==='grp'){h+=`<span class="grp" role="group"${it.nofill?' data-nofill':''}>`+it.opts.map(o=>`<button type="button" class="v-${o.label.toLowerCase().replace(/[^a-z]/g,'')}" data-cb="${o.cb}" aria-pressed="false">${esc(o.label)}</button>`).join('')+`</span>`}
       }
       h+=`</div>`;
@@ -949,6 +980,7 @@ function fillUI(){
   document.querySelectorAll('[data-slot]').forEach(i=>{const v=state.v['s'+i.dataset.slot];i.value=i.dataset.part!==undefined?splitVal(model.slots[i.dataset.slot],typeof v==='string'?v:'')[+i.dataset.part]:typeof v==='string'?v:'';i.classList.toggle('pend',isPending(i.value))});
   document.querySelectorAll('[data-cb]').forEach(b=>{const on=!!state.v['c'+b.dataset.cb];b.setAttribute('aria-pressed',on);b.classList.toggle('auto',on&&!state.manual['c'+b.dataset.cb])});
   lucesUI();lucesCalc();
+  {const mi=$('#ltMedida');if(mi)mi.value=(state.lt&&state.lt.medida)||''}ltCalc();
   refresh();hereSoon();
 }
 function setCb(cb,on,manual){
@@ -1012,8 +1044,13 @@ document.addEventListener('input',e=>{
     if(!cur||cur===prev){state.v['s'+mr]=e.target.value;state.auto=state.auto||{};state.auto['m'+mr]=e.target.value;const o=document.querySelector(`[data-slot="${mr}"]`);if(o){o.value=e.target.value;if(ROW_OF[mr])autoCumple(ROW_OF[mr])}}
   }
   if(PLATE&&+id===PLATE.sup)plateCalc();
+  if(LT&&LT.parts.includes(+id))ltCalc();else if(LT&&+id===LT.out)ltDif();
   if(LUZ&&+id===LUZ.anchura){const a=$('#luz_anch');if(a)a.value=e.target.value;lucesCalc()}
   save();refreshSoon();
+});
+document.addEventListener('input',e=>{ // longitud medida: solo en la app, no va al Word
+  if(!(e.target.dataset&&e.target.dataset.extra==='medida'))return;
+  state.lt=state.lt||{};state.lt.medida=e.target.value;ltDif();save();
 });
 // Daniel escribe "-" en la medición de las filas que no aplican: al marcar NP o NA se rellenan las mediciones vacías; si la fila deja de estar en NP se quitan los guiones puestos así
 function dashNP(b){
@@ -2380,7 +2417,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 9 oct, 21:22';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 10 oct, 11:43';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
