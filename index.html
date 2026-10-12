@@ -1849,7 +1849,7 @@ fillUI=function(){
   }
   palFillUI0();
   palTextos();
-  if(TPL_ACT==='pal')palCalc();
+  if(TPL_ACT==='pal'){palCalc();refresh()}
 };
 // aspecto «como el PDF de Palfinger» (Daniel lo eligió el 12 oct): pal-tema.css, que build.sh mete aquí; solo afecta a los COP de Palfinger
 const PAL_CSS="/* Aspecto \u00abcomo el PDF de Palfinger\u00bb (solo en los COP de Palfinger): papel blanco, tablas con raya negra, casillas verdes,\n   cabeceras azul claro, t\u00edtulos de apartado en rojo y S\u00ed/No como cuadraditos. La plantilla general no cambia. */\nhtml[data-tpl=\"pal\"]{--py:#ffd400;--pred:#d90012;--pgreen:#ccffcc;--pgline:#8cc98c;--pblue:#ddebf7;--pline:#1a1a1a;--ppaper:#ffffff;--pink:#111;--pmut:#555;\n  --pfont:Calibri,Carlito,\"Segoe UI\",Arial,sans-serif}\n@media (prefers-color-scheme:dark){html[data-tpl=\"pal\"]:not([data-theme=\"light\"]){--pred:#ff6b6b;--pgreen:#1f3d24;--pgline:#3f7a4a;--pblue:#1f3347;--pline:#8a8a8a;--ppaper:#161616;--pink:#eee;--pmut:#aaa}}\nhtml[data-tpl=\"pal\"][data-theme=\"dark\"]{--pred:#ff6b6b;--pgreen:#1f3d24;--pgline:#3f7a4a;--pblue:#1f3347;--pline:#8a8a8a;--ppaper:#161616;--pink:#eee;--pmut:#aaa}\nhtml[data-tpl=\"pal\"] #form{font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] #form::before{content:\"PALFINGER\";display:block;margin-top:12px;padding:10px 14px;background:var(--py);color:#000;font:800 20px/1 var(--pfont);letter-spacing:.04em;\n  border:2px solid #000;border-bottom:3px solid var(--pred)}\nhtml[data-tpl=\"pal\"] details.sec{border-radius:0;border:1px solid var(--pline);box-shadow:none;background:var(--ppaper);margin-top:10px;--secr:0}\nhtml[data-tpl=\"pal\"] details.sec>summary{background:var(--ppaper)!important;color:var(--pink)!important;border-radius:0!important;padding:12px 12px}\nhtml[data-tpl=\"pal\"] details.sec>summary .snum{background:none!important;color:var(--pred)!important;border:0;font:800 18px/1 var(--pfont);min-width:0;width:auto;height:auto;padding:0 2px 0 0}\nhtml[data-tpl=\"pal\"] details.sec>summary .snum::after{content:\".\"}\nhtml[data-tpl=\"pal\"] details.sec>summary h2{color:var(--pred)!important;font:800 15px/1.25 var(--pfont);text-decoration:underline;text-underline-offset:3px;letter-spacing:0}\nhtml[data-tpl=\"pal\"] details.sec>summary .count{color:var(--pmut)!important;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] details.sec[open]>summary{border-bottom:1px solid var(--pline)}\nhtml[data-tpl=\"pal\"] .secbody{padding:8px 10px 12px}\nhtml[data-tpl=\"pal\"] h3.sub.band1,html[data-tpl=\"pal\"] .row.band1{background:var(--pblue)!important;color:var(--pink)!important;border:1px solid var(--pline);border-radius:0!important;\n  font:italic 700 14px/1.25 var(--pfont);text-transform:none;letter-spacing:0;text-align:center;padding:7px 8px;margin:12px 0 0}\nhtml[data-tpl=\"pal\"] .blk1{border-radius:0}\nhtml[data-tpl=\"pal\"] .row,html[data-tpl=\"pal\"] .row.pt{background:var(--ppaper)!important;border:1px solid var(--pline)!important;border-top-width:0!important;border-radius:0!important;\n  box-shadow:none!important;margin:0!important;padding:8px 9px}\nhtml[data-tpl=\"pal\"] h3.sub.band1+.row,html[data-tpl=\"pal\"] .blk1>.row:first-child{border-top-width:1px!important}\nhtml[data-tpl=\"pal\"] .pnum{background:none!important;color:var(--pmut)!important;border:1px solid var(--pline);border-radius:0;font:600 11px/1.4 var(--pfont);padding:0 4px}\nhtml[data-tpl=\"pal\"] .lbl.first,html[data-tpl=\"pal\"] .ptxt{font:700 14.5px/1.3 var(--pfont);color:var(--pink)}\nhtml[data-tpl=\"pal\"] .fld label{font:600 11px/1.2 var(--pfont);color:var(--pmut);text-transform:uppercase;letter-spacing:.02em}\nhtml[data-tpl=\"pal\"] input.t,html[data-tpl=\"pal\"] textarea.notes,html[data-tpl=\"pal\"] select{background:var(--pgreen)!important;border:1px solid var(--pgline)!important;border-radius:0!important;\n  color:var(--pink);font-family:Arial,Helvetica,sans-serif;font-size:15px;box-shadow:none}\nhtml[data-tpl=\"pal\"] input.t::placeholder,html[data-tpl=\"pal\"] textarea.notes::placeholder{color:color-mix(in srgb,var(--pink) 40%,transparent)}\nhtml[data-tpl=\"pal\"] .lbl.lim{background:var(--ppaper)!important;color:var(--pink)!important;border:1px solid var(--pline)!important;border-radius:0!important;font:600 13px var(--pfont)}\n/* S\u00ed / No como las casillas del PDF: \u25a0 S\u00cd  \u2610 NO */\nhtml[data-tpl=\"pal\"] .grp{background:none!important;border:0!important;border-radius:0!important;padding:0;gap:4px;display:inline-flex}\nhtml[data-tpl=\"pal\"] .grp button{background:none!important;color:var(--pink)!important;border:0!important;border-radius:0!important;box-shadow:none!important;\n  padding:6px 8px;font:700 14px var(--pfont);text-transform:uppercase;display:inline-flex;align-items:center;gap:6px}\nhtml[data-tpl=\"pal\"] .grp button::before{content:\"\";flex:none;width:16px;height:16px;border:1.5px solid var(--pink);background:var(--pgreen)}\nhtml[data-tpl=\"pal\"] .grp button[aria-pressed=\"true\"]::before{background:var(--pink);box-shadow:inset 0 0 0 3px var(--pgreen)}\nhtml[data-tpl=\"pal\"] .row.isbad{outline:2px solid var(--pred);outline-offset:-2px}\nhtml[data-tpl=\"pal\"] .calc,html[data-tpl=\"pal\"] .pics img,html[data-tpl=\"pal\"] .ltdif{border-radius:0!important}\nhtml[data-tpl=\"pal\"] .pics img{border:1px solid var(--pline)}\nhtml[data-tpl=\"pal\"] .sectools button{border-radius:0;border:1px solid var(--pline);box-shadow:none;font-family:var(--pfont)}\n";
@@ -1865,9 +1865,10 @@ render=function(){
   document.querySelectorAll('.blk1').forEach(bk=>{const m=/^(\d+(?:\.\d+)+)\b/.exec(bk.dataset.title||'');if(!m)return;let k=0;
     bk.querySelectorAll('.row.pt .pnum').forEach(p=>{p.textContent=m[1]+'.'+(++k)})});
   // comprobaciones de longitud (criterio de aceptación máx. 3 %) y textos de ayuda
-  for(const k of ['check1','check2']){const el=palRowEl(k);if(el&&!el.querySelector('.ltdif'))el.insertAdjacentHTML('beforeend',`<div class="ltdif" data-pchk="${k}" hidden></div><p class="ltnota" data-pnota="${k}"></p>`)}
+  for(const k of ['check1','check2']){const el=palRowEl(k);if(el&&!el.querySelector('.ltdif'))el.insertAdjacentHTML('beforeend',`<div class="ltdif" data-pchk="${k}" hidden></div><p class="ltnota" data-pnota="${k}"></p>`+(k==='check2'?'<div class="ltdif" data-pcmp hidden></div>':''))}
   const n=palRowEl('lados');if(n&&!n.querySelector('.ltnota'))n.insertAdjacentHTML('beforeend','<p class="ltnota">Si coinciden, en el PDF van solo las del lado izquierdo (como dice la plantilla) y el lado derecho no hace falta rellenarlo.</p>');
   const lz=palRowEl('presentes');if(lz&&!lz.querySelector('.ltnota'))lz.insertAdjacentHTML('beforeend','<p class="ltnota">Marca las luces que lleva el vehículo. En la tabla, A = altura del borde superior, B = altura del borde inferior, C = separación entre luces y D = distancia al lateral.</p>');
+  palCalc();refresh(); // las cajas de aviso ya existen: que salgan con lo que haya
 };
 // número de apartado como en el PDF (el 5 y el 6 no salen: firmas y equipos de medida se quedan como vienen en la plantilla)
 function palRowEl(key){const r=PAL_MODEL&&PAL_MODEL.rowKey[key];if(!r)return null;const i=RL.indexOf(r);return i<0?null:document.querySelector(`.row[data-r="${i}"]`)}
@@ -1880,10 +1881,10 @@ function palTextos(){
 const palV=s=>s?String(state.v['s'+s.id]||'').trim():'';
 const palN=s=>{const v=palV(s);if(!v)return NaN;return num(v.replace(/[^\d.,-]/g,''))};
 const palFmt=x=>Number.isInteger(x)?String(x):String(Math.round(x*10)/10).replace('.',',');
-function palSet(s,val,clave){ // casilla calculada: se rellena sola mientras no la cambie a mano
+function palSet(s,val,clave,siempre){ // casilla calculada: se rellena sola mientras no la cambie a mano
   if(!s)return;state.auto=state.auto||{};
   const cur=state.v['s'+s.id]||'',prev=state.auto[clave]||'';
-  if(cur&&cur!==prev)return;
+  if(cur&&cur!==prev&&!(siempre&&val))return; // las sumas (siempre) se rehacen al cambiar una medida, aunque vengan de un PDF cargado
   state.auto[clave]=val;if(cur===val)return;
   state.v['s'+s.id]=val;const el=document.querySelector(`[data-slot="${s.id}"]`);if(el){el.value=val;if(ROW_OF[s.id])autoCumple(ROW_OF[s.id])}
 }
@@ -1899,11 +1900,11 @@ function palCalc(){
   if(TPL_ACT!=='pal'||!PAL_MODEL)return;const k=PAL_MODEL.key;
   // 7.1 tara total = suma de los ejes
   const taras=[1,2,3,4,5].map(i=>palN(k['tara'+i])).filter(x=>!isNaN(x));
-  palSet(k.taraT,taras.length?palFmt(taras.reduce((a,b)=>a+b,0)):'','taraT');
+  palSet(k.taraT,taras.length?palFmt(taras.reduce((a,b)=>a+b,0)):'','taraT',true);
   // 7.4 Check1 = Vd + D12 + D23 + D34 + D45 + Vt, Check2 = Vd + Ic + Lc; se comparan con la longitud total medida (máx. 3 %)
   const sum=ks=>{const xs=ks.map(x=>palN(k[x]));return isNaN(xs[0])||xs.filter(x=>!isNaN(x)).length<2?NaN:xs.filter(x=>!isNaN(x)).reduce((a,b)=>a+b,0)};
   const c1=sum(['vd','d12','d23','d34','d45','vt']),c2=(()=>{const xs=['vd','ic','lc'].map(x=>palN(k[x]));return xs.some(isNaN)?NaN:xs[0]+xs[1]+xs[2]})();
-  palSet(k.check1,isNaN(c1)?'':palFmt(c1),'check1');palSet(k.check2,isNaN(c2)?'':palFmt(c2),'check2');
+  palSet(k.check1,isNaN(c1)?'':palFmt(c1),'check1',true);palSet(k.check2,isNaN(c2)?'':palFmt(c2),'check2',true);
   const lt=palN(k.lt);
   for(const [key,txt] of [['check1','Vd + D12 + D23 + D34 + D45 + Vt'],['check2','Vd + Ic + Lc']]){
     const box=document.querySelector(`[data-pchk="${key}"]`),nota=document.querySelector(`[data-pnota="${key}"]`);if(!box)continue;
@@ -1914,10 +1915,14 @@ function palCalc(){
     box.textContent=d===0?'✓ Coincide con la longitud total':`${p<=3?'✓':'⚠'} ${d>0?'+':''}${palFmt(d)} mm con la longitud total (${palFmt(Math.round(p*10)/10)} %): ${p<=3?'dentro':'fuera'} del 3 %`;
     nota.textContent=`${txt} = ${palFmt(c)} mm. Longitud total medida: ${palFmt(lt)} mm.`;
   }
+  // Check1 y Check2 tienen que dar lo mismo (Daniel, 12 oct): con cualquier diferencia, aviso aquí y arriba en el resumen
+  {const a=palN(k.check1),b=palN(k.check2),box=document.querySelector('[data-pcmp]');PAL_CMP=null;
+    if(box){if(isNaN(a)||isNaN(b))box.hidden=true;else{const d=b-a;PAL_CMP=d||null;box.hidden=false;box.className='ltdif '+(d?'mal':'ok');
+      box.textContent=d?`⚠ Check1 y Check2 no coinciden: Check2 ${palFmt(b)} − Check1 ${palFmt(a)} = ${d>0?'+':''}${palFmt(d)} mm`:'✓ Check1 y Check2 coinciden'}}}
   // 10.3 % de marcado; el ancho del vehículo y la longitud de carrocería se copian de masas mientras no los cambie
   palSet(k.mpA,palV(k.anch),'mpA');palSet(k.mlLc,palV(k.lt),'mlLc');
   const pct=(a,b)=>{const x=palN(a),y=palN(b);return isNaN(x)||isNaN(y)||!y?'':Math.round(x/y*100)+'%'};
-  palSet(k.mpPct,pct(k.mpLA,k.mpA),'mpPct');palSet(k.mlPct,pct(k.mlLA,k.mlLc),'mlPct');
+  palSet(k.mpPct,pct(k.mpLA,k.mpA),'mpPct',true);palSet(k.mlPct,pct(k.mlLA,k.mlLc),'mlPct',true);
   // 7.5.1 dimensiones máximas y 7.5.3 suma de MMTA por eje ≥ MMTA total
   const L=palN(k.lt),A=palN(k.anch),H=palN(k.alt),iso=/ISOTERM|FRIGO/i.test(palV(PAL_MODEL.slots.find(s=>s.f[0]==='TIPO CARROZADO')));
   palCumple('c751',[L,A,H].some(isNaN)?null:L<=12000&&A<=(iso?2600:2550)&&H<=4000);
@@ -1960,7 +1965,10 @@ document.addEventListener('click',e=>{if(TPL_ACT==='pal'&&e.target.closest&&e.ta
 /* ---------- nombre del vehículo, COC y búsqueda de casillas ---------- */
 findSlot=function(re){return model.slots.find(s=>re.test(s.label)||(s.alias&&re.test(s.alias)))};
 const palRefresh0=refresh;
-refresh=function(){palRefresh0();if(TPL_ACT==='pal'){const v=$('#veh');v.textContent='Palfinger · '+v.textContent}};
+let PAL_CMP=null; // diferencia Check2 − Check1 (null si coinciden o falta alguno)
+refresh=function(){palRefresh0();if(TPL_ACT!=='pal')return;const v=$('#veh');v.textContent='Palfinger · '+v.textContent;
+  if(PAL_CMP){const c=document.createElement('span');c.className='chip warn';c.tabIndex=0;c.textContent='Check1 y Check2 no coinciden';
+    c.onclick=()=>{const el=document.querySelector('[data-pcmp]');if(el)goTo(el.closest('.row'))};$('#sum').appendChild(c)}};
 function palCocTargets(m){
   const k=m.key,one=f=>m.slots.find(s=>s.f[0]===f);
   return [['marca','Marca',one('MARCA')],['denominacion_comercial','Denominación comercial',one('DENOMINACIÓN COMERCIAL')],
@@ -2776,7 +2784,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 12 oct, 23:32';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 12 oct, 23:41';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
