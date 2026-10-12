@@ -257,6 +257,14 @@ button.tile:active{transform:scale(.98)}
 .empty{margin:0 0 10px;padding:18px 16px;border-radius:16px;background:var(--panel);color:var(--muted)}
 #homeMis .pick{margin:0 0 12px}
 #homeMis .pruebas{border-top:0;padding-top:0}
+/* elegir plantilla al empezar un COP */
+.tplpick{display:grid;gap:10px;margin:10px 0 4px}
+.tplpick button{display:grid;gap:2px;justify-items:start;padding:14px 16px;border-radius:14px;text-align:left}
+.tplpick button b{font-family:var(--f-display);font-size:17px}
+.tplpick button span{font-size:13px;color:var(--muted)}
+.copit .tags{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
+.copit .tag.pal{background:color-mix(in srgb,#c8102e 14%,transparent);color:#c8102e}
+@media (prefers-color-scheme:dark){.copit .tag.pal{color:#ff8a8a}}
 ul.cocl{list-style:none;margin:6px 0;padding:0}
 ul.cocl li{padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
 ul.cocl b{font-family:var(--f-mono);font-weight:500;overflow-wrap:anywhere}
@@ -328,7 +336,7 @@ button.linkb{align-self:center;border:0;background:none;box-shadow:none;color:va
       <h2 class="hh">Tus COP</h2>
       <div id="misList"></div>
       <h2 class="hh">Otros</h2>
-      <div class="pick"><button type="button" id="misWord">Cargar un Word anterior</button></div>
+      <div class="pick"><button type="button" id="misWord">Cargar un Word anterior</button><button type="button" id="misPdf">Cargar un PDF de Palfinger anterior</button></div>
       <div class="pruebas" id="misPruebas"></div>
     </div>
   </section>
@@ -861,7 +869,7 @@ function render(){
   model.sections.forEach((sec,si)=>{
     if(!sec.blocks.length||sec.off)return;nSec++;
     const d=document.createElement('details');d.className='sec';d.dataset.si=si; // todos cerrados al empezar: se abre el que elija
-    let h=`<summary><span class="snum">${nSec}</span><h2>${esc(sec.title)}</h2><span class="count" data-count="${si}"></span></summary><div class="secbody">`;
+    const sn=sec.num||nSec;let h=`<summary><span class="snum">${sn}</span><h2>${esc(sec.title)}</h2><span class="count" data-count="${si}"></span></summary><div class="secbody">`;
     h+=`<div class="sectools"><button type="button" data-fillsi="${si}">Marcar «Sí» en las casillas vacías</button></div>`;
     for(const b of sec.blocks){
       if(b.sub){h+=`<h3 class="sub">${esc(b.sub)}</h3>`;continue}
@@ -877,7 +885,7 @@ function render(){
       for(const it of r.items){
         if(it.t==='lbl'){h+=`<span class="lbl${it.first?' first':''}${it.lim?' lim':''}${!it.first&&!it.lim&&it.text.length<4?' small':''}">${it.first&&rowSlots.length?sideWords(esc(it.text)):esc(it.text)}</span>`}
         else if(it.t==='slot'){const s=model.slots[it.id];if(s.hidden)continue;
-          const wide=/Marca|Contrase|bastidor|Homolog|Denominaci|Variante|Versi|Descripci|Lugar|validada|Tipo|Nº/i.test(s.label);
+          const wide=s.wide||/Marca|Contrase|bastidor|Homolog|Denominaci|Variante|Versi|Descripci|Lugar|validada|Tipo|Nº/i.test(s.label);
           if(s.split){h+=s.split.map((lab,k)=>`<span class="fld${sideCls(lab)}"><label for="s${s.id}_${k}">${esc(lab)}</label><input class="t" id="s${s.id}_${k}" data-slot="${s.id}" data-part="${k}" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Medición" aria-label="${esc(s.label+' · '+lab)}"></span>`).join('');continue}
           if(s.select){h+=`<span class="fld"><select class="t col" id="s${s.id}" data-slot="${s.id}" aria-label="${esc((s.rowLabel?s.rowLabel+' · ':'')+s.label)} · color"><option value="">Color…</option>${s.select.map(c=>`<option>${c}</option>`).join('')}</select></span>`;continue}
           // con el dato puesto el texto gris de la casilla desaparece: «Derecha», «Izquierda», «Nº»… van encima para saber siempre qué es cada número
@@ -890,7 +898,7 @@ function render(){
       h+=`</div>`;
     }
     h+='</div>';d.innerHTML=h;f.appendChild(d);
-    groupParts(d.querySelector('.secbody'));numPuntos(d,nSec);
+    groupParts(d.querySelector('.secbody'));numPuntos(d,sn);
   });
   // índices auxiliares
   CB_GROUP={};ROW_OF={};
@@ -1111,10 +1119,10 @@ function lucesCalc(force){
   const A=n(state.v['s'+LUZ.anchura]),H=n(L.alt),D=n(L.dist);
   const ev=c=>!c||!t||H===null||D===null||(c[0]&&A===null)?'':fmtMm(c[0]*(A||0)+c[1]*H+c[2]*D+c[3]);
   const want={};
-  for(const g of ['freno','intermitente','posicion','catadioptrico'])if(LUZ[g])for(const k of LUZ_KEYS)if(LUZ[g][k]!==undefined)want[LUZ[g][k]]=t?ev(t[g][k]):'';
-  if(LUZ.antiniebla!==undefined){const sl=model.slots[LUZ.antiniebla];want[LUZ.antiniebla]=t?(sl.split?joinSplit(sl,[ev(t.antiniebla.inf),ev(t.antiniebla.sup)]):ev(t.antiniebla.sup)):''}
-  if(LUZ.marchaAtras!==undefined)want[LUZ.marchaAtras]=t?ev(t.marchaAtras.sup):'';
-  if(LUZ.galibo!==undefined)want[LUZ.galibo]=t?ev(t.galibo.izq):'';
+  for(const g of ['freno','intermitente','posicion','catadioptrico','marchaAtras','antiniebla','galibo'])if(LUZ[g]&&typeof LUZ[g]==='object')for(const k of LUZ_KEYS)if(LUZ[g][k]!==undefined)want[LUZ[g][k]]=t&&t[g]?ev(t[g][k]):'';
+  if(typeof LUZ.antiniebla==='number'){const sl=model.slots[LUZ.antiniebla];want[LUZ.antiniebla]=t?(sl.split?joinSplit(sl,[ev(t.antiniebla.inf),ev(t.antiniebla.sup)]):ev(t.antiniebla.sup)):''}
+  if(typeof LUZ.marchaAtras==='number')want[LUZ.marchaAtras]=t?ev(t.marchaAtras.sup):'';
+  if(typeof LUZ.galibo==='number')want[LUZ.galibo]=t?ev(t.galibo.izq):'';
   state.auto=state.auto||{};let put=0,kept=0;
   for(const [id,val] of Object.entries(want)){
     const cur=state.v['s'+id]||'',prev=state.auto['l'+id];
@@ -1416,6 +1424,7 @@ function writeDoc(){
 }
 const DOCX_MIME='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 // Prepara el Word y el correo que lo acompaña: asunto «COP marca bastidor» y en el texto los datos del camión y el resultado
+const docNom=L=>(L?L.pdf:model&&model.tpl==='pal')?'PDF':'Word'; // la plantilla de Palfinger sale en PDF
 async function buildWord(){
   const zip=await JSZip.loadAsync(TPL_BYTES);
   zip.file('word/document.xml',writeDoc());
@@ -1444,11 +1453,11 @@ function badText(r){
 }
 let LAST=null; // último Word generado
 async function generate(){
-  showMsg('Preparando el Word…');
-  try{LAST=await buildWord()}catch(e){showMsg('No se pudo preparar el Word: '+(e&&e.message||e),true);return}
+  showMsg('Preparando el '+docNom()+'…');
+  try{LAST=await buildWord()}catch(e){showMsg('No se pudo preparar el '+docNom()+': '+(e&&e.message||e),true);return}
   $('#msg').hidden=true;
   const L=LAST;
-  ask('Word listo',`<p><b>${esc(L.name)}</b></p><p class="hint">Por correo va adjunto, con el asunto «${esc(L.subject)}».</p>`,
+  ask(docNom(L)+' listo',`<p><b>${esc(L.name)}</b></p><p class="hint">Por correo va adjunto, con el asunto «${esc(L.subject)}».</p>`,
     [['Solo guardar','',()=>saveWord(L)],['Enviar por correo','primary',()=>sendWord(L)]]);
 }
 async function saveWord(L,hint){
@@ -1457,7 +1466,7 @@ async function saveWord(L,hint){
   if(dl){
     showMsg('Confirma la descarga de «'+L.name+'» en el aviso de Claude.');
     try{await dl.save({filename:L.name,data:L.blob});showMsg(hint||`Guardado: ${L.name}`)}
-    catch(e){if(e&&e.code==='declined')showMsg('Descarga cancelada.');else showMsg('No se pudo guardar el Word: '+(e&&e.message||e),true)}
+    catch(e){if(e&&e.code==='declined')showMsg('Descarga cancelada.');else showMsg('No se pudo guardar el '+docNom(L)+': '+(e&&e.message||e),true)}
   }else{const a=document.createElement('a');a.href=URL.createObjectURL(L.blob);a.download=L.name;document.body.appendChild(a);a.click();a.remove();showMsg(hint||`Generado: ${L.name}`)}
 }
 function copyText(t){
@@ -1472,10 +1481,10 @@ function copyText(t){
 function sendWord(L){
   const copied=copyText(L.subject);
   let file=null,can=false;
-  try{file=new File([L.blob],L.name,{type:DOCX_MIME});can=!!(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]}))}catch(e){}
+  try{file=new File([L.blob],L.name,{type:L.mime||DOCX_MIME});can=!!(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]}))}catch(e){}
   if(can){
     navigator.share({files:[file],title:L.subject})
-      .then(()=>showMsg(`Word pasado a la app de correo.${copied?' El asunto está copiado: si no aparece puesto, pégalo.':''} (modo: compartir del móvil)`))
+      .then(()=>showMsg(`${docNom(L)} pasado a la app de correo.${copied?' El asunto está copiado: si no aparece puesto, pégalo.':''} (modo: compartir del móvil)`))
       .catch(e=>{if(e&&e.name==='AbortError')showMsg('Envío cancelado.');else mailFallback(L,copied,e&&e.name)});
     return;
   }
@@ -1485,10 +1494,10 @@ function sendWord(L){
 // se guarda el Word en Descargas y se abre un correo con asunto y texto, y él lo adjunta desde Descargas.
 function mailFallback(L,copied,why){
   const href='mailto:?subject='+encodeURIComponent(L.subject)+'&body='+encodeURIComponent(L.body);
-  const android=/Android/i.test(navigator.userAgent);
+  const android=/Android/i.test(navigator.userAgent),dn=docNom(L);
   const steps=android
-    ?`<ol><li>Se guarda el Word en el móvil: acepta el aviso de Claude.</li><li>Abre <b>Descargas</b> (o Archivos), mantén pulsado el Word, toca <b>Compartir</b> y elige Outlook.</li><li>Si el asunto no sale puesto, pégalo: ya está copiado.</li></ol><p class="hint">Otra forma: pulsa <b>Abrir correo</b> (sale Outlook con el asunto y el texto) y adjunta el Word desde Descargas con el clip.</p>`
-    :`<p><b>En el menú que se abre, elige Outlook:</b> así el Word va adjunto.</p><p>Si no te sale ese menú, pulsa <b>Abrir correo</b> y adjunta el Word desde Archivos.</p>`;
+    ?`<ol><li>Se guarda el ${dn} en el móvil: acepta el aviso de Claude.</li><li>Abre <b>Descargas</b> (o Archivos), mantén pulsado el ${dn}, toca <b>Compartir</b> y elige Outlook.</li><li>Si el asunto no sale puesto, pégalo: ya está copiado.</li></ol><p class="hint">Otra forma: pulsa <b>Abrir correo</b> (sale Outlook con el asunto y el texto) y adjunta el ${dn} desde Descargas con el clip.</p>`
+    :`<p><b>En el menú que se abre, elige Outlook:</b> así el ${dn} va adjunto.</p><p>Si no te sale ese menú, pulsa <b>Abrir correo</b> y adjunta el ${dn} desde Archivos.</p>`;
   ask('Enviar por correo',steps+`<p><a class="${android?'':'btnlink'}" href="${esc(href)}" target="_blank" rel="noopener">Abrir correo</a></p>
 <p class="hint">${copied?'Asunto (copiado)':'Asunto'}: ${esc(L.subject)}</p><p class="hint">Modo: guardar con Claude (${esc(why||'')})</p>`,[['Cerrar']]);
   saveWord(L,`Guardado: ${L.name}.`);
@@ -1744,6 +1753,278 @@ async function initCoc(){
 })();
 </script>
 <script>
+/* ---------- Plantilla Palfinger (FC12-06, PDF rellenable) ----------
+   La misma app sirve para las dos plantillas: al empezar un COP se elige «General (PRC-08.02)» o «Palfinger».
+   El COP lleva su plantilla en state.tpl ('pal'; sin nada es la general) y el formulario se cambia solo al abrirlo.
+   Los datos de Palfinger (qué casilla del PDF es cada punto, los esquemas y la plantilla en PDF) y pdf-lib van en
+   palfinger-datos.js, que solo se carga la primera vez que hace falta (luego queda guardado en el móvil).
+   El modelo lo genera palfinger/def.py: mismo formato que el de la PRC-08.02, así render(), los Cumple automáticos,
+   los avisos y el guardado son los de siempre. Aquí van los cálculos propios de Palfinger y el PDF. */
+const PAL_SRC='palfinger-datos.js';
+let PAL=null,PAL_P=null,PAL_MODEL=null,PRC_SET=null,PAL_SET=null,TPL_ACT='prc';
+const esPal=st=>!!st&&st.tpl==='pal';
+function palCargar(){
+  if(PAL)return Promise.resolve(PAL);
+  if(!PAL_P)PAL_P=new Promise((res,rej)=>{
+    if(window.PAL_DATA){PAL=window.PAL_DATA;return res(PAL)}
+    const s=document.createElement('script');s.src=PAL_SRC;
+    s.onload=()=>{PAL=window.PAL_DATA;PAL?res(PAL):rej(new Error('sin datos'))};
+    s.onerror=()=>{PAL_P=null;s.remove();rej(new Error('No se ha podido cargar la plantilla de Palfinger. Revisa la conexión y vuelve a probar.'))};
+    document.head.appendChild(s);
+  });
+  return PAL_P;
+}
+// modelo del formulario a partir de palfinger-model.json (generado por def.py)
+function palModelo(){
+  const m=JSON.parse(JSON.stringify(PAL.model));
+  for(const sec of m.sections){
+    sec.blocks=sec.blocks.map(b=>b.esq?{imgs:b.esq.map(k=>'pal:'+k)}:b);
+    for(const b of sec.blocks)if(b.row){const r=b.row;
+      r.limit=parseLimit(r.limText);r.head=false;
+      const l=r.items.find(i=>i.t==='lbl');if(l)l.first=true;
+      for(const i of r.items)if(i.t==='lbl'&&i.lim)i.lim=true;
+      if(r.esq)r.imgs=r.esq.map(k=>'pal:'+k);
+    }
+  }
+  m.cbCount=m.cbs.length;m.synth={};m.tpl='pal';
+  m.key={};for(const s of m.slots)if(s.key)m.key[s.key]=s;
+  m.rowKey={};for(const sec of m.sections)for(const b of sec.blocks)if(b.row&&b.row.key)m.rowKey[b.row.key]=b.row;
+  return m;
+}
+// cada plantilla tiene sus cálculos (en la general: matrícula, longitud, caja, luces, copias izquierda→derecha)
+function palAjustes(m){
+  const S={DEFAULTS:{},MIRROR:{},PLATE:null,LUZ:null,LT:null,CJ:null},k=m.key;
+  // valores que ya trae la plantilla (ángulos de las luces): salen puestos; df=850 de la posición izquierda no es un dato
+  for(const s of m.slots)if(s.tplv&&!s.calc&&!/^fill_18$/.test(s.f[0]))S.DEFAULTS['s'+s.id]=s.tplv;
+  // matrícula: primero el tamaño, luego la altura superior y la inferior se calcula (superior − 120 o − 240), como en la general
+  const pl=m.rowKey.placa,g=pl&&pl.items.find(i=>i.t==='grp');
+  if(g&&k.matSup&&k.matInf){S.PLATE={sup:k.matSup.id,inf:k.matInf.id,cb:[[g.opts[0].cb,120],[g.opts[1].cb,240]]};k.matInf.phApp='Se calcula sola'}
+  // protección lateral: la contraseña y los anclajes suelen ser iguales en los dos lados
+  for(const sec of m.sections)if(/^PROTECCI[OÓ]N LATERAL/.test(sec.title))for(const b of sec.blocks){const r=b.row;if(!r)continue;
+    const sl=r.items.filter(i=>i.t==='slot').map(i=>m.slots[i.id]);
+    if(sl.length===2&&/^(Contraseña dispositivo|Anclajes)/.test(r.items[0].text))S.MIRROR[sl[0].id]=sl[1].id}
+  // calculadora de luces traseras (Excel de Daniel): A = altura borde superior, B = inferior, C = separación, D = distancia al lateral
+  if(typeof LUCES!=='undefined'&&k.anch){
+    const L={anchura:k.anch.id};
+    for(const g of ['freno','intermitente','posicion','catadioptrico','marchaAtras','antiniebla','galibo']){
+      const x={};for(const [c,key] of [['a','sup'],['b','inf'],['c','sep'],['d','izq']])if(k[g+'.'+c])x[key]=k[g+'.'+c].id;
+      if(Object.keys(x).length)L[g]=x;
+    }
+    S.LUZ=L;
+  }
+  return S;
+}
+const PRC_GLOBALS=()=>({model,DEFAULTS,MIRROR,PLATE,LUZ,LT,CJ});
+function ponGlobals(o){model=o.model;DEFAULTS=o.DEFAULTS;MIRROR=o.MIRROR;PLATE=o.PLATE;LUZ=o.LUZ;LT=o.LT;CJ=o.CJ}
+// cambia el formulario a la plantilla del COP (sin volver a pintar)
+function usarPlantilla(t){
+  if(t===TPL_ACT)return true;
+  if(!PRC_SET){if(!model)return false;PRC_SET=PRC_GLOBALS()}
+  if(t==='pal'){
+    if(!PAL)return false;
+    if(!PAL_SET){PAL_MODEL=palModelo();PAL_SET={model:PAL_MODEL,...palAjustes(PAL_MODEL)}}
+    ponGlobals(PAL_SET);
+  }else ponGlobals(PRC_SET);
+  TPL_ACT=t;return true;
+}
+// hace fn() con el modelo de la plantilla de st (para leer un COP guardado sin cambiar el formulario); sin datos de Palfinger, sin
+function conModelo(st,fn,sin){
+  const t=esPal(st)?'pal':'prc',prev=TPL_ACT;if(t===prev)return fn();
+  if(!usarPlantilla(t))return sin===undefined?fn():sin;
+  try{return fn()}finally{usarPlantilla(prev)}
+}
+// el formulario sigue al COP abierto: si es de Palfinger y aún no están sus datos, se cargan y se pinta después
+const palFillUI0=fillUI;let PAL_PINTANDO=false;
+fillUI=function(){
+  const t=esPal(state)?'pal':'prc';
+  if(t!==TPL_ACT&&!PAL_PINTANDO){
+    if(!usarPlantilla(t)){
+      $('#form').innerHTML='<p class="hint" style="padding:16px 0">Cargando la plantilla de Palfinger…</p>';
+      const st=state;palCargar().then(()=>{if(state===st){fillUI();if(typeof renderHome==='function'&&!document.documentElement.dataset.vista)renderHome()}},e=>{if(state===st)$('#form').innerHTML=`<p class="msg bad">${esc(e.message||e)}</p>`});
+      return;
+    }
+    PAL_PINTANDO=true;try{render()}finally{PAL_PINTANDO=false}return; // render() ya llama a fillUI
+  }
+  palFillUI0();
+  palTextos();
+  if(TPL_ACT==='pal')palCalc();
+};
+// aspecto «como el PDF de Palfinger» (Daniel lo eligió el 12 oct): pal-tema.css, que build.sh mete aquí; solo afecta a los COP de Palfinger
+const PAL_CSS="/* Aspecto \u00abcomo el PDF de Palfinger\u00bb (solo en los COP de Palfinger): papel blanco, tablas con raya negra, casillas verdes,\n   cabeceras azul claro, t\u00edtulos de apartado en rojo y S\u00ed/No como cuadraditos. La plantilla general no cambia. */\nhtml[data-tpl=\"pal\"]{--py:#ffd400;--pred:#d90012;--pgreen:#ccffcc;--pgline:#8cc98c;--pblue:#ddebf7;--pline:#1a1a1a;--ppaper:#ffffff;--pink:#111;--pmut:#555;\n  --pfont:Calibri,Carlito,\"Segoe UI\",Arial,sans-serif}\n@media (prefers-color-scheme:dark){html[data-tpl=\"pal\"]:not([data-theme=\"light\"]){--pred:#ff6b6b;--pgreen:#1f3d24;--pgline:#3f7a4a;--pblue:#1f3347;--pline:#8a8a8a;--ppaper:#161616;--pink:#eee;--pmut:#aaa}}\nhtml[data-tpl=\"pal\"][data-theme=\"dark\"]{--pred:#ff6b6b;--pgreen:#1f3d24;--pgline:#3f7a4a;--pblue:#1f3347;--pline:#8a8a8a;--ppaper:#161616;--pink:#eee;--pmut:#aaa}\nhtml[data-tpl=\"pal\"] #form{font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] #form::before{content:\"PALFINGER\";display:block;margin-top:12px;padding:10px 14px;background:var(--py);color:#000;font:800 20px/1 var(--pfont);letter-spacing:.04em;\n  border:2px solid #000;border-bottom:3px solid var(--pred)}\nhtml[data-tpl=\"pal\"] details.sec{border-radius:0;border:1px solid var(--pline);box-shadow:none;background:var(--ppaper);margin-top:10px;--secr:0}\nhtml[data-tpl=\"pal\"] details.sec>summary{background:var(--ppaper)!important;color:var(--pink)!important;border-radius:0!important;padding:12px 12px}\nhtml[data-tpl=\"pal\"] details.sec>summary .snum{background:none!important;color:var(--pred)!important;border:0;font:800 18px/1 var(--pfont);min-width:0;width:auto;height:auto;padding:0 2px 0 0}\nhtml[data-tpl=\"pal\"] details.sec>summary .snum::after{content:\".\"}\nhtml[data-tpl=\"pal\"] details.sec>summary h2{color:var(--pred)!important;font:800 15px/1.25 var(--pfont);text-decoration:underline;text-underline-offset:3px;letter-spacing:0}\nhtml[data-tpl=\"pal\"] details.sec>summary .count{color:var(--pmut)!important;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] details.sec[open]>summary{border-bottom:1px solid var(--pline)}\nhtml[data-tpl=\"pal\"] .secbody{padding:8px 10px 12px}\nhtml[data-tpl=\"pal\"] h3.sub.band1,html[data-tpl=\"pal\"] .row.band1{background:var(--pblue)!important;color:var(--pink)!important;border:1px solid var(--pline);border-radius:0!important;\n  font:italic 700 14px/1.25 var(--pfont);text-transform:none;letter-spacing:0;text-align:center;padding:7px 8px;margin:12px 0 0}\nhtml[data-tpl=\"pal\"] .blk1{border-radius:0}\nhtml[data-tpl=\"pal\"] .row,html[data-tpl=\"pal\"] .row.pt{background:var(--ppaper)!important;border:1px solid var(--pline)!important;border-top-width:0!important;border-radius:0!important;\n  box-shadow:none!important;margin:0!important;padding:8px 9px}\nhtml[data-tpl=\"pal\"] h3.sub.band1+.row,html[data-tpl=\"pal\"] .blk1>.row:first-child{border-top-width:1px!important}\nhtml[data-tpl=\"pal\"] .pnum{background:none!important;color:var(--pmut)!important;border:1px solid var(--pline);border-radius:0;font:600 11px/1.4 var(--pfont);padding:0 4px}\nhtml[data-tpl=\"pal\"] .lbl.first,html[data-tpl=\"pal\"] .ptxt{font:700 14.5px/1.3 var(--pfont);color:var(--pink)}\nhtml[data-tpl=\"pal\"] .fld label{font:600 11px/1.2 var(--pfont);color:var(--pmut);text-transform:uppercase;letter-spacing:.02em}\nhtml[data-tpl=\"pal\"] input.t,html[data-tpl=\"pal\"] textarea.notes,html[data-tpl=\"pal\"] select{background:var(--pgreen)!important;border:1px solid var(--pgline)!important;border-radius:0!important;\n  color:var(--pink);font-family:Arial,Helvetica,sans-serif;font-size:15px;box-shadow:none}\nhtml[data-tpl=\"pal\"] input.t::placeholder,html[data-tpl=\"pal\"] textarea.notes::placeholder{color:color-mix(in srgb,var(--pink) 40%,transparent)}\nhtml[data-tpl=\"pal\"] .lbl.lim{background:var(--ppaper)!important;color:var(--pink)!important;border:1px solid var(--pline)!important;border-radius:0!important;font:600 13px var(--pfont)}\n/* S\u00ed / No como las casillas del PDF: \u25a0 S\u00cd  \u2610 NO */\nhtml[data-tpl=\"pal\"] .grp{background:none!important;border:0!important;border-radius:0!important;padding:0;gap:4px;display:inline-flex}\nhtml[data-tpl=\"pal\"] .grp button{background:none!important;color:var(--pink)!important;border:0!important;border-radius:0!important;box-shadow:none!important;\n  padding:6px 8px;font:700 14px var(--pfont);text-transform:uppercase;display:inline-flex;align-items:center;gap:6px}\nhtml[data-tpl=\"pal\"] .grp button::before{content:\"\";flex:none;width:16px;height:16px;border:1.5px solid var(--pink);background:var(--pgreen)}\nhtml[data-tpl=\"pal\"] .grp button[aria-pressed=\"true\"]::before{background:var(--pink);box-shadow:inset 0 0 0 3px var(--pgreen)}\nhtml[data-tpl=\"pal\"] .row.isbad{outline:2px solid var(--pred);outline-offset:-2px}\nhtml[data-tpl=\"pal\"] .calc,html[data-tpl=\"pal\"] .pics img,html[data-tpl=\"pal\"] .ltdif{border-radius:0!important}\nhtml[data-tpl=\"pal\"] .pics img{border:1px solid var(--pline)}\nhtml[data-tpl=\"pal\"] .sectools button{border-radius:0;border:1px solid var(--pline);box-shadow:none;font-family:var(--pfont)}\n";
+document.head.insertAdjacentHTML('beforeend','<style>'+PAL_CSS+'</style>');
+// opciones largas (p. ej. 8.1 tipología): que bajen de línea en vez de salirse de la pantalla
+document.head.insertAdjacentHTML('beforeend','<style>html[data-tpl="pal"] .grp{flex-wrap:wrap;max-width:100%}html[data-tpl="pal"] .grp:has(> :nth-child(3)){border-radius:18px}html[data-tpl="pal"] .grp:has(> :nth-child(3)) button{border-radius:16px}</style>');
+const palRender0=render;
+render=function(){
+  palRender0();
+  if(TPL_ACT!=='pal')return;
+  document.querySelectorAll('img[data-rid^="pal:"]').forEach(i=>{i.src=PAL.esq[i.dataset.rid.slice(4)]||''});
+  // los puntos se numeran dentro de su parte del PDF (8.2 → 8.2.1, 8.2.2…), para que no choquen con los números de la plantilla
+  document.querySelectorAll('.blk1').forEach(bk=>{const m=/^(\d+(?:\.\d+)+)\b/.exec(bk.dataset.title||'');if(!m)return;let k=0;
+    bk.querySelectorAll('.row.pt .pnum').forEach(p=>{p.textContent=m[1]+'.'+(++k)})});
+  // comprobaciones de longitud (criterio de aceptación máx. 3 %) y textos de ayuda
+  for(const k of ['check1','check2']){const el=palRowEl(k);if(el&&!el.querySelector('.ltdif'))el.insertAdjacentHTML('beforeend',`<div class="ltdif" data-pchk="${k}" hidden></div><p class="ltnota" data-pnota="${k}"></p>`)}
+  const n=palRowEl('lados');if(n&&!n.querySelector('.ltnota'))n.insertAdjacentHTML('beforeend','<p class="ltnota">Si coinciden, en el PDF van solo las del lado izquierdo (como dice la plantilla) y el lado derecho no hace falta rellenarlo.</p>');
+  const lz=palRowEl('presentes');if(lz&&!lz.querySelector('.ltnota'))lz.insertAdjacentHTML('beforeend','<p class="ltnota">Marca las luces que lleva el vehículo. En la tabla, A = altura del borde superior, B = altura del borde inferior, C = separación entre luces y D = distancia al lateral.</p>');
+};
+// número de apartado como en el PDF (el 5 y el 6 no salen: firmas y equipos de medida se quedan como vienen en la plantilla)
+function palRowEl(key){const r=PAL_MODEL&&PAL_MODEL.rowKey[key];if(!r)return null;const i=RL.indexOf(r);return i<0?null:document.querySelector(`.row[data-r="${i}"]`)}
+function palTextos(){
+  const pal=TPL_ACT==='pal';
+  const g=$('#gen');if(g)g.textContent=pal?'Generar PDF':'Generar Word';
+  document.documentElement.dataset.tpl=TPL_ACT;
+}
+/* ---------- cálculos de Palfinger ---------- */
+const palV=s=>s?String(state.v['s'+s.id]||'').trim():'';
+const palN=s=>{const v=palV(s);if(!v)return NaN;return num(v.replace(/[^\d.,-]/g,''))};
+const palFmt=x=>Number.isInteger(x)?String(x):String(Math.round(x*10)/10).replace('.',',');
+function palSet(s,val,clave){ // casilla calculada: se rellena sola mientras no la cambie a mano
+  if(!s)return;state.auto=state.auto||{};
+  const cur=state.v['s'+s.id]||'',prev=state.auto[clave]||'';
+  if(cur&&cur!==prev)return;
+  state.auto[clave]=val;if(cur===val)return;
+  state.v['s'+s.id]=val;const el=document.querySelector(`[data-slot="${s.id}"]`);if(el){el.value=val;if(ROW_OF[s.id])autoCumple(ROW_OF[s.id])}
+}
+function palCumple(key,ok){ // Cumple de un punto calculado por la app (si no lo ha tocado a mano)
+  const el=palRowEl(key);if(!el)return;const g=[...el.querySelectorAll('.grp')].pop();if(!g)return;
+  const bs=[...g.querySelectorAll('button')];if(bs.some(b=>state.manual['c'+b.dataset.cb]))return;
+  const si=bs.find(b=>/^s[ií]$/i.test(b.textContent.trim())),no=bs.find(b=>/^no$/i.test(b.textContent.trim()));if(!si||!no)return;
+  if(ok===null){bs.forEach(b=>setCb(+b.dataset.cb,false,false));return}
+  setCb(+(ok?si:no).dataset.cb,true,false);
+}
+const cbOn=(key,label)=>{const r=PAL_MODEL.rowKey[key];if(!r)return false;const o=r.items.filter(i=>i.t==='grp').flatMap(g=>g.opts).find(o=>o.label===label);return !!(o&&state.v['c'+o.cb])};
+function palCalc(){
+  if(TPL_ACT!=='pal'||!PAL_MODEL)return;const k=PAL_MODEL.key;
+  // 7.1 tara total = suma de los ejes
+  const taras=[1,2,3,4,5].map(i=>palN(k['tara'+i])).filter(x=>!isNaN(x));
+  palSet(k.taraT,taras.length?palFmt(taras.reduce((a,b)=>a+b,0)):'','taraT');
+  // 7.4 Check1 = Vd + D12 + D23 + D34 + D45 + Vt, Check2 = Vd + Ic + Lc; se comparan con la longitud total medida (máx. 3 %)
+  const sum=ks=>{const xs=ks.map(x=>palN(k[x]));return isNaN(xs[0])||xs.filter(x=>!isNaN(x)).length<2?NaN:xs.filter(x=>!isNaN(x)).reduce((a,b)=>a+b,0)};
+  const c1=sum(['vd','d12','d23','d34','d45','vt']),c2=(()=>{const xs=['vd','ic','lc'].map(x=>palN(k[x]));return xs.some(isNaN)?NaN:xs[0]+xs[1]+xs[2]})();
+  palSet(k.check1,isNaN(c1)?'':palFmt(c1),'check1');palSet(k.check2,isNaN(c2)?'':palFmt(c2),'check2');
+  const lt=palN(k.lt);
+  for(const [key,txt] of [['check1','Vd + D12 + D23 + D34 + D45 + Vt'],['check2','Vd + Ic + Lc']]){
+    const box=document.querySelector(`[data-pchk="${key}"]`),nota=document.querySelector(`[data-pnota="${key}"]`);if(!box)continue;
+    const c=palN(k[key]);
+    if(isNaN(c)||isNaN(lt)){box.hidden=true;nota.textContent=`Se calcula sola: ${txt}. Se compara con la longitud total medida (Lt); la plantilla admite hasta un 3 % de diferencia.`;continue}
+    const d=c-lt,p=Math.abs(d)/lt*100;
+    box.hidden=false;box.className='ltdif '+(d===0?'ok':p<=3?'ok':'mal');
+    box.textContent=d===0?'✓ Coincide con la longitud total':`${p<=3?'✓':'⚠'} ${d>0?'+':''}${palFmt(d)} mm con la longitud total (${palFmt(Math.round(p*10)/10)} %): ${p<=3?'dentro':'fuera'} del 3 %`;
+    nota.textContent=`${txt} = ${palFmt(c)} mm. Longitud total medida: ${palFmt(lt)} mm.`;
+  }
+  // 10.3 % de marcado; el ancho del vehículo y la longitud de carrocería se copian de masas mientras no los cambie
+  palSet(k.mpA,palV(k.anch),'mpA');palSet(k.mlLc,palV(k.lt),'mlLc');
+  const pct=(a,b)=>{const x=palN(a),y=palN(b);return isNaN(x)||isNaN(y)||!y?'':Math.round(x/y*100)+'%'};
+  palSet(k.mpPct,pct(k.mpLA,k.mpA),'mpPct');palSet(k.mlPct,pct(k.mlLA,k.mlLc),'mlPct');
+  // 7.5.1 dimensiones máximas y 7.5.3 suma de MMTA por eje ≥ MMTA total
+  const L=palN(k.lt),A=palN(k.anch),H=palN(k.alt),iso=/ISOTERM|FRIGO/i.test(palV(PAL_MODEL.slots.find(s=>s.f[0]==='TIPO CARROZADO')));
+  palCumple('c751',[L,A,H].some(isNaN)?null:L<=12000&&A<=(iso?2600:2550)&&H<=4000);
+  const me=[1,2,3,4,5].map(i=>palN(k['mmta'+i])).filter(x=>!isNaN(x)),mt=palN(k.mmtaT);
+  palCumple('c753',!me.length||isNaN(mt)?null:me.reduce((a,b)=>a+b,0)>=mt);
+  // límites que dependen de la categoría, la suspensión y el ángulo de salida (8.4 H min, 8.5 G max)
+  const cat=palV(k.cat).toUpperCase().replace(/\s/g,''),mmta=palN(k.mmtaT);
+  const hm=PAL_MODEL.rowKey.hmin;
+  if(hm){let v=null;
+    if(/^(N1|O1|O2)/.test(cat)||/^N[23]G/.test(cat)||(/^N2/.test(cat)&&mmta<=8000))v=100;else if(/^(N2|N3|O3|O4)/.test(cat)&&(!/^N2/.test(cat)||mmta>8000))v=120;
+    hm.limit=v?{min:v}:null;const el=palRowEl('hmin');if(el){const l=el.querySelector('.lbl.lim');if(l)l.textContent=v?`≥${v} mm (${cat})`:'≥100 mm o ≥120 mm';autoCumple(el)}}
+  const gm=PAL_MODEL.rowKey.gmax;
+  if(gm){const neu=cbOn('susp','Neumática'),bal=cbOn('susp','Ballestas'),a8=cbOn('alfa','α° > 8°'),b8=cbOn('alfa','α° ≤ 8°');let v=null;
+    if(/^(M|N1|O1|O2)/.test(cat)||(/^N2/.test(cat)&&mmta<8000))v=550;else if((neu||bal)&&(a8||b8))v=b8?550:neu?450:500;
+    gm.limit=v?{max:v}:null;const el=palRowEl('gmax');if(el){const l=el.querySelector('.lbl.lim');if(l)l.textContent=v?`≤${v} mm`:'≤450, ≤500 o ≤550 mm';autoCumple(el)}}
+  // 10.2 luces laterales: Cumple de posición y catadióptricos con los límites de cada columna (y el lado derecho si no coinciden)
+  const lados=cbOn('lados','Sí');
+  for(const [key,rows] of [['cumPos',['posI',...(lados?[]:['posD'])]],['cumCat',['catI',...(lados?[]:['catD'])]]]){
+    let res=[];for(const rk of rows){const r=PAL_MODEL.rowKey[rk];r.items.filter(i=>i.t==='slot').forEach((i,j)=>{const v=palV(PAL_MODEL.slots[i.id]);if(v)res.push(evalLimit(parseLimit(r.lims[j]),v))})}
+    palCumple(key,!res.length||res.some(x=>x===null)?null:res.every(Boolean));
+  }
+  palVer();
+}
+// partes que no aplican: el lado derecho de las luces laterales si coinciden, el sistema antiproyección que no lleva,
+// y la protección trasera según la categoría (8.3 solo N1, O1 y O2; 8.5 solo N2, N3, O3 y O4)
+function palVer(){
+  const blkDe=key=>{const el=palRowEl(key);return el&&el.closest('.blk1')};
+  const ocultar=(el,h)=>{if(el)el.hidden=h};
+  const lados=cbOn('lados','Sí');ocultar(blkDe('posD'),lados);
+  const g=cbOn('antiSis','Con guardabarros específicos (12.3)'),s=cbOn('antiSis','Con suelo de carrocería (12.4)');
+  document.querySelectorAll('.row').forEach(el=>{const r=rowModelFor(el);if(!r||!r.key)return;
+    if(r.key==='a123'){const b=el.closest('.blk1');if(b)b.hidden=s&&!g}
+    if(r.key==='a124'){const b=el.closest('.blk1');if(b)b.hidden=g&&!s}});
+  const cat=palV(PAL_MODEL.key.cat).toUpperCase(),lig=/^(N1|O1|O2)/.test(cat),pes=/^(N2|N3|O3|O4)/.test(cat);
+  const sec=[...document.querySelectorAll('details.sec')].find(d=>/^PROTECCI[OÓ]N TRASERA/.test(d.querySelector('h2').textContent));
+  if(sec)sec.querySelectorAll('.blk1').forEach(b=>{const t=b.dataset.title||'';if(/^8\.3/.test(t))b.hidden=pes;if(/^8\.5/.test(t))b.hidden=lig});
+}
+document.addEventListener('input',e=>{if(TPL_ACT==='pal'&&e.target.dataset&&e.target.dataset.slot!==undefined){palCalc();save()}});
+document.addEventListener('click',e=>{if(TPL_ACT==='pal'&&e.target.closest&&e.target.closest('[data-cb]'))setTimeout(()=>{palCalc();save()},0)});
+/* ---------- nombre del vehículo, COC y búsqueda de casillas ---------- */
+findSlot=function(re){return model.slots.find(s=>re.test(s.label)||(s.alias&&re.test(s.alias)))};
+const palRefresh0=refresh;
+refresh=function(){palRefresh0();if(TPL_ACT==='pal'){const v=$('#veh');v.textContent='Palfinger · '+v.textContent}};
+function palCocTargets(m){
+  const k=m.key,one=f=>m.slots.find(s=>s.f[0]===f);
+  return [['marca','Marca',one('MARCA')],['denominacion_comercial','Denominación comercial',one('DENOMINACIÓN COMERCIAL')],
+    ['categoria','Categoría',one('CATEGORIA VEHICULO')],['homologacion','C. homologación 1ª fase',one('C HOMOLOGACIÓN 1 FASE')],
+    ['bastidor','Nº de bastidor',one('N DE BASTIDOR')],
+    ...['d12','d23','d34','d45'].map((x,i)=>[['distancia_ejes',i],`Distancia eje ${i+1}-${i+2}`,k[x]]),
+    ['mmta_total','MMTA total',k.mmtaT],...[1,2,3,4,5].map(i=>[['mmta_ejes',i-1],`MMTA eje ${i}`,k['mmta'+i]])].filter(t=>t[2]);
+}
+const palCoc0=cocTargets;
+cocTargets=function(){return TPL_ACT==='pal'?palCocTargets(model):palCoc0()};
+/* ---------- PDF ---------- */
+const PDF_MIME='application/pdf';
+function palNombres(){
+  const val=re=>{const s=findSlot(re);return String((s&&state.v['s'+s.id])||'').replace(/\s+/g,' ').trim()};
+  return {marca:val(/^Marca \(fase/),bast:val(/bastidor/i)};
+}
+async function palPdf(){
+  await palCargar();usarPlantilla('pal');
+  const {PDFDocument}=PDFLib;
+  const pdf=await PDFDocument.load(b64ToBytes(PAL.tpl));
+  const form=pdf.getForm();
+  for(const s of model.slots){
+    const raw=state.v['s'+s.id];
+    let v=raw===undefined?(DEFAULTS['s'+s.id]!==undefined?DEFAULTS['s'+s.id]:null):String(raw).trim().replace(/°/g,'º');
+    if(v===null&&!/^fill_18$/.test(s.f[0]))continue; // sin tocar: como venga la plantilla
+    for(const n of s.f){const f=form.getTextField(n);if(/\n/.test(v||''))f.enableMultiline();f.setText(v||'')}
+  }
+  // responsable de la homologación de Palfinger: Francisco González Nogueira (como trae la plantilla, sin el espacio delante)
+  try{form.getTextField('Nombre del responsable de la Homologación PALFINGER').setText('Francisco González Nogueira')}catch(e){}
+  for(const c of model.cbs){const f=form.getCheckBox(c.f);if(state.v['c'+c.id])f.check();else f.uncheck()}
+  pdf.setTitle('Conformidad de la producción FC12-06');pdf.setAuthor('');pdf.setCreator('');pdf.setProducer('');
+  return new Blob([await pdf.save()],{type:PDF_MIME});
+}
+async function palBuild(){
+  const blob=await palPdf();
+  const {marca,bast}=palNombres();
+  const clean=x=>(x||'').replace(/[\\/:*?"<>|]+/g,'.').replace(/\s+/g,' ').trim();
+  const name=`COP PALFINGER ${clean(marca)||'VEHICULO'} ${clean(bast)}`.trim()+'.pdf';
+  const subject=`COP ${marca||'VEHÍCULO'} ${bast}`.trim();
+  refresh();
+  const val=re=>{const s=findSlot(re);return String((s&&state.v['s'+s.id])||'').replace(/\s+/g,' ').trim()};
+  const datos=[['Marca',marca],['Nº de bastidor',bast],['Denominación comercial',val(/^Denominaci[oó]n comercial/)],['Categoría',val(/^Categor[ií]a del veh/)],
+    ['Máquina instalada',[palV(model.slots.find(s=>s.f[0]==='MÁQUINA INSTALADA 1')),palV(model.slots.find(s=>s.f[0]==='MÁQUINA INSTALADA 2'))].filter(Boolean).join(' / ')],
+    ['Fecha de la revisión',palV(model.key.fecha)]].filter(([,v])=>v);
+  const bad=BAD.map(badText);
+  const body=['COP PALFINGER FC12-06',...datos.map(([k,v])=>k+': '+v),'',
+    ...(bad.length?[`Resultado: ${bad.length===1?'1 medida no cumple':bad.length+' medidas no cumplen'}:`,...bad.map(t=>'- '+t)]:['Resultado: todas las medidas dentro de límite.']),
+    ...(PEND.length?[`Pendientes: ${PEND.length}`]:[]),'','PDF adjunto: '+name].join('\n');
+  return {blob,name,subject,body,pdf:true,mime:PDF_MIME};
+}
+const palBuild0=buildWord;
+buildWord=function(){return TPL_ACT==='pal'?palBuild():palBuild0()};
+// leer un COP de Palfinger ya hecho (el PDF relleno): sus casillas pasan a la app
+async function palLeerPdf(file){
+  await palCargar();
+  const {PDFDocument}=PDFLib;
+  const pdf=await PDFDocument.load(await file.arrayBuffer(),{ignoreEncryption:true});
+  const form=pdf.getForm(),m=PAL_MODEL||palModelo(),v={};
+  const nombres=new Set(form.getFields().map(f=>f.getName()));
+  const faltan=m.slots.flatMap(s=>s.f).concat(m.cbs.map(c=>c.f)).filter(n=>!nombres.has(n)).length;
+  if(faltan>20)throw new Error('Este PDF no es la plantilla de Palfinger FC12-06 rellena.');
+  for(const s of m.slots){if(!nombres.has(s.f[0]))continue;const t=form.getTextField(s.f[0]).getText();if(t&&t.trim())v['s'+s.id]=t.trim()}
+  for(const c of m.cbs){if(!nombres.has(c.f))continue;if(form.getCheckBox(c.f).isChecked())v['c'+c.id]=true}
+  return {v,m};
+}
+
 /* ---------- Versión con pantalla de inicio (build.sh → cop-inicio.html) ----------
    Al abrir sale el inicio: Nuevo COP, Cargar COP, Añadir COC, Crear Word. Cada COP se guarda solo mientras se rellena
    (base de datos de la app, privada de cada usuario; sin ella, en este navegador) y no se borra nunca solo: los borra Daniel
@@ -1753,7 +2034,7 @@ const DIA=864e5;
 // sitio del navegador para la app (localStorage): Chrome deja unos 5,2 millones de letras; se cuenta con 5 y cada COP ocupa unas 11.000
 const SITIO=5e6, COP_TAM=11500, POCO=40;
 const K_ACTUAL='cop-inicio-actual-v1', K_LISTA='cop-inicio-lista-v1';
-const ORIGEN={coc:'Empezado con el COC',word:'Desde un Word'};
+const ORIGEN={coc:'Empezado con el COC',word:'Desde un Word',pdf:'Desde un PDF'};
 let CUR=null;            // COP abierto: {id, creado, cambiado, origen, word, guardado} o {prueba:título}
 let LIST=null;           // COP guardados (null mientras se cargan)
 let DBX=null, UID=null;  // sin base de datos la lista va en localStorage
@@ -1772,9 +2053,9 @@ const newId=()=>'cop-'+Date.now().toString(36)+'-'+Math.random().toString(36).sl
 const nuevoCur=origen=>({id:newId(),creado:Date.now(),cambiado:Date.now(),origen,word:null});
 const vacio=()=>({v:{},manual:{}});
 function valOf(st,re){const s=findSlot(re);return String((s&&st.v['s'+s.id])||'').replace(/\s+/g,' ').trim()}
-function infoOf(st){return {marca:valOf(st,/^Marca \(fase/i),bastidor:valOf(st,/bastidor/i),denominacion:valOf(st,/^Denominaci[oó]n comercial/),categoria:valOf(st,/^Categor[ií]a del veh/)}}
+function infoOf(st){return conModelo(st,()=>({marca:valOf(st,/^Marca \(fase/i),bastidor:valOf(st,/bastidor/i),denominacion:valOf(st,/^Denominaci[oó]n comercial/),categoria:valOf(st,/^Categor[ií]a del veh/)}),{})}
 // datos escritos (sin contar lo que la app pone por defecto); con cb también cuenta las casillas marcadas
-function nDatos(st,cb){let n=0;for(const [k,v] of Object.entries(st.v||{})){if(DEFAULTS[k]===v)continue;if(k[0]==='c'?(cb&&v):(typeof v==='string'&&v.trim()))n++}return n}
+function nDatos(st,cb){return conModelo(st,()=>{let n=0;for(const [k,v] of Object.entries(st.v||{})){if(DEFAULTS[k]===v)continue;if(k[0]==='c'?(cb&&v):(typeof v==='string'&&v.trim()))n++}return n})}
 const hasData=st=>nDatos(st,true)>0;
 const titulo=i=>[i.marca,i.bastidor].filter(Boolean).join(' · ')||i.etiqueta||'COP sin identificar'; // etiqueta: nombre para un COP aún sin marca ni bastidor
 const infoCur=()=>({...infoOf(state),etiqueta:CUR&&CUR.etiqueta})
@@ -1815,7 +2096,7 @@ async function borrar(id){
   else{const m=lsGet(K_LISTA,{});delete m[id];lsSet(K_LISTA,m)}
   if(LIST)LIST=LIST.filter(x=>x.id!==id);
 }
-function docOf(){return {tipo:'cop',id:CUR.id,creado:CUR.creado,cambiado:CUR.cambiado,word:CUR.word||null,origen:CUR.origen||'nuevo',etiqueta:CUR.etiqueta||null,...infoOf(state),datos:nDatos(state),estado:JSON.stringify(state)}}
+function docOf(){return {tipo:'cop',id:CUR.id,creado:CUR.creado,cambiado:CUR.cambiado,word:CUR.word||null,origen:CUR.origen||'nuevo',plantilla:esPal(state)?'pal':'prc',etiqueta:CUR.etiqueta||null,...infoOf(state),datos:nDatos(state),estado:JSON.stringify(state)}}
 // cada cambio del COP abierto (save) se guarda en la lista a los 1,5 s de dejar de escribir
 function onSaved(){
   if(CUR&&CUR.prueba)return;                            // los COP de prueba no se guardan
@@ -1989,12 +2270,12 @@ function renderHome(){
   $('#curCard').hidden=!ab;$('#curSwipe').hidden=!ab;cerrarSwipe();
   if(ab){
     if(model)refresh();
-    $('#curVeh').textContent=CUR.prueba||titulo(infoCur());
+    $('#curVeh').textContent=(esPal(state)?'Palfinger · ':'')+(CUR.prueba||titulo(infoCur()));
     const bad=BAD.length?`<span class="bad">${BAD.length===1?'1 medida no cumple':BAD.length+' medidas no cumplen'}</span>`:'';
     $('#curInfo').innerHTML=CUR.prueba?'COP de prueba con datos inventados: no se guarda en tu lista'+(bad?' · '+bad:'')
-      :[esc('Cambiado '+cuando(CUR.cambiado||Date.now())),esc(datosTxt(nDatos(state))),CUR.word?'Word creado':'',bad].filter(Boolean).join(' · ');
+      :[esc('Cambiado '+cuando(CUR.cambiado||Date.now())),esc(datosTxt(nDatos(state))),CUR.word?(esPal(state)?'PDF':'Word')+' creado':'',bad].filter(Boolean).join(' · ');
   }
-  $('#tWord').setAttribute('aria-disabled',String(!ab));
+  $('#tWord').setAttribute('aria-disabled',String(!ab));$('#tWord b').textContent=ab&&esPal(state)?'Crear PDF':'Crear Word';
   if(LIST){const pr=PRUEBAS.length?' o uno de prueba':'';
     $('#tCargarD').textContent=LIST.length?`${LIST.length===1?'1 COP guardado':LIST.length+' COP guardados'}${pr?', un Word anterior'+pr:' o un Word anterior'}`:`Un Word anterior${pr} (aún no hay COP guardados)`}
   const n=caben();
@@ -2009,10 +2290,10 @@ function renderMis(){
   if(!LIST){box.innerHTML='<p class="empty">Cargando tus COP…</p>';return}
   const it=[...LIST].sort((a,b)=>(b.cambiado||0)-(a.cambiado||0));
   box.innerHTML=it.length?it.map(d=>{const now=!!CUR&&CUR.id===d.id;return `<div class="copit${now?' now':''}" data-id="${esc(d.id)}">
-    <div class="ct"><b>${esc(titulo(d))}</b>${now?'<span class="tag">Abierto</span>':''}</div>
+    <div class="ct"><b>${esc(titulo(d))}</b><span class="tags">${d.plantilla==='pal'?'<span class="tag pal">Palfinger</span>':''}${now?'<span class="tag">Abierto</span>':''}</span></div>
     ${[d.denominacion,d.categoria,ORIGEN[d.origen]].filter(Boolean).length?`<span class="m">${esc([d.denominacion,d.categoria,ORIGEN[d.origen]].filter(Boolean).join(' · '))}</span>`:''}
-    <span class="m">Cambiado ${esc(cuando(d.cambiado))} · ${datosTxt(+d.datos||0)}${d.word?' · Word creado':''}</span>
-    <div class="acts"><button type="button" class="primary" data-abrir>Abrir</button><button type="button" data-word>Crear Word</button><button type="button" class="del" data-borrar>Borrar</button></div>
+    <span class="m">Cambiado ${esc(cuando(d.cambiado))} · ${datosTxt(+d.datos||0)}${d.word?' · '+(d.plantilla==='pal'?'PDF':'Word')+' creado':''}</span>
+    <div class="acts"><button type="button" class="primary" data-abrir>Abrir</button><button type="button" data-word>Crear ${d.plantilla==='pal'?'PDF':'Word'}</button><button type="button" class="del" data-borrar>Borrar</button></div>
   </div>`}).join(''):`<p class="empty">Aún no hay COP guardados. Los que empieces aparecerán aquí hasta que los borres.</p>`;
   const n=caben();
   box.insertAdjacentHTML('beforeend',n===null?'':`<p class="hint sitio${n<POCO?' aviso':''}">${n<1?'Ya casi no queda sitio en este móvil para más COP: borra los que ya no necesites.':n<POCO?`Queda sitio para unos ${n} COP más en este móvil: borra los que ya no necesites.`:`Caben unos ${n} COP más en este móvil.`}</p>`);
@@ -2056,11 +2337,21 @@ async function quitarDelInicio(){
 }
 {let hecho=0;const b=$('#curDel'),go=e=>{e.preventDefault();e.stopPropagation();if(Date.now()-hecho<800)return;hecho=Date.now();quitarDelInicio()};
   b.addEventListener('click',go);b.addEventListener('pointerup',e=>{if(e.pointerType!=='mouse')go(e)});} // en el móvil, al levantar el dedo
+// Nuevo COP: primero se elige la plantilla (la general o la de Palfinger, que sale en PDF)
+const TPLS=[['prc','General','PRC-08.02 ED13 · sale en Word'],['pal','Palfinger','FC12-06 · sale en PDF']];
+const tplBotones=pre=>`<div class="tplpick">${TPLS.map(([t,n,d])=>`<button type="button" data-${pre}="${t}"><b>${n}</b><span>${d}</span></button>`).join('')}</div>`;
 $('#tNuevo').onclick=async()=>{
-  await READY;const habia=!!CUR&&!CUR.prueba&&hasData(state);
-  abrirEstado(vacio(),nuevoCur('nuevo'));
-  if(habia)showMsg('COP nuevo en blanco. El que tenías abierto sigue guardado en «Cargar COP».');
+  await READY;
+  ask('Nuevo COP','<p>¿Con qué plantilla?</p>'+tplBotones('nuevo'),[['Cancelar']]);
 };
+async function nuevoCop(t){
+  const habia=!!CUR&&!CUR.prueba&&hasData(state);
+  if(t==='pal'){showMsg('Cargando la plantilla de Palfinger…');try{await palCargar()}catch(e){showMsg(e.message||String(e),true);return}}
+  abrirEstado(t==='pal'?{...vacio(),tpl:'pal'}:vacio(),nuevoCur('nuevo'));
+  const q=t==='pal'?'COP nuevo de Palfinger.':'COP nuevo en blanco.';
+  showMsg(habia?q+' El que tenías abierto sigue guardado en «Cargar COP».':q);
+}
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-nuevo]');if(!b)return;$('#dlg').hidden=true;nuevoCop(b.dataset.nuevo)});
 $('#tCargar').onclick=async()=>{await READY;flush().then(()=>{if(document.documentElement.dataset.vista==='mis')renderMis()});vista('mis')};
 $('#tCoc').onclick=async()=>{
   await READY;
@@ -2074,6 +2365,23 @@ $('#tWord').onclick=async()=>{
 };
 $('#cocbtn').onclick=()=>{openPicker('coc');PICK.onFiles=fs=>{COC_HOME=false;readCoc(fs)}};
 $('#misWord').onclick=()=>{openPicker('docx');PICK.onFiles=fs=>importarWord(fs[0])};
+// un COP de Palfinger ya hecho (el PDF relleno): se abre igual que un Word anterior, completo o como base
+$('#misPdf').onclick=()=>{openPicker('coc');$('#dlgT').textContent='Cargar un PDF de Palfinger';PICK.onFiles=fs=>importarPdf(fs[0])};
+async function importarPdf(file){
+  if(!file)return;showMsg('Leyendo «'+file.name+'»…');
+  try{
+    const {v,m}=await palLeerPdf(file);$('#msg').hidden=true;
+    const n=Object.keys(v).length;if(!n)throw new Error('no tiene nada relleno');
+    const abrir=keep=>{
+      const nv={...v};
+      if(!keep){const sec0=m.sections[0].title;for(const s of m.slots)if(s.sec===sec0||/Fecha/.test(s.label))delete nv['s'+s.id]}
+      abrirEstado({v:nv,manual:Object.fromEntries(Object.keys(nv).filter(k=>k[0]==='c').map(k=>[k,true])),tpl:'pal'},nuevoCur('pdf'));
+      showMsg(`Cargado «${file.name}» como COP nuevo de Palfinger.`);
+    };
+    ask('Cargar un PDF de Palfinger',`<p>«${esc(file.name)}» tiene ${n} datos rellenos.</p><p>Puedes cargarlo completo para corregirlo, o usarlo como base para otro vehículo parecido (sin identificación ni fecha). Se abre como un COP nuevo de tu lista.</p>`,
+      [['Cancelar'],['Como base','',()=>abrir(false)],['Completo','primary',()=>abrir(true)]]);
+  }catch(err){showMsg('No se pudo leer el PDF: '+((err&&err.message)||err),true)}
+}
 $('#misList').onclick=e=>{
   const b=e.target.closest('button'),it=b&&b.closest('.copit');if(!it)return;
   const d=(LIST||[]).find(x=>x.id===it.dataset.id);if(!d)return;
@@ -2107,10 +2415,10 @@ async function importarWord(file){
   showMsg('Leyendo «'+file.name+'»…');
   try{
     const z=await JSZip.loadAsync(await file.arrayBuffer());
-    const v=readDoc(parseXml(await z.file('word/document.xml').async('string')));
+    const xml=parseXml(await z.file('word/document.xml').async('string')),v=conModelo(vacio(),()=>readDoc(xml)); // un Word es siempre de la general
     const abrir=keep=>{
       const nv={...v};
-      if(!keep){const sec0=model.sections.find(s=>/IDENTIFICACI/.test(s.title));for(const s of model.slots)if(s.sec===sec0.title||/Fecha/.test(s.label))delete nv['s'+s.id]}
+      if(!keep)conModelo(vacio(),()=>{const sec0=model.sections.find(s=>/IDENTIFICACI/.test(s.title));for(const s of model.slots)if(s.sec===sec0.title||/Fecha/.test(s.label))delete nv['s'+s.id]});
       abrirEstado({v:nv,manual:Object.fromEntries(Object.keys(nv).filter(k=>k[0]==='c').map(k=>[k,true]))},nuevoCur('word'));
       showMsg(`Cargado «${file.name}» como COP nuevo.`);
     };
@@ -2119,6 +2427,15 @@ async function importarWord(file){
   }catch(err){showMsg('No se pudo leer el Word: '+((err&&err.message)||err),true)}
 }
 // COC leído desde el inicio: COP nuevo con sus datos, o completar las casillas vacías del abierto
+// el COC sirve para las dos plantillas: los datos que se ven son los de la plantilla del COP abierto (o la general);
+// «Nuevo COP» deja elegir la plantilla y rellena las casillas de esa
+const cocFound=(data,t)=>conModelo(t==='pal'?{tpl:'pal'}:vacio(),()=>cocTargets().map(([key,name,slot])=>({name,slot,v:cocValue(data,key)})).filter(x=>x.v&&!/^null$/i.test(x.v)),[]);
+async function nuevoConCoc(data,t){
+  if(t==='pal'){try{await palCargar()}catch(e){showMsg(e.message||String(e),true);return}}
+  const found=cocFound(data,t),st=t==='pal'?{...vacio(),tpl:'pal'}:vacio();found.forEach(x=>{st.v['s'+x.slot.id]=x.v});
+  abrirEstado(st,nuevoCur('coc'));
+  showMsg(`COP nuevo${t==='pal'?' de Palfinger':''} con ${found.length} datos del COC. Revisa la identificación y sigue con las medidas.`);
+}
 function cocElegir(data,fname){
   const found=cocTargets().map(([key,name,slot])=>({name,slot,v:cocValue(data,key)})).filter(x=>x.v&&!/^null$/i.test(x.v));
   if(!found.length){ask('COC leído',`<p>No he encontrado datos en «${esc(fname)}». Revisa que sea el COC del vehículo.</p>`,[['Cerrar','primary']]);return}
@@ -2126,11 +2443,7 @@ function cocElegir(data,fname){
   ask('COC leído',`<p>He leído ${found.length} datos de «${esc(fname)}»:</p><ul class="cocl">${found.map(x=>`<li>${esc(x.name)}: <b>${esc(x.v)}</b></li>`).join('')}</ul>`+
     (abierto?`<p class="hint">Puedes empezar un COP nuevo con ellos o completar las casillas vacías del COP abierto (${esc(CUR.prueba||titulo(infoCur()))}).</p>`:''),
     [['Cancelar'],...(abierto?[['Completar el abierto','',()=>{vista('cop');_showCoc(data,fname)}]]:[]),
-     ['Nuevo COP con estos datos','primary',()=>{
-       const st=vacio();found.forEach(x=>{st.v['s'+x.slot.id]=x.v});
-       abrirEstado(st,nuevoCur('coc'));
-       showMsg(`COP nuevo con ${found.length} datos del COC. Revisa la identificación y sigue con las medidas.`);
-     }]]);
+     ['Nuevo COP general',abierto?'':'primary',()=>nuevoConCoc(data,'prc')],['Nuevo COP Palfinger','',()=>nuevoConCoc(data,'pal')]]);
 }
 
 /* ---------- al arrancar ---------- */
@@ -2450,7 +2763,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 12 oct, 20:08';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 12 oct, 23:11';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
