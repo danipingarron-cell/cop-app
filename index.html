@@ -250,7 +250,8 @@ button.tile:active{transform:scale(.98)}
 .copit .ct b{font-size:16px;overflow-wrap:anywhere}
 .copit .tag{flex:none;padding:3px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
 .copit .m{font-size:13px;color:var(--muted)}
-.copit .exp.pronto{color:var(--warn);font-weight:600} /* el último día */
+.sitio{margin:2px 4px 14px}
+.sitio.aviso,.homenote.aviso{color:var(--warn);font-weight:600} /* queda poco sitio en el móvil */
 .copit .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .copit .acts .del{color:var(--bad)}
 .empty{margin:0 0 10px;padding:18px 16px;border-radius:16px;background:var(--panel);color:var(--muted)}
@@ -317,7 +318,7 @@ button.linkb{align-self:center;border:0;background:none;box-shadow:none;color:va
       </div>
       <div class="tiles">
         <button type="button" class="tile main" id="tNuevo"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/></svg></span><b>Nuevo COP</b><span class="d">Empieza un COP en blanco</span></button>
-        <button type="button" class="tile" id="tCargar"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 11h18"/></svg></span><b>Cargar COP</b><span class="d" id="tCargarD">Los de esta semana, un Word anterior o uno de prueba</span></button>
+        <button type="button" class="tile" id="tCargar"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 11h18"/></svg></span><b>Cargar COP</b><span class="d" id="tCargarD">Tus COP guardados o un Word anterior</span></button>
         <button type="button" class="tile" id="tCoc"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M8 9h8M8 12h8M8 15h5"/></svg></span><b>Añadir COC</b><span class="d">Foto o PDF: COP nuevo con sus datos o completar el abierto</span></button>
         <button type="button" class="tile" id="tWord"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8 12l1.3 5 1.7-3.8 1.7 3.8L14 12"/></svg></span><b>Crear Word</b><span class="d">Del COP abierto, para guardarlo o enviarlo</span></button>
       </div>
@@ -1745,9 +1746,12 @@ async function initCoc(){
 <script>
 /* ---------- Versión con pantalla de inicio (build.sh → cop-inicio.html) ----------
    Al abrir sale el inicio: Nuevo COP, Cargar COP, Añadir COC, Crear Word. Cada COP se guarda solo mientras se rellena
-   (base de datos de la app, privada de cada usuario; sin ella, en este navegador) y se borra 7 días después del último cambio.
+   (base de datos de la app, privada de cada usuario; sin ella, en este navegador) y no se borra nunca solo: los borra Daniel
+   desde «Cargar COP» (12 oct; antes se borraban a los 7 días). En el móvil se avisa cuando queda poco sitio.
    La app de siempre no cambia: aquí se envuelven save(), buildWord(), showCoc() e initCoc() y se cambian los botones de la cabecera. */
-const DIAS=7, DIA=864e5;
+const DIA=864e5;
+// sitio del navegador para la app (localStorage): Chrome deja unos 5,2 millones de letras; se cuenta con 5 y cada COP ocupa unas 11.000
+const SITIO=5e6, COP_TAM=11500, POCO=40;
 const K_ACTUAL='cop-inicio-actual-v1', K_LISTA='cop-inicio-lista-v1';
 const ORIGEN={coc:'Empezado con el COC',word:'Desde un Word'};
 let CUR=null;            // COP abierto: {id, creado, cambiado, origen, word, guardado} o {prueba:título}
@@ -1780,7 +1784,14 @@ function cuando(ms){
   return n===0?'hoy, '+hm:n===1?'ayer, '+hm:d.toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'})+', '+hm;
 }
 const datosTxt=n=>n===1?'1 dato':n+' datos';
-function borraEn(ms){const n=Math.ceil((ms+DIAS*DIA-Date.now())/DIA);return n<=1?'Se borra en menos de un día':`Se borra en ${n} días`}
+// cuántos COP caben aún en este móvil (solo sin base de datos: la lista va en localStorage); null si no se sabe
+function caben(){
+  if(DBX||!LIST)return null;
+  let usado=0;try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);usado+=k.length+(localStorage.getItem(k)||'').length}}catch(e){return null}
+  const tam=LIST.length?Math.max(COP_TAM,Math.round(LIST.reduce((a,d)=>a+JSON.stringify(d).length,0)/LIST.length)):COP_TAM;
+  return Math.max(0,Math.floor((SITIO-usado)/tam));
+}
+const lleno=e=>!!e&&(e.code==='lleno'||e.name==='QuotaExceededError'||e.code===22);
 
 /* ---------- guardar: base de datos de la app o este navegador ---------- */
 async function initStore(){
@@ -1795,7 +1806,8 @@ async function listar(){
 }
 async function guardar(doc){
   if(DBX)await retry(()=>col().doc(doc.id).set(doc));
-  else{const m=lsGet(K_LISTA,{});m[doc.id]=doc;lsSet(K_LISTA,m)}
+  else{const m=lsGet(K_LISTA,{});m[doc.id]=doc;
+    try{localStorage.setItem(K_LISTA,JSON.stringify(m))}catch(e){throw lleno(e)?{code:'lleno'}:e}} // sin sitio: que se vea, no perderlo callado
   if(LIST){const i=LIST.findIndex(x=>x.id===doc.id);if(i<0)LIST.push(doc);else LIST[i]=doc}
 }
 async function borrar(id){
@@ -1816,8 +1828,9 @@ function flush(){
   clearTimeout(SYNC_T);
   if(DIRTY&&CUR&&!CUR.prueba){
     DIRTY=false;const doc=docOf(),cur=CUR;              // se copia ya: aunque luego se abra otro COP, se guarda este
-    SYNC_P=SYNC_P.then(()=>guardar(doc)).then(()=>{cur.guardado=true;if(cur===CUR)curSave();SYNC_ERR=null},e=>{
-      SYNC_ERR=e;if(cur===CUR)DIRTY=true;
+    const enInicio=()=>{if(!document.documentElement.dataset.vista)renderHome()}; // que el aviso del inicio salga o se quite ya
+    SYNC_P=SYNC_P.then(()=>guardar(doc)).then(()=>{cur.guardado=true;if(cur===CUR)curSave();const habia=SYNC_ERR;SYNC_ERR=null;if(habia)enInicio()},e=>{
+      SYNC_ERR=e;if(cur===CUR)DIRTY=true;enInicio();
       if(DBX&&['revoked','not_granted','capability_disabled','capability_removed','invalid_argument'].includes(e&&e.code)){DBX=null;setTimeout(flush,0)} // sin base de datos: a este navegador
     });
   }
@@ -1960,7 +1973,7 @@ function vista(v,y){
   if(v==='inicio')delete r.dataset.vista;else r.dataset.vista=v;
   $('#dlg').hidden=true;$('#msg').hidden=true;
   $('#hT').textContent=v==='mis'?'Cargar COP':NOMBRE;
-  $('#hsub').textContent=v==='mis'?`Tus COP de los últimos ${DIAS} días`:'Inicio';
+  $('#hsub').textContent=v==='mis'?'Tus COP guardados':'Inicio';
   if(v==='inicio'){renderHome();cocReciente()}
   if(v==='mis')renderMis();
   window.scrollTo(0,y||0);hereSoon();
@@ -1984,8 +1997,12 @@ function renderHome(){
   $('#tWord').setAttribute('aria-disabled',String(!ab));
   if(LIST){const pr=PRUEBAS.length?' o uno de prueba':'';
     $('#tCargarD').textContent=LIST.length?`${LIST.length===1?'1 COP guardado':LIST.length+' COP guardados'}${pr?', un Word anterior'+pr:' o un Word anterior'}`:`Un Word anterior${pr} (aún no hay COP guardados)`}
-  $('#homeNote').textContent=`Los COP se guardan solos mientras los rellenas${DBX||!LIST?'':INDEP?' en este móvil':' (en este navegador)'} y se borran ${DIAS} días después del último cambio.`+
-    (SYNC_ERR?' Ahora mismo no se ha podido guardar en la lista: se vuelve a intentar al seguir rellenando.':'');
+  const n=caben();
+  $('#homeNote').textContent=`Los COP se guardan solos mientras los rellenas${DBX||!LIST?'':INDEP?' en este móvil':' (en este navegador)'} y no se borran: los quitas tú en «Cargar COP» cuando ya no los necesites.`+
+    (lleno(SYNC_ERR)?' No queda sitio para guardar este COP en la lista: borra en «Cargar COP» los que ya no necesites.'
+     :SYNC_ERR?' Ahora mismo no se ha podido guardar en la lista: se vuelve a intentar al seguir rellenando.'
+     :n!==null&&n<POCO?(n<1?' Ya casi no queda sitio en el móvil para más COP: borra en «Cargar COP» los que ya no necesites.':` Queda sitio para unos ${n} COP más: borra en «Cargar COP» los que ya no necesites.`):'');
+  $('#homeNote').classList.toggle('aviso',lleno(SYNC_ERR)||(n!==null&&n<POCO));
 }
 function renderMis(){
   const box=$('#misList');
@@ -1995,13 +2012,14 @@ function renderMis(){
     <div class="ct"><b>${esc(titulo(d))}</b>${now?'<span class="tag">Abierto</span>':''}</div>
     ${[d.denominacion,d.categoria,ORIGEN[d.origen]].filter(Boolean).length?`<span class="m">${esc([d.denominacion,d.categoria,ORIGEN[d.origen]].filter(Boolean).join(' · '))}</span>`:''}
     <span class="m">Cambiado ${esc(cuando(d.cambiado))} · ${datosTxt(+d.datos||0)}${d.word?' · Word creado':''}</span>
-    <span class="m exp${d.cambiado+(DIAS-1)*DIA<Date.now()?' pronto':''}">${esc(borraEn(d.cambiado))}</span>
     <div class="acts"><button type="button" class="primary" data-abrir>Abrir</button><button type="button" data-word>Crear Word</button><button type="button" class="del" data-borrar>Borrar</button></div>
-  </div>`}).join(''):`<p class="empty">Aún no hay COP guardados. Los que empieces aparecerán aquí durante ${DIAS} días.</p>`;
+  </div>`}).join(''):`<p class="empty">Aún no hay COP guardados. Los que empieces aparecerán aquí hasta que los borres.</p>`;
+  const n=caben();
+  box.insertAdjacentHTML('beforeend',n===null?'':`<p class="hint sitio${n<POCO?' aviso':''}">${n<1?'Ya casi no queda sitio en este móvil para más COP: borra los que ya no necesites.':n<POCO?`Queda sitio para unos ${n} COP más en este móvil: borra los que ya no necesites.`:`Caben unos ${n} COP más en este móvil.`}</p>`);
 }
 $('#misPruebas').innerHTML=PRUEBAS.length?`<p class="hint"><b>COP de prueba</b> (datos inventados, para ver cómo sale el Word; no se guardan en tu lista):</p>`+
   PRUEBAS.map((t,i)=>`<button type="button" data-prueba="${i}"><b>${esc(t.title)}</b><span class="hint">${esc(t.desc)}</span></button>`).join(''):'';
-{const lg=document.querySelector('.legend');if(lg)lg.innerHTML='Las casillas <b>Cumple</b> se marcan solas al escribir una medida cuando la fila tiene un límite (≤, ≥, Máx, Mín). Puedes cambiarlas a mano. Escribe <b>¿?</b> o <b>PREGUNTAR</b> en un campo para dejarlo pendiente. Con <b>Añadir COC</b> completas con el certificado las casillas vacías. Todo se guarda solo y lo tienes en <b>Cargar COP</b> durante '+DIAS+' días.'}
+{const lg=document.querySelector('.legend');if(lg)lg.innerHTML='Las casillas <b>Cumple</b> se marcan solas al escribir una medida cuando la fila tiene un límite (≤, ≥, Máx, Mín). Puedes cambiarlas a mano. Escribe <b>¿?</b> o <b>PREGUNTAR</b> en un campo para dejarlo pendiente. Con <b>Añadir COC</b> completas con el certificado las casillas vacías. Todo se guarda solo y lo tienes en <b>Cargar COP</b> hasta que lo borres.'}
 $('#cocbtn').textContent='Añadir COC';
 
 /* ---------- botones ---------- */
@@ -2137,10 +2155,7 @@ async function arrancar(){
   try{LIST=await listar()}catch(e){LIST=[];SYNC_ERR=e}
   // el COP abierto, si después se cambió en otro móvil u ordenador
   if(CUR&&CUR.id&&!DIRTY){const d=LIST.find(x=>x.id===CUR.id);if(d&&d.cambiado>(CUR.cambiado||0)){try{state=JSON.parse(d.estado);Object.assign(CUR,{cambiado:d.cambiado,word:d.word||null,guardado:true});curSave();_save();fillUI()}catch(e){}}}
-  // se borran los que llevan 7 días sin cambios
-  const lim=Date.now()-DIAS*DIA;
-  for(const d of LIST.filter(d=>!(d.cambiado>=lim))){try{await borrar(d.id)}catch(e){}}
-  if(CUR&&!CUR.prueba&&!((CUR.cambiado||0)>=lim)&&!(LIST.some(x=>x.id===CUR.id))){CUR=null;DIRTY=false;curSave();state=vacio();_save();fillUI()}
+  // ya no se borra nada solo (Daniel, 12 oct): antes se borraban los que llevaban 7 días sin cambios
   await sembrar();
   if(DIRTY)flush();
   renderHome();if(document.documentElement.dataset.vista==='mis')renderMis();
@@ -2435,7 +2450,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 12 oct, 19:54';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 12 oct, 20:08';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
