@@ -1659,7 +1659,9 @@ Extrae estos datos y responde SOLO con un objeto JSON con exactamente estas clav
  "mmr_eje_central": "masa remolcable máxima, remolque de eje central (punto 18.3), kg",
  "mmr_sin_frenos": "masa remolcable máxima, remolque sin frenos (punto 18.4), kg",
  "capacidad_deposito": "capacidad del depósito de combustible, litros",
- "distancia_ejes": "array con la distancia entre ejes consecutivos en orden 1-2, 2-3, 3-4 (punto 4, o 4.1 si hay más de dos ejes), mm"}
+ "distancia_ejes": "array con la distancia entre ejes consecutivos en orden 1-2, 2-3, 3-4 (punto 4, o 4.1 si hay más de dos ejes), mm",
+ "neumaticos": "array con la medida del neumático de cada eje en orden (punto 35, la primera combinación de cada eje), escrita como 385/65R 22.5",
+ "indices_carga": "array con el índice de carga y velocidad del neumático de cada eje en orden (punto 35), sin espacios, p. ej. 160K o 156/150L"}
 Los números van sin unidades ni separador de miles (26000, no "26.000 kg"). Si un punto da varios valores, usa el máximo técnicamente admisible. Los textos exactamente como aparecen (respeta mayúsculas y minúsculas).`;
 function cocTargets(){
   const ident=model.sections.find(s=>/IDENTIFICACI/.test(s.title)).title;
@@ -1965,7 +1967,9 @@ function palCocTargets(m){
     ['categoria','Categoría',one('CATEGORIA VEHICULO')],['homologacion','C. homologación 1ª fase',one('C HOMOLOGACIÓN 1 FASE')],
     ['bastidor','Nº de bastidor',one('N DE BASTIDOR')],
     ...['d12','d23','d34','d45'].map((x,i)=>[['distancia_ejes',i],`Distancia eje ${i+1}-${i+2}`,k[x]]),
-    ['mmta_total','MMTA total',k.mmtaT],...[1,2,3,4,5].map(i=>[['mmta_ejes',i-1],`MMTA eje ${i}`,k['mmta'+i]])].filter(t=>t[2]);
+    ['mmta_total','MMTA total',k.mmtaT],...[1,2,3,4,5].map(i=>[['mmta_ejes',i-1],`MMTA eje ${i}`,k['mmta'+i]]),
+    // neumáticos (punto 35 del COC): medida e índice de carga/velocidad de cada eje
+    ...[1,2,3,4,5].flatMap(i=>[[['neumaticos',i-1],`Neumático eje ${i}`,one('DIMENSION NEUMÁTICOEje '+i)],[['indices_carga',i-1],`Índice carga/vel. eje ${i}`,one('Índice CargaVelEje '+i)]])].filter(t=>t[2]);
 }
 const palCoc0=cocTargets;
 cocTargets=function(){return TPL_ACT==='pal'?palCocTargets(model):palCoc0()};
@@ -2515,7 +2519,7 @@ const CocLector=(()=>{
     '0.10':[/identificaci[oó]n\s+del\s+veh[ií]culo\s*:/i,/Localizaci/i],
     '16.1':[/m[aá]xima\s+en\s+carga\s+t[eé]cnicamente/i,/prevista/i],'16.2':[/admisible\s+en\s+cada\s+eje/i,/prevista|grupo/i],
     '16.4':[/admisible\s+del\s+conjunto/i,/prevista/i],'18.1':[/barra\s*de\s*tracci[oó]n/i,/r[ií]gida/i],'18.2':[/(^|\s)Semirremolque\s*:/i],
-    '18.3':[/eje\s*central/i],'18.4':[/sin\s*frenos/i],'4.1':[/(Espacio|Separaci[oó]n)\s+entre\s+(los\s+)?ejes/i]};
+    '18.3':[/eje\s*central/i],'18.4':[/sin\s*frenos/i],'4.1':[/(Espacio|Separaci[oó]n)\s+entre\s+(los\s+)?ejes/i],'35':[/Combinaci[oó]n\s+de\s+neum/i]};
   function campos(T){
     T=T.map(t=>t.replace(/[|\[\]{}]/g,' ').replace(/\s+/g,' ').trim());
     const pos=n=>{const re=new RegExp('^'+n.replace(/\./g,'\\.')+'\\.?\\s');let i=T.findIndex(t=>re.test(t));
@@ -2566,6 +2570,15 @@ const CocLector=(()=>{
       if(i4<0)i4=T.findIndex(t=>/Distancia\s+entre\s+ejes/i.test(t)&&!/^4\.1/.test(t));
       const v=i4<0?null:num(tras(T[i4]));if(enRango(v))dist[0]=v}
     r.distancia_ejes=dist.length?Array.from(dist,v=>v===undefined?null:v):null;
+    // neumáticos (punto 35), para la plantilla de Palfinger: por eje la primera combinación, «1: 385/65R22.5 - 160 K / 22.5x11.75»
+    // → medida «385/65R 22.5» e índice de carga y velocidad «160K» (así los escribe Daniel)
+    const nd=[],ni=[],i35=pos('35');
+    if(i35>=0){const b=[tras(T[i35])];for(let k=i35+1;k<T.length&&k<=i35+12&&!esAncla(T[k]);k++)b.push(T[k]);
+      for(const m of b.join(' ').matchAll(/(?:^|\s)(\d)\s*[:.)]\s*(\d{3}\s*\/\s*\d{2,3}\s*Z?R\s*\d{2}(?:[.,]\d)?)\s*(?:[-–]\s*)?(\d{2,3}(?:\s*\/\s*\d{2,3})?\s*[A-Z](?![a-z]))?/g)){
+        const e=+m[1]-1;if(e<0||e>5||nd[e])continue;
+        nd[e]=m[2].replace(/\s+/g,'').replace(/R(\d)/,'R $1');if(m[3])ni[e]=m[3].replace(/\s+/g,'')}}
+    r.neumaticos=nd.length?Array.from(nd,v=>v||null):null;
+    r.indices_carga=ni.length?Array.from(ni,v=>v||null):null;
     return r;
   }
   const leer=items=>campos(lineas(items));
@@ -2763,7 +2776,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 12 oct, 23:11';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 12 oct, 23:27';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
