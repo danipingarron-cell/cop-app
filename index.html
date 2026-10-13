@@ -1936,6 +1936,7 @@ render=function(){
   // 10.1: luz de posición y catadióptrico con la misma marca y contraseña (Daniel, 12 oct): un botón y se copian al catadióptrico
   const l1=palRowEl('lat1');if(l1&&!l1.querySelector('[data-palmisma]'))l1.insertAdjacentHTML('beforeend','<span class="grp palmisma" role="group"><button type="button" data-palmisma aria-pressed="false">Misma marca y contraseña en el catadióptrico</button></span>');
   palMisma();
+  for(const [c,q] of [['catI','posI'],['catD','posD']]){const r=palRowEl(c);if(r&&!r.querySelector('[data-pal60]'))r.insertAdjacentHTML('beforeend',`<span class="latpos"><button type="button" data-pal60="${c}|${q}">Poner en luces de posición: distancias entre luces + 60 mm</button><span class="latnota" data-pal60n="${c}">Copia d1-2, d2-3, d3-4 y d4-5 a las luces de posición de este lado con 60 mm más cada una. d1, df y las alturas no se tocan.</span></span>`)}
   for(const s of PAL_MODEL.slots)if(s.select&&s.selPh){const sel=document.querySelector(`select[data-slot="${s.id}"]`);if(sel){sel.options[0].textContent=s.selPh;sel.setAttribute('aria-label',s.rowLabel||s.label);sel.classList.remove('col')}}
   document.querySelectorAll('.row.pt').forEach(r=>{const l=[...r.querySelectorAll(':scope>.lbl:not(.first)')].map(x=>x.textContent.trim());if(l.join('|')==='Aplica|Cumple')r.classList.add('apcu')});
   palCalc();refresh(); // las cajas de aviso ya existen: que salgan con lo que haya
@@ -2118,6 +2119,14 @@ async function palLeerPdf(file){
   for(const c of m.cbs){if(!nombres.has(c.f))continue;if(form.getCheckBox(c.f).isChecked())v['c'+c.id]=true}
   return {v,m};
 }
+
+// +60 mm (muestra): distancias entre catadióptricos → luces de posición del mismo lado, d1-2…d4-5 con 60 mm más
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-pal60]');if(!b||TPL_ACT!=='pal')return;
+  const [c,q]=b.dataset.pal60.split('|'),sc=[...palRowEl(c).querySelectorAll('[data-slot]')],sq=[...palRowEl(q).querySelectorAll('[data-slot]')],n=document.querySelector(`[data-pal60n="${c}"]`);
+  const hecho=[];for(const i of [1,2,3,4]){const v=String(state.v['s'+sc[i].dataset.slot]||'').trim(),x=parseFloat(v.replace(',','.'));if(isNaN(x))continue;
+    const val=String(Math.round(x+60));state.v['s'+sq[i].dataset.slot]=val;sq[i].value=val;hecho.push(val)}
+  if(!hecho.length){n.textContent='Primero escribe las distancias entre catadióptricos (d1-2, d2-3…).';return}
+  save();refreshSoon();n.textContent='✓ Puesto en luces de posición: '+hecho.join(' / ')});
 
 /* ---------- Versión con pantalla de inicio (build.sh → cop-inicio.html) ----------
    Al abrir sale el inicio: Nuevo COP, Cargar COP, Añadir COC, Crear Word. Cada COP se guarda solo mientras se rellena
@@ -2866,7 +2875,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 13 oct, 16:00';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 13 oct, 16:25';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
