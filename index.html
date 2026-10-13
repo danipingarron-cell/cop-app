@@ -1,4 +1,4 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <meta name="robots" content="noindex,nofollow">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#4f46e5">
@@ -155,6 +155,11 @@ select.t.col{font-family:inherit;width:auto;min-width:8em}
 .luzsel .pics{flex:1 1 100%;flex-wrap:nowrap;overflow-x:auto}.luzsel .pics figure{flex:0 0 auto}.luzsel .pics img{height:90px;width:auto;max-width:none}.luzsel .pics figure.big{flex:0 0 100%}.luzsel .pics figure.big img{height:auto;width:100%}
 .luzsel b{font-size:15px}
 .luzin{display:flex;flex-wrap:wrap;gap:8px 14px}
+/* altura, distancia y anchura: un poco más visibles que una casilla normal (Daniel no las quiere grandes) */
+.luzin .luzbig label{font-size:14px;font-weight:600;color:var(--ink);flex:0 0 10.8em} /* las tres casillas alineadas */
+.luzin .luzbig input.t{font-size:16px;font-weight:600;border:2px solid var(--accent);background:var(--panel)}
+.latpos{flex-basis:100%;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.latpos button{font-weight:600;border:2px solid var(--accent);color:var(--accent);background:var(--panel)}
 .luzmsg{margin-top:8px}.luzmsg button{font-size:13px;padding:4px 10px;margin-left:6px}
 .legend{font-size:12px;color:var(--muted);margin:6px 0 0}
 .panel{background:var(--panel);border:2px solid var(--accent);border-radius:8px;padding:12px 14px;margin-top:12px}
@@ -733,6 +738,26 @@ function applyPrefs(m,rels){
    // comprobación con la caja (lo pidió Daniel): voladizo delantero + 1er eje→inicio de caja + longitud de caja tiene que dar la longitud total
    const ic=one(/^Distancia entre 1er eje y el inicio de la caja$/),lc=one(/^Longitud de la caja$/);
    if(vd&&lt&&ic&&lc){CJ={vd:vd.id,ic:ic.id,lc:lc.id,lt:lt.id};lc.cjOut=true}}
+  // (lo pidió Daniel el 13 oct; va en el modelo para que la plantilla de Palfinger no lo herede)
+  // protección trasera: distancia al borde exterior del neumático = (anchura del eje − anchura del dispositivo) / 2, como en sus COP (2500 − 2360 → 70)
+  {const pt=m.slots.filter(s=>/^PROTECCI[OÓ]N TRASERA/.test(s.sec)&&!s.hidden&&s.ph==='Medición'),one=re=>pt.find(s=>re.test(s.label));
+   const eje=one(/^Anchura del eje$/),disp=one(/^Anchura del dispositivo$/),out=one(/^Distancia al borde exterior del neum/);
+   if(eje&&disp&&out){m.bordeNeu={eje:eje.id,disp:disp.id,out:out.id};out.phApp='Se calcula sola';out.bnOut=true}}
+  // alumbrado lateral: el 7.19 son las luces de posición laterales (solo el texto de la app; el Word no cambia)
+  for(const sec of m.sections)if(/^INSTALACI[OÓ]N DE DISPOSITIVOS DE ALUMBRADO/.test(sec.title))for(const b of sec.blocks){
+    const l=b.row&&b.row.items.find(i=>i.t==='lbl');if(!l)continue;
+    if(/^Instala dispositivos laterales obligatorios/.test(l.text.trim()))l.app='Instala luces de posición laterales (dispositivos laterales obligatorios si longitud total del vehículo > de 6000 mm)';
+    else if(/^ALUMBRADO LATERAL$/.test(l.text.trim()))l.app='ALUMBRADO LATERAL (LUZ DE POSICIÓN)'}
+  // distancias entre luces de posición laterales = las de los catadióptricos + 60 mm, con un botón junto a los catadióptricos (solo en la app)
+  {const z=m.slots.filter(s=>/^INSTALACI[OÓ]N DE DISPOSITIVOS DE ALUMBRADO/.test(s.sec)&&!s.hidden&&/^Distancia máxima entre dispositivos laterales consecutivos/.test(s.label));
+   if(z.length===2){m.latPos={pos:z[0].id,cat:z[1].id};z[1].latBtn=true}}
+  // medidas en % o en grados: al salir de la casilla se pone el % o el º detrás de cada número
+  for(const sec of m.sections)for(const b of sec.blocks){const r=b.row;if(!r)continue;const f=firstLbl(r);
+    const u=/^[ÁA]ngulos? |^Recubrimiento interior/.test(f)?'º':/longitud acumulada de las marcas|% de marcado/.test(f)?'%':'';
+    if(u)for(const i of r.items)if(i.t==='slot'&&!m.slots[i.id].hidden)m.slots[i.id].unit=u}
+  // antiproyección: la anchura del neumático de la faldilla posterior (sistema 1) es la misma que la del guardabarros
+  {const an=m.slots.filter(s=>/ANTIPROYECCI/.test(s.sec)&&!s.hidden),g=an.find(s=>/^Anchura del neum[aá]tico \(b\)/.test(s.label)),fp=an.find(s=>s.rowLabel==='Anchura de la faldilla posterior'&&/^Anchura neum[aá]tico \(b\)/.test(s.label));
+   if(g&&fp)MIRROR[g.id]=fp.id}
   // calculadora del Excel de luces: casillas del alumbrado trasero que rellena, y su panel antes de «ALUMBRADO TRASERO (FRENO)»
   const alu=m.sections.find(x=>/^INSTALACI[OÓ]N DE DISPOSITIVOS DE ALUMBRADO/.test(x.title)), anch=m.slots.find(s=>/^MASAS/.test(s.sec)&&/^Anchura total$/.test(s.label));
   if(typeof LUCES!=='undefined'&&alu&&anch){
@@ -785,6 +810,37 @@ function cjDif(){ // como en la longitud total: cualquier diferencia es «No coi
   nota.textContent=`Voladizo delantero + inicio de caja + longitud de caja = ${f(sum)} mm. Longitud total: ${f(lt)} mm.`;
   box.className='cjdif '+(d===0?'ok':'mal');box.textContent=d===0?'✓ Coincide con la longitud total':`⚠ No coincide con la longitud total: ${d>0?'+':''}${f(d)} mm`;box.hidden=false;
 }
+function bnCalc(){ // 5.10: (anchura del eje − anchura del dispositivo) / 2; si la ha cambiado a mano se respeta
+  const B=model.bordeNeu;if(!B)return;
+  const n=id=>{const v=String(state.v['s'+id]||'').trim();return v?num(v.replace(/[^\d.,]/g,'')):NaN};
+  const e=n(B.eje),d=n(B.disp),x=(e-d)/2,val=isNaN(x)?'':String(Math.round(x*10)/10).replace('.',',');
+  const cur=state.v['s'+B.out]||'',prev=(state.auto&&state.auto.bn)||'';
+  if(cur&&cur!==prev)return;
+  state.auto=state.auto||{};state.auto.bn=val;state.v['s'+B.out]=val;
+  const el=document.querySelector(`[data-slot="${B.out}"]`);if(el){el.value=val;if(ROW_OF[B.out])autoCumple(ROW_OF[B.out])}
+}
+// luces de posición laterales: cada distancia entre catadióptricos + 60 mm (lo pidió Daniel: 1000+1200+1300 → 1060+1260+1360)
+const ptoDe=id=>{const r=ROW_OF[id],p=r&&r.querySelector('.pnum');return p?p.textContent:''};
+function latNota(t){const n=document.querySelector('.latnota'),L=model.latPos;if(!n||!L)return;
+  n.textContent=t||`Pone en el ${ptoDe(L.pos)} (distancia entre luces de posición laterales) estas mismas distancias con 60 mm más cada una.`}
+function latPasar(){
+  const L=model.latPos;if(!L)return;
+  const v=String(state.v['s'+L.cat]||'').trim();
+  if(!/\d/.test(v)){latNota(`Primero escribe aquí las distancias entre catadióptricos, por ejemplo 1000+1200+1300.`);return}
+  const val=v.replace(/\d[\d.,]*/g,t=>{const x=num(t);return isNaN(x)?t:fmtMm(x+60)});
+  const el=document.querySelector(`[data-slot="${L.pos}"]`);
+  state.v['s'+L.pos]=val;if(el){el.value=val;el.classList.toggle('pend',isPending(val))}
+  if(ROW_OF[L.pos])autoCumple(ROW_OF[L.pos]);save();refresh();
+  latNota(`✓ Puesto en el ${ptoDe(L.pos)}: ${val}`);
+}
+document.addEventListener('click',e=>{if(e.target.closest('[data-latpos]'))latPasar()});
+// % y º: al salir de la casilla, detrás de cada número que no lo lleve (85 → 85%, -5/-5/2 → -5º/-5º/2º)
+const conUnidad=(v,u)=>v.replace(/-?\d+(?:[.,]\d+)?(?!\s*[\d.,%º°])/g,x=>x+u);
+document.addEventListener('change',e=>{
+  const i=e.target,u=i.dataset&&i.dataset.unit;if(!u||i.dataset.slot===undefined)return;
+  const v=conUnidad(i.value,u);if(v===i.value)return;
+  i.value=v;i.dispatchEvent(new Event('input',{bubbles:true}));
+});
 function plateCalc(){
   if(!PLATE)return;
   const sup=num(String(state.v['s'+PLATE.sup]||'').replace(/[^\d.,]/g,''));const h=(PLATE.cb.find(([cb])=>state.v['c'+cb])||[])[1];
@@ -882,20 +938,24 @@ function render(){
       if(r.diag&&!r.imgs)h+=`<div class="pics"><figure>${diagSvg(r.diag[0],r.diag[1])}</figure></div>`;
       if(r.imgs){const op=r.items.filter(i=>i.t==='grp').flatMap(g=>g.opts),cap=r.imgs.length>1&&op.length===r.imgs.length?op.map(o=>'Opción '+o.label):null;
         h+=`<div class="pics${cap?' two':''}">${r.imgs.map((id,k)=>`<figure><img alt="" data-rid="${id}">${cap?`<figcaption>${esc(cap[k])}</figcaption>`:''}</figure>`).join('')}</div>`}
+      let tail='';
       for(const it of r.items){
-        if(it.t==='lbl'){h+=`<span class="lbl${it.first?' first':''}${it.lim?' lim':''}${!it.first&&!it.lim&&it.text.length<4?' small':''}">${it.first&&rowSlots.length?sideWords(esc(it.text)):esc(it.text)}</span>`}
+        if(it.t==='lbl'){h+=`<span class="lbl${it.first?' first':''}${it.lim?' lim':''}${!it.first&&!it.lim&&it.text.length<4?' small':''}">${it.first&&rowSlots.length?sideWords(esc(it.app||it.text)):esc(it.app||it.text)}</span>`}
         else if(it.t==='slot'){const s=model.slots[it.id];if(s.hidden)continue;
           const wide=s.wide||/Marca|Contrase|bastidor|Homolog|Denominaci|Variante|Versi|Descripci|Lugar|validada|Tipo|Nº/i.test(s.label);
           if(s.split){h+=s.split.map((lab,k)=>`<span class="fld${sideCls(lab)}"><label for="s${s.id}_${k}">${esc(lab)}</label><input class="t" id="s${s.id}_${k}" data-slot="${s.id}" data-part="${k}" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Medición" aria-label="${esc(s.label+' · '+lab)}"></span>`).join('');continue}
           if(s.select){h+=`<span class="fld"><select class="t col" id="s${s.id}" data-slot="${s.id}" aria-label="${esc((s.rowLabel?s.rowLabel+' · ':'')+s.label)} · color"><option value="">Color…</option>${s.select.map(c=>`<option>${c}</option>`).join('')}</select></span>`;continue}
           // con el dato puesto el texto gris de la casilla desaparece: «Derecha», «Izquierda», «Nº»… van encima para saber siempre qué es cada número
           const top=s.topApp||(s.kind!=='colon'&&s.ph&&(s.ph!=='Medición'||hasN)?s.ph:'');
-          h+=`<span class="fld${top?' stk':''}${s.ltOut?' lt ltc':''}${sideCls(top||(s.kind==='colon'?s.label:''))}">${s.kind==='colon'?`<label for="s${s.id}">${esc(s.label)}</label>`:top?`<label for="s${s.id}">${esc(top)}</label>`:''}<input class="t${wide?' wide':''}" id="s${s.id}" data-slot="${s.id}" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="${esc(s.phApp||s.ph||'')}" aria-label="${esc((s.rowLabel?s.rowLabel+' · ':'')+s.label)}"></span>`;
+          h+=`<span class="fld${top?' stk':''}${s.ltOut?' lt ltc':''}${sideCls(top||(s.kind==='colon'?s.label:''))}">${s.kind==='colon'?`<label for="s${s.id}">${esc(s.label)}</label>`:top?`<label for="s${s.id}">${esc(top)}</label>`:''}<input class="t${wide?' wide':''}" id="s${s.id}" data-slot="${s.id}" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="${esc(s.phApp||s.ph||'')}"${s.unit?` data-unit="${s.unit}"`:''} aria-label="${esc((s.rowLabel?s.rowLabel+' · ':'')+s.label)}"></span>`;
           if(s.ltOut)h+=`<span class="fld stk lt"><label for="ltMedida">Medida</label><input class="t" id="ltMedida" data-extra="medida" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Medición" aria-label="Longitud total · medida"></span><div class="ltdif" hidden></div><p class="ltnota">Calculada = voladizo delantero + distancia entre ejes + voladizo trasero. En el Word, en «Longitud total», va la calculada (si la cambias a mano, va la que pongas).</p>`;
-          if(s.cjOut)h+=`<div class="cjdif" hidden></div><p class="ltnota cjnota" hidden></p>`}
+          if(s.cjOut)h+=`<div class="cjdif" hidden></div><p class="ltnota cjnota" hidden></p>`;
+          // al final de la fila, después del límite y del Cumple
+          if(s.bnOut)tail+=`<p class="ltnota">Se calcula sola: (anchura del eje − anchura del dispositivo) / 2. Si la cambias a mano, se respeta.</p>`;
+          if(s.latBtn)tail+=`<div class="latpos"><button type="button" data-latpos>Pasar a luces de posición laterales (+60 mm)</button><p class="ltnota latnota" aria-live="polite"></p></div>`}
         else if(it.t==='grp'){h+=`<span class="grp" role="group"${it.nofill?' data-nofill':''}>`+it.opts.map(o=>`<button type="button" class="v-${o.label.toLowerCase().replace(/[^a-z]/g,'')}" data-cb="${o.cb}" aria-pressed="false">${esc(o.label)}</button>`).join('')+`</span>`}
       }
-      h+=`</div>`;
+      h+=tail+`</div>`;
     }
     h+='</div>';d.innerHTML=h;f.appendChild(d);
     groupParts(d.querySelector('.secbody'));numPuntos(d,sn);
@@ -1005,7 +1065,7 @@ function fillUI(){
   document.querySelectorAll('[data-slot]').forEach(i=>{const v=state.v['s'+i.dataset.slot];i.value=i.dataset.part!==undefined?splitVal(model.slots[i.dataset.slot],typeof v==='string'?v:'')[+i.dataset.part]:typeof v==='string'?v:'';i.classList.toggle('pend',isPending(i.value))});
   document.querySelectorAll('[data-cb]').forEach(b=>{const on=!!state.v['c'+b.dataset.cb];b.setAttribute('aria-pressed',on);b.classList.toggle('auto',on&&!state.manual['c'+b.dataset.cb])});
   lucesUI();lucesCalc();
-  {const mi=$('#ltMedida');if(mi)mi.value=(state.lt&&state.lt.medida)||''}ltCalc();cjDif();
+  {const mi=$('#ltMedida');if(mi)mi.value=(state.lt&&state.lt.medida)||''}ltCalc();cjDif();bnCalc();latNota();
   refresh();hereSoon();
 }
 function setCb(cb,on,manual){
@@ -1025,7 +1085,10 @@ function autoCumple(rowEl){
   if(!si||!no)return;
   if(bs.some(b=>state.manual['c'+b.dataset.cb]))return;
   let res=vals.length?vals.map(v=>evalLimit(r.limit,v)):[null];
-  if(r.qb){const n=inputs.map(i=>num(i.value.trim()));res=n.length===2&&n.every(x=>!isNaN(x))?[n[0]>=n[1]]:[null]}
+  if(r.qb){ // q ≥ b eje por eje (Daniel lo autorizó el 13 oct): 680/680/460 con 560/560/310; si uno trae un solo valor vale para todos
+    const [q,bb]=inputs.map(i=>i.value.trim().split('/').map(x=>num(x.replace(/[^\d.,-]/g,''))));
+    const okq=inputs.length===2&&[...q,...bb].every(x=>!isNaN(x))&&(q.length===bb.length||q.length===1||bb.length===1);
+    res=okq?[Array.from({length:Math.max(q.length,bb.length)},(_,k)=>q[q.length===1?0:k]>=bb[bb.length===1?0:k]).every(Boolean)]:[null]}
   if(res.some(x=>x===null)){ if(!vals.length){bs.forEach(b=>setCb(+b.dataset.cb,false,false))} return;}
   setCb(+(res.every(Boolean)?si:no).dataset.cb,true,false);
 }
@@ -1071,6 +1134,7 @@ document.addEventListener('input',e=>{
   if(PLATE&&+id===PLATE.sup)plateCalc();
   if(LT&&LT.parts.includes(+id))ltCalc();else if(LT&&+id===LT.out)ltDif();
   if(CJ)cjDif();
+  if(model.bordeNeu&&(+id===model.bordeNeu.eje||+id===model.bordeNeu.disp))bnCalc();
   if(LUZ&&+id===LUZ.anchura){const a=$('#luz_anch');if(a)a.value=e.target.value;lucesCalc()}
   save();refreshSoon();
 });
@@ -1096,11 +1160,11 @@ let rT=null;function refreshSoon(){clearTimeout(rT);rT=setTimeout(refresh,150)}
 // Cada medida del Excel es a·Ancho vehículo + b·Altura borde superior + c·Distancia entre dispositivos + d (ver luces.js)
 function lucesHtml(){
   const card=t=>`<button type="button" class="luzcard" data-luz="${esc(t.id)}" aria-pressed="false">${t.pics.length?`<img alt="" src="${LUCES_FOTOS[t.pics[0]]}">`:'<span class="nofoto">Sin foto</span>'}<b>Tipo ${esc(t.id)}</b></button>`;
-  const fld=(k,lab)=>`<span class="fld"><label for="luz_${k}">${lab}</label><input class="t" id="luz_${k}" data-luzin="${k}" autocomplete="off" inputmode="decimal" placeholder="mm"></span>`;
+  const fld=(k,lab,big)=>`<span class="fld${big?' luzbig':''}"><label for="luz_${k}">${lab}</label><input class="t" id="luz_${k}" data-luzin="${k}" autocomplete="off" inputmode="decimal" placeholder="mm"></span>`;
   return `<div class="calc"><h3 class="sub">Calculadora de luces traseras (tu Excel)</h3>
-<p class="hint">Elige el tipo de piloto y mete la altura del borde superior y la distancia entre dispositivos: se rellenan solas las medidas de freno, intermitente, posición, catadióptrico, antiniebla, marcha atrás y gálibo. Lo que cambies a mano se respeta.</p>
+<p class="hint">Elige el tipo de piloto y mete la altura del borde superior y la distancia entre ellos: se rellenan solas las medidas de freno, intermitente, posición, catadióptrico, antiniebla, marcha atrás y gálibo, redondeadas a 0 o 5. Lo que cambies a mano se respeta.</p>
 <div class="luzsel"></div><div class="luzgrid">${LUCES.map(card).join('')}</div>
-<div class="luzin">${fld('alt','Altura borde superior')}${fld('dist','Distancia entre dispositivos')}${fld('anch','Ancho vehículo')}</div>
+<div class="luzin">${fld('alt','Altura borde superior',1)}${fld('dist','Distancia entre ellos',1)}${fld('anch','Ancho vehículo',1)}</div>
 <p class="hint luzmsg" aria-live="polite"></p></div>`;
 }
 function lucesUI(){
@@ -1117,7 +1181,8 @@ function lucesCalc(force){
   const L=state.luces||{},t=LUCES.find(x=>x.id===L.tipo);
   const n=v=>{const x=num(String(v||'').replace(/[^\d.,]/g,''));return isNaN(x)?null:x};
   const A=n(state.v['s'+LUZ.anchura]),H=n(L.alt),D=n(L.dist);
-  const ev=c=>!c||!t||H===null||D===null||(c[0]&&A===null)?'':fmtMm(c[0]*(A||0)+c[1]*H+c[2]*D+c[3]);
+  // el Excel da decimales: Daniel quiere números enteros acabados en 0 o en 5, el más cercano (172,5 → 175)
+  const ev=c=>!c||!t||H===null||D===null||(c[0]&&A===null)?'':fmtMm(Math.round((c[0]*(A||0)+c[1]*H+c[2]*D+c[3])/5+1e-9)*5);
   const want={};
   for(const g of ['freno','intermitente','posicion','catadioptrico','marchaAtras','antiniebla','galibo'])if(LUZ[g]&&typeof LUZ[g]==='object')for(const k of LUZ_KEYS)if(LUZ[g][k]!==undefined)want[LUZ[g][k]]=t&&t[g]?ev(t[g][k]):'';
   if(typeof LUZ.antiniebla==='number'){const sl=model.slots[LUZ.antiniebla];want[LUZ.antiniebla]=t?(sl.split?joinSplit(sl,[ev(t.antiniebla.inf),ev(t.antiniebla.sup)]):ev(t.antiniebla.sup)):''}
@@ -1134,8 +1199,8 @@ function lucesCalc(force){
     if(ROW_OF[id])autoCumple(ROW_OF[id]);
   }
   if(!box)return;
-  const miss=[!t&&'el tipo de piloto',H===null&&'la altura del borde superior',D===null&&'la distancia entre dispositivos'].filter(Boolean);
-  let msg=miss.length?`Falta ${miss.join(', ').replace(/, ([^,]*)$/,' y $1')} para rellenar las medidas.`:`Rellenadas ${put} medidas con el tipo ${esc(t.id)}.`;
+  const miss=[!t&&'el tipo de piloto',H===null&&'la altura del borde superior',D===null&&'la distancia entre ellos'].filter(Boolean);
+  let msg=miss.length?`Falta ${miss.join(', ').replace(/, ([^,]*)$/,' y $1')} para rellenar las medidas.`:`Rellenadas ${put} medidas con el tipo ${esc(t.id)}, redondeadas a 0 o 5.`;
   if(!miss.length&&A===null)msg+=' Falta el ancho del vehículo: sin él no salen las distancias a los laterales ni el gálibo.';
   if(kept)msg+=` ${kept===1?'Una casilla tiene':kept+' casillas tienen'} otro valor puesto a mano y no se ha${kept===1?'':'n'} tocado.<button type="button" data-luzforce>Poner los del Excel</button>`;
   box.querySelector('.luzmsg').innerHTML=msg;
@@ -2799,7 +2864,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 13 oct, 00:33';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 13 oct, 14:43';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
