@@ -2003,7 +2003,7 @@ function palCalc(){
     if(box){if(isNaN(a)||isNaN(b))box.hidden=true;else{const d=b-a;PAL_CMP=d||null;box.hidden=false;box.className='ltdif '+(d?'mal':'ok');
       box.textContent=d?`⚠ Check1 y Check2 no coinciden: Check2 ${palFmt(b)} − Check1 ${palFmt(a)} = ${d>0?'+':''}${palFmt(d)} mm`:'✓ Check1 y Check2 coinciden'}}}
   // 10.3 % de marcado; el ancho del vehículo y la longitud de carrocería se copian de masas mientras no los cambie
-  palSet(k.mpA,palV(k.anch),'mpA');palSet(k.mlLc,palV(k.lt),'mlLc');
+  palSet(k.mpA,palV(k.anch),'mpA',true);palSet(k.mlLc,palV(k.check1)||palV(k.check2),'mlLc',true); // 10.3.1.5 = anchura de masas; 10.3.2.5 = longitud de los Check1/Check2 (Daniel, 13 oct)
   const pct=(a,b)=>{const x=palN(a),y=palN(b);return isNaN(x)||isNaN(y)||!y?'':Math.round(x/y*100)+'%'};
   palSet(k.mpPct,pct(k.mpLA,k.mpA),'mpPct',true);palSet(k.mlPct,pct(k.mlLA,k.mlLc),'mlPct',true);
   // 7.5.1 dimensiones máximas y 7.5.3 suma de MMTA por eje ≥ MMTA total
@@ -2875,7 +2875,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 13 oct, 16:25';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 13 oct, 16:37';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
