@@ -2326,10 +2326,14 @@ document.addEventListener('click',e=>{
   clearTimeout(PICK_T);PICK_T=setTimeout(avisar,1500);
   setTimeout(()=>{window.removeEventListener('blur',fuera);document.removeEventListener('visibilitychange',fuera)},8000);
 });
-document.addEventListener('change',e=>{
+document.addEventListener('change',async e=>{
   const i=e.target.closest&&e.target.closest('input[data-movil]');if(!i)return;
-  clearTimeout(PICK_T);const fs=[...i.files];i.value='';if(!fs.length||!PICK)return;
-  lsSet(K_SINSEL,false);$('#dlg').hidden=true;PICK.onFiles(fs);
+  clearTimeout(PICK_T);const sel=[...i.files];if(!sel.length||!PICK){i.value='';return}
+  // se leen en el momento: en la parte de empresa del móvil (Edge) el archivo elegido deja de poderse leer al rato
+  let fs;try{fs=await Promise.all(sel.map(async f=>new File([await f.arrayBuffer()],f.name,{type:f.type,lastModified:f.lastModified})))}
+  catch(err){i.value='';$('#dlg').hidden=true;
+    showMsg(`El móvil no deja que la app lea «${sel[0].name}». Pasa con algunos archivos de la parte de empresa: prueba a elegirlo desde otra carpeta (por ejemplo Descargas u OneDrive).`,true);return}
+  i.value='';lsSet(K_SINSEL,false);$('#dlg').hidden=true;PICK.onFiles(fs);
 });
 // en el inicio: un COC mandado al chat hace poco y aún sin leer (solo si ya diste permiso para ver los archivos)
 async function cocReciente(){
@@ -2875,7 +2879,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 14 oct, 13:26';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 14 oct, 13:43';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
