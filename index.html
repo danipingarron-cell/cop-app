@@ -2601,11 +2601,15 @@ const CocLector=(()=>{
     for(const pg of [...new Set(items.map(i=>i.pg))].sort((a,b)=>a-b)){
       const its=items.filter(i=>i.pg===pg&&String(i.s).trim());
       const xs=[];
-      for(const f of filas(its))f.its.forEach((a,k)=>{const m=ANCLA.exec(String(a.s).trim()),sig=f.its[k+1];
+      for(const f of filas(its))f.its.forEach((a,k)=>{const t=String(a.s).trim(),m=ANCLA.exec(t),sig=f.its[k+1];
+        if(m&&!/\./.test(t)&&m[2]&&!/^[\p{Lu}(]/u.test(m[2]))return; // «6 in Reihe stehend» es un dato, no el punto 6
         if(m&&(etiqueta(m[2])||(!m[2]&&sig&&sig.x-(a.x+(a.w||0))<60&&etiqueta(String(sig.s).trim()))))xs.push(a.x)});
       xs.sort((a,b)=>a-b);const grupos=[];
       for(const x of xs){const g=grupos[grupos.length-1];if(g&&x-g.max<=40){g.max=x;g.n++}else grupos.push({min:x,max:x,n:1})}
-      const lim=grupos.filter(g=>g.n>=2).map(g=>g.min).slice(1); // donde empieza cada columna después de la primera
+      const x0=Math.min(...its.map(i=>i.x));
+      // donde empieza cada columna después de la primera (la primera puede ser una tabla sin puntos, como la de los actos reglamentarios)
+      const lim=grupos.filter(g=>g.n>=2).filter(g=>g.n>=Math.max(...grupos.map(o=>o.n))*.3) // unos pocos puntos en medio de una tabla (4.1, 6.1, 18.2 del DAF) no son otra columna
+        .map(g=>g.min).filter((x,k)=>k>0||(x>x0+60&&its.filter(i=>i.x+(i.w||0)<x-5).length>its.length*.15));
       const col=x=>lim.filter(l=>x>=l-8).length;
       for(let c=0;c<=lim.length;c++)for(const f of filas(its.filter(i=>col(i.x)===c)))
         out.push(f.its.map(i=>String(i.s).trim()).join(' ').replace(/\s+/g,' '));
@@ -2617,11 +2621,13 @@ const CocLector=(()=>{
   const nulo=s=>!s||/^[-–—\s.]*$/.test(s)||/^(n\/?a|no aplica|ninguno)$/i.test(s);
   // lo que va detrás de la etiqueta: tras la primera «:», sin la unidad entre paréntesis
   const tras=t=>{const k=t.indexOf(':');return k<0?'':t.slice(k+1).replace(/^\s*\(?\s*(k[gqe]|mm|l)\s*\)\s*:?\s*/i,'').trim()};
+  const resto=t=>t.includes(':')?tras(t):t.replace(/^\d{1,2}(?:\.\d{1,2}){0,3}\.?\s*/,''); // sin «:» (COC en alemán): la línea sin el número
   const VIN=/\b(?=[A-HJ-NPR-Z0-9]*\d)(?=[A-HJ-NPR-Z0-9]*[A-HJ-NPR-Z])[A-HJ-NPR-Z0-9]{17}\b/;
   // bastidor leído por OCR: en un VIN no hay O, I ni Q, así que son 0, 1 y 0
   const vinDe=t=>{for(const w of String(t||'').toUpperCase().match(/\b[A-Z0-9]{17}\b/g)||[]){const v=w.replace(/O|Q/g,'0').replace(/I/g,'1');if(VIN.test(v))return v}return null};
   // etiquetas del COC en inglés (van sin «:»); el OCR cambia alguna letra, por eso son flexibles
-  const EN={'0.1':/^Make\b[^)]*\)?/i,'0.2.1':/^Commercial\s+name\S*/i,'0.4':/^Vehicle\s+cat\S*/i,'0.10':/^.*?number\b/i};
+  // y en alemán (Mercedes, MAN): «0.1 Fabrikmarke (Firmenname des Herstellers) Mercedes-Benz»
+  const EN={'0.1':/^\W*(Make|Fabrikmarke|Marca)\b[^)]*\)?/i,'0.2.1':/^\W*(Commercial\s+name|Handelsbezeichnung|\S?enominaci[oó]n(es)?\s+comercial)\S*/i,'0.4':/^(Vehicle\s+cat|Fahrzeugklasse)\S*/i,'0.10':/^.*?(number|nummer)\b/i};
   const NUMERICO=/^1[68]\./;
   function sinDosPuntos(n,t){ // dato de una línea sin «:»: «0.1 Make (trade name of manufacturer) Fuso» → «Fuso»
     if(t.includes(':'))return '';
@@ -2632,13 +2638,14 @@ const CocLector=(()=>{
   }
   const HOMOL=/\be\s?\d{1,2}\s?\*\s?\d{2,4}\/\d{1,4}(?:\*\d{2,4}\/\d{1,4})?\s?\*\s?\d{2,6}\s?\*\s?\d{1,3}\b/i;
   // si el número del campo no se lee (pasa en fotos con tablas), se busca por el texto de la etiqueta (COC en español)
-  const ETIQ={'0.1':[/\bMarca\b/i],'0.2':[/(^|\s)Tipo\s*:/i],'0.2.1':[/Denominaci[oó]n(es)?\s+comercial/i],'0.4':[/Categor[ií]a\s+del\s+veh/i],
+  const ETIQ={'0.1':[/\bMarca\b|raz[oó]n\s+social\s+del\s+fabricante/i],'0.2':[/(^|\s)Tipo\s*:/i],'0.2.1':[/\S?enominaci[oó]n(es)?\s+comercial/i],'0.4':[/Categor[ií]a\s+del\s+veh/i],
     '0.10':[/identificaci[oó]n\s+del\s+veh[ií]culo\s*:/i,/Localizaci/i],
     '16.1':[/m[aá]xima\s+en\s+carga\s+t[eé]cnicamente/i,/prevista/i],'16.2':[/admisible\s+en\s+cada\s+eje/i,/prevista|grupo/i],
     '16.4':[/admisible\s+del\s+conjunto/i,/prevista/i],'18.1':[/barra\s*de\s*tracci[oó]n/i,/r[ií]gida/i],'18.2':[/(^|\s)Semirremolque\s*:/i],
     '18.3':[/eje\s*central/i],'18.4':[/sin\s*frenos/i],'4.1':[/(Espacio|Separaci[oó]n)\s+entre\s+(los\s+)?ejes/i],'35':[/Combinaci[oó]n\s+de\s+neum/i]};
   function campos(T){
-    T=T.map(t=>t.replace(/[|\[\]{}]/g,' ').replace(/\s+/g,' ').trim());
+    // fuera las marcas de agua del COC de MAN («FOR INFORMATION PURPOSES ONLY», «COPY»)
+    T=T.map(t=>t.replace(/[|\[\]{}]/g,' ').replace(/\b(FOR\s+INFORMATION|PURPOSES\s+ONLY|COPY)\b/g,' ').replace(/\s+/g,' ').trim());
     const pos=n=>{const re=new RegExp('^'+n.replace(/\./g,'\\.')+'\\.?\\s');let i=T.findIndex(t=>re.test(t));
       if(i<0&&ETIQ[n]){const [si,no]=ETIQ[n];i=T.findIndex(t=>si.test(t)&&!(no&&no.test(t)))}return i};
     const bloque=i=>{if(i<0)return [];const b=[T[i]];for(let k=i+1;k<T.length&&k<=i+5&&!esAncla(T[k])&&!(/\p{L}{4}/u.test(T[k])&&!/^\s*(Varia|Versi)/i.test(T[k])&&k>i+3);k++)b.push(T[k]);return b};
@@ -2649,12 +2656,18 @@ const CocLector=(()=>{
     const b2=bloque(pos('0.2')).join('\n');
     const kv=re=>{const m=b2.match(re);return m&&!nulo(m[1])?m[1]:null};
     const COD='([A-Z0-9][A-Z0-9\\-\\/.]{2,})(?=[\\s:.,;]*(?:\\n|$))'; // sin «:», solo si lo que sigue parece un código
+    // los tres en una línea: «TYPE / VARIANTE / VERSION L.2018.858.006 / 39E01ZAAAZB1THB / 3MACF»
+    const tvv=b2.match(/(?:Tipo|Typ|Type)\s*\/\s*Varia\S*\s*\/\s*Versi\S*\s*:?\s*([^\s\/:]+)\s*\/\s*([^\s\/:]+)\s*\/\s*([^\s\/:]+)/i);
+    if(tvv){r.tipo=tvv[1];r.variante=tvv[2];r.version=tvv[3]}else{
     r.tipo=kv(/(?:^|\s)(?:Tipo|Type|Typ)\s*:\s*([^\s:]+)/i)||kv(new RegExp('(?:^|\\s)(?:[Tt]ipo|[Tt]yp\\w?)\\s+'+COD,'m'))||(b2?(tras(b2.split('\n')[0]).split(/\s+/)[0]||null):null);
     r.variante=kv(/Varia(?:nte|nt)\s*:\s*([^\s:]+)/i)||kv(new RegExp('[Vv]aria(?:nte|nt)\\s+'+COD,'m'));
-    r.version=kv(/(?:Versi[oó]n|Version)\s*:\s*([^\s:]+)/i)||kv(new RegExp('[Vv]ersi(?:[oó]n|on)\\s+'+COD,'m'));
+    r.version=kv(/(?:Versi[oó]n|Version)\s*:\s*([^\s:]+)/i)||kv(new RegExp('[Vv]ersi(?:[oó]n|on)\\s+'+COD,'m'))}
     if(r.tipo&&nulo(r.tipo))r.tipo=null;
+    if(!r.tipo){ // «Tipo - Variante - Versión  F53N3 - AN290ZD6ZZZ - 5D100…» (DAF; el número 0.2 lo tapa el logotipo)
+      const m=T.join('\n').match(/Varia\S*\s*[-–\/]\s*Vers\s?\S*\s*:?\s*([A-Z0-9][^\s\/]{2,})\s+[-–\/]\s+([^\s\/]{2,})\s+[-–\/]\s+([^\s\/]{2,})/i);
+      if(m){r.tipo=m[1];r.variante=m[2];r.version=m[3]}}
     r.denominacion_comercial=valor('0.2.1');
-    const cat=(valor('0.4')||'').match(/\b([MNOLT]\d?[A-Z]?G?)\b/);r.categoria=cat?cat[1]:null;
+    const i04=pos('0.4'),cat=(valor('0.4')||'').match(/\b([MNOLT]\d?[A-Z]?G?)\b/)||(i04>=0?T[i04].match(/(?:^|\s)([MNO][1-4]G?)(?=\s|$)/):null);r.categoria=cat?cat[1]:null;
     const vin=(valor('0.10')||'').replace(/\s/g,'').match(VIN);
     const vinTodo=T.find(t=>/identificaci|VIN|identification/i.test(t)&&VIN.test(t.replace(/\s/g,' ')));
     r.bastidor=vin?vin[0]:vinTodo?vinTodo.match(VIN)[0]:vinDe(valor('0.10'))||vinDe((T.find(t=>/identificaci|VIN|identi\S*\s+number/i.test(t)&&vinDe(t)))||'');
@@ -2662,28 +2675,37 @@ const CocLector=(()=>{
     const i10=Math.max(pos('0.10'),pos('0.11'));let h=null;
     for(let k=Math.max(0,i10);k<T.length&&!h;k++){const m=T[k].match(HOMOL);if(m)h=m[0]}
     if(!h){const m=T.join('\n').match(HOMOL);if(m)h=m[0]}
-    r.homologacion=h?h.replace(/\s/g,''):null;
+    r.homologacion=h?h.replace(/\s/g,'').replace(/\*2018\/85\d\*/,'*2018/858*').replace(/\*2007\/4\d\*/,'*2007/46*'):null; // el OCR cambia a veces la última cifra del reglamento
     const kg=(v,max)=>{const n=num(v);return n!==null&&n<=max?n:null}; // fuera de rango = mal leído: mejor vacío
     r.mmta_total=kg(valor('16.1'),60000);
     const i162=pos('16.2');
-    if(i162>=0){const b=[tras(T[i162]),...bloque(i162).slice(1)].join(' ');const ejes=[];
+    if(i162>=0){const b=[resto(T[i162]),...bloque(i162).slice(1)].join(' ');const ejes=[];
       for(const m of b.matchAll(/(?:^|\s)(\d{1,2})\s*[:.)\-]\s*(\d{1,2}[ .]\d{3}|\d{3,6})(?!\d)/g)){const e=+m[1],v=num(m[2]);if(e>=1&&e<=6&&v>=1000&&v<=30000&&!ejes[e-1])ejes[e-1]=v}
       if(!ejes.length||ejes.includes(undefined)){ // sin el número de eje: los pesos en orden
-        const ns=[...b.matchAll(/(\d{1,2}[ .]\d{3}|\d{3,6})(?!\d)/g)].map(m=>num(m[1])).filter(v=>v>=1000&&v<=30000);ejes.length=0;ejes.push(...ns.slice(0,6))}
+        const ns=[...b.matchAll(/(\d{1,2}[ .]\d{3}|\d{3,6})(?!\d)/g)].map(m=>{const v=num(m[1]);return v>30000&&/^\d{4,5}49$/.test(m[1])?Math.floor(v/100):v}).filter(v=>v>=1000&&v<=30000);ejes.length=0;ejes.push(...ns.slice(0,6))} // «800049»: el OCR lee así «8000 kg»
       r.mmta_ejes=ejes.length>=2?ejes:null}
     else r.mmta_ejes=null;
     r.mmtc=kg(valor('16.4'),60000);
-    r.mmr_barra=kg(valor('18.1'),45000);
-    r.mmr_semirremolque=kg(valor('18.2'),45000);
-    r.mmr_eje_central=kg(valor('18.3'),45000);
-    r.mmr_sin_frenos=kg(valor('18.4'),3500);
+    // tablas con varios puntos en una fila y sus datos al final, en el mismo orden (DAF):
+    // «18.3 Remolque de eje 18.3.1 Remolque con 18.4 Remolque sin 24403 kg 24403 kg 750 kg»
+    const fila={};
+    for(const t of T){const as=[...t.matchAll(/(?:^|\s)(18\.\d(?:\.?\d)?)\.?(?=\s)/g)].map(a=>(a[1]=a[1].replace(/^18\.(\d)(\d)$/,'18.$1.$2'),a));if(as.length<2)continue; // «18.31» = 18.3.1
+      const ult=as[as.length-1],cola=t.slice(ult.index+ult[0].length);
+      const vs=[...cola.matchAll(/(?:^|\s)(\d{1,2}[ .]\d{3}|\d{3,6}|N\s?[\/I1l]\s?A|NA|N\.A\.?|-)(?=\s|$)/g)].map(m=>/\d/.test(m[1])?m[1]:'-');
+      if(vs.length===as.length)as.forEach((a,k)=>{fila[a[1]]=vs[k]})}
+    const v18=n=>n in fila?fila[n]:valor(n);
+    r.mmr_barra=kg(v18('18.1'),45000);
+    r.mmr_semirremolque=kg(v18('18.2'),45000);
+    r.mmr_eje_central=kg(v18('18.3'),45000);
+    r.mmr_sin_frenos=kg(v18('18.4'),3500);
     const dep=T.join('\n').match(/dep[oó]sito[^:\n]*:\s*\(?\s*l?\s*\)?\s*(\d{2,4})/i);r.capacidad_deposito=dep?+dep[1]:null;
     // distancia entre ejes en mm (punto 4, o 4.1 con varios ejes: «1-2: 3900 2-3: 1370»), en orden 1-2, 2-3, 3-4
     const dist=[],enRango=v=>v!==null&&v>=500&&v<=15000;
     const i41=pos('4.1');
-    if(i41>=0){const b=[tras(T[i41]),...bloque(i41).slice(1)].join(' ');
-      for(const m of b.matchAll(/(?:^|\s)(\d)\s*[-–]\s*(\d)\s*[:=]?\s*(\d[ .]\d{3}|\d{3,5})(?!\d)/g)){const a=+m[1],v=num(m[3]);if(+m[2]===a+1&&a>=1&&a<=3&&enRango(v)&&!dist[a-1])dist[a-1]=v}
-      if(!dist.length)[...tras(T[i41]).matchAll(/(\d[ .]\d{3}|\d{3,5})(?!\d)/g)].map(m=>num(m[1])).filter(enRango).slice(0,3).forEach((v,k)=>dist[k]=v)}
+    if(i41>=0){const b=[resto(T[i41]),...bloque(i41).slice(1)].join(' ');
+      for(const m of b.matchAll(/(?:^|\s)A?(\d)\s*[-–]\s*A?(\d)\s*[:=]?\s*(\d[ .]\d{3}|\d{3,5})(?!\d)/g)){const a=+m[1],v=num(m[3]);if(+m[2]===a+1&&a>=1&&a<=3&&enRango(v)&&!dist[a-1])dist[a-1]=v}
+      // sin la pareja de ejes delante de cada distancia («A1-A2 A2-A3 A3-A4» y debajo «1795 4105 1400»): en orden
+      if(!dist.length)[...b.replace(/(^|\s)A?\d\s*[-–]\s*A?\d(?=\s|$)/g,' ').matchAll(/(\d[ .]\d{3}|\d{3,5})(?!\d)/g)].map(m=>num(m[1])).filter(enRango).slice(0,3).forEach((v,k)=>dist[k]=v)}
     if(!dist[0]){let i4=T.findIndex(t=>/^4\.?\s/.test(t)&&/ejes|wheel|axle|radstand|empattement/i.test(t));
       if(i4<0)i4=T.findIndex(t=>/Distancia\s+entre\s+ejes|(^|\s)Wheelbase\b/i.test(t)&&!/^4\.1/.test(t));
       const v=i4<0?null:num(tras(T[i4])||(T[i4].includes(':')?'':T[i4].replace(/^.*?(Wheelbase|ejes)\b/i,'')));if(enRango(v))dist[0]=v}
@@ -2691,10 +2713,15 @@ const CocLector=(()=>{
     // neumáticos (punto 35), para la plantilla de Palfinger: por eje la primera combinación, «1: 385/65R22.5 - 160 K / 22.5x11.75»
     // → medida «385/65R 22.5» e índice de carga y velocidad «160K» (así los escribe Daniel; la letra siempre K, aunque el COC diga L)
     const nd=[],ni=[],i35=pos('35');
-    if(i35>=0){const b=[tras(T[i35])];for(let k=i35+1;k<T.length&&k<=i35+12&&!esAncla(T[k]);k++)b.push(T[k]);
-      for(const m of b.join(' ').matchAll(/(?:^|\s)(\d)\s*[:.)]\s*(\d{3}\s*\/\s*\d{2,3}\s*Z?R\s*\d{2}(?:[.,]\d)?)\s*(?:[-–]\s*)?(\d{2,3}(?:\s*\/\s*\d{2,3})?\s*[A-Z](?![a-z]))?/g)){
-        const e=+m[1]-1;if(e<0||e>5||nd[e])continue;
-        nd[e]=m[2].replace(/\s+/g,'').replace(/R(\d)/,'R $1');if(m[3])ni[e]=m[3].replace(/\s+/g,'').replace(/[A-Z]$/,'K')}} // Daniel: la letra de velocidad siempre K
+    if(i35>=0){const b=[resto(T[i35])];for(let k=i35+1;k<T.length&&k<=i35+12&&!esAncla(T[k]);k++)b.push(T[k]);
+      // cada medida con lo que la sigue hasta la siguiente: el eje va delante («1:», «A1») o, si no se lee, es el siguiente;
+      // el índice, sencillo o gemelo: «160 K», «164/- K» o «-/150 K» (MAN), «164/--, K» (Scania, tras la llanta)
+      const t=b.join(' '),ms=[...t.matchAll(/\d{3}\s*\/\s*\d{2,3}\s*Z?R\s*\d{2}(?:[.,]\d)?/g)];let e=-1;
+      ms.forEach((m,k)=>{const antes=t.slice(Math.max(0,m.index-8),m.index),des=t.slice(m.index+m[0].length,k+1<ms.length?ms[k+1].index:t.length);
+        const ej=antes.match(/(?:^|\s)(A?)([1-6])\s*([:.)]?)\s*$/);e=ej&&(ej[1]||ej[3]||!/\d\s*$/.test(antes.slice(0,-2)))?+ej[2]-1:e+1;if(e>5||nd[e])return;
+        nd[e]=m[0].replace(/\s+/g,'').replace(',','.').replace(/R(\d)/,'R $1');
+        const ix=des.match(/^[\s\-–,]*(?:\d{2}[.,]\d\s*x\s*\d{1,2}[.,]\d{1,2}\S*\s*(?:[A-Z]{1,3}\s*\d{1,3})?[\s,]*)?(?:(\d{2,3}\s*\/\s*\d{2,3})|(\d{2,3})\s*\/\s*-+|-+\s*\/\s*(\d{2,3})|(\d{2,3})(?=\s*[A-Z](?![a-z])))\s*,?\s*(?:-\s*)*([A-Z])?(?![a-z])/);
+        if(ix&&ix[5])ni[e]=(ix[1]||ix[2]||ix[3]||ix[4]).replace(/\s+/g,'')+'K'})} // Daniel: la letra de velocidad siempre K
     r.neumaticos=nd.length?Array.from(nd,v=>v||null):null;
     r.indices_carga=ni.length?Array.from(ni,v=>v||null):null;
     return r;
@@ -2718,7 +2745,92 @@ const CocLector=(()=>{
     r.denominacion_comercial=cerca(/^(1\.1\.7\.?\s*)?(Modell|Modelo)\b/i,0,2,(t,mismo)=>{const x=(mismo?t.replace(/^(1\.1\.7\.?\s*)?(Modell|Modelo)\s*:?/i,''):t).replace(/^Model\b\s*:?/i,'').trim();return x&&/\p{L}{2}/u.test(x)&&x.length<=30&&!/:/.test(x)?x:null});
     return r;
   }
-  return {lineas,campos,leer,cuantos,esHojaCO2,hojaCO2};
+  // Ficha técnica española (tarjeta ITV, Mod ITV/C): en vez de los puntos del COC trae casillas con códigos (D.1 marca, E bastidor,
+  // F.1 MMTA…) en columnas, código a la izquierda y dato a la derecha. El OCR pierde a veces el código (E, J, K, F.1), pero las
+  // casillas van siempre en el mismo orden y a la misma altura, así que el que falta se busca entre sus vecinos.
+  const FC=[['C.L','C.I','A.1','A.2','D.1','D.2','D.3','E','J','J.1','J.2','J.3','R','D.6','K','Z'],
+    ['G','G.2','F.1','F.1.1','F.1.5','F.2','F.2.1','O.1','O.1.1','O.1.2','O.1.3','O.1.4','F.3','F.3.1','F.5.1','F.6.1','F.7','F.7.1','F.8.1','M.1','M.4'],
+    ['L','L.0','L.1','L.2','P.5.1','P.5','P.3','P.1','P.1.1','P.2','P.2.1','S.1','S.2','U.1','U.2','V.7','V.9']];
+  const esq=s=>String(s||'').trim().toUpperCase().replace(/^0(?=[.,]?\d)/,'O').replace(/[.,:]/g,''); // «0.1.1» (OCR) = O.1.1
+  const mediana=a=>{const s=[...a].sort((x,y)=>x-y);return s.length?s[s.length>>1]:null};
+  function casillas(its){ // por columna: dónde está cada código (los leídos y los que faltan)
+    const cols=FC.map(cod=>{const idx=new Map(cod.map((c,k)=>[esq(c),k]));
+      const xs=its.filter(i=>{const e=esq(i.s);return e.length>=2&&idx.has(e)}).map(i=>i.x);
+      return {cod,idx,x:xs.length>=3?mediana(xs):null}});
+    const sep=[];
+    for(const c of cols){if(c.x===null)continue;
+      let cand=its.filter(i=>idx0(c,i)!==undefined);
+      // un código mal leído o repetido («Cl» por C.I sale igual que C.L): se quedan los que van en orden de arriba abajo
+      cand=cand.filter(i=>Math.abs(i.x-c.x)<=20).sort((a,b)=>a.y-b.y);
+      const best=[],prev=[];
+      for(let k=0;k<cand.length;k++){best[k]=1;prev[k]=-1;
+        for(let j=0;j<k;j++)if(idx0(c,cand[j])<idx0(c,cand[k])&&cand[k].y-cand[j].y>2&&best[j]+1>best[k]){best[k]=best[j]+1;prev[k]=j}}
+      let k=best.indexOf(Math.max(0,...best));c.vistos=[];while(k>=0){c.vistos.unshift(cand[k]);k=prev[k]}
+      for(let j=1;j<c.vistos.length;j++)sep.push((c.vistos[j].y-c.vistos[j-1].y)/(idx0(c,c.vistos[j])-idx0(c,c.vistos[j-1])))}
+    const paso=mediana(sep)||12;
+    for(const c of cols){if(!c.vistos)continue;
+      const ks=c.vistos.map(i=>idx0(c,i));
+      c.y=c.cod.map((_,k)=>{const j=ks.indexOf(k);if(j>=0)return c.vistos[j].y;
+        let a=-1,b=-1;ks.forEach((q,n)=>{if(q<k)a=n;if(q>k&&b<0)b=n});
+        if(a>=0&&b>=0)return c.vistos[a].y+(c.vistos[b].y-c.vistos[a].y)*(k-ks[a])/(ks[b]-ks[a]);
+        if(a>=0&&k-ks[a]<=3)return c.vistos[a].y+paso*(k-ks[a]);if(b>=0&&ks[b]-k<=3)return c.vistos[b].y-paso*(ks[b]-k);return null})}
+    return {cols,paso};
+  }
+  function idx0(c,i){const e=esq(i.s);return c.idx.get(e)}
+  function fichaPagina(items){ // la página de la ficha con más códigos en su sitio (las otras son la leyenda y el dorso)
+    let mejor=null;
+    for(const pg of new Set(items.map(i=>i.pg))){const its=items.filter(i=>i.pg===pg&&String(i.s).trim());
+      const k=casillas(its),n=k.cols.slice(0,2).reduce((a,c)=>a+(c.vistos?c.vistos.length:0),0);
+      if(!mejor||n>mejor.n)mejor={n,its,k}}
+    return mejor;
+  }
+  const esFichaC=items=>{const m=fichaPagina(items);return !!m&&m.n>=8&&/ITV|Matr[ií]cula|Certificado|de\s+Serie/i.test(m.its.map(i=>i.s).join(' '))};
+  function filasTexto(its,tol){const out=[];
+    for(const i of [...its].sort((a,b)=>a.y-b.y)){const f=out.find(f=>Math.abs(f.y-i.y)<=tol);if(f)f.its.push(i);else out.push({y:i.y,its:[i]})}
+    return out.map(f=>f.its.sort((a,b)=>a.x-b.x).map(i=>String(i.s).trim()).join(' '))}
+  function fichaC(items){
+    const {its,k:{cols,paso}}=fichaPagina(items);
+    const dato=code=>{const g=cols.findIndex(c=>c.cod.includes(code)),c=cols[g];if(!c||c.x===null||!c.y)return null;
+      const y=c.y[c.cod.indexOf(code)];if(y===null||y===undefined)return null;
+      const fin=cols.slice(g+1).map(o=>o.x).find(x=>x!==null&&x>c.x)??Infinity;
+      const v=its.filter(i=>i.x>c.x+paso*1.6&&i.x<fin-paso*.5&&Math.abs(i.y-y)<=paso*.45).sort((a,b)=>a.x-b.x).map(i=>String(i.s).trim()).join(' ').replace(/[|\[\]{}]/g,' ').replace(/\s+/g,' ').trim();
+      return nulo(v)?null:v};
+    const kg=(v,max)=>{const n=num(v);return n!==null&&n>=100&&n<=max?n:null};
+    const nums=(v,a,b)=>[...String(v||'').matchAll(/\d[\d.]*\d|\d/g)].map(m=>+m[0].replace(/\./g,'')).filter(n=>n>=a&&n<=b);
+    const r={};
+    r.marca=dato('D.1');
+    const d2=(dato('D.2')||'').replace(/\s*\/\s*/g,'/').split('/').map(s=>s.trim()); // tipo / variante / versión
+    r.tipo=d2[0]||null;r.variante=d2[1]||null;r.version=d2[2]||null;
+    r.denominacion_comercial=dato('D.3');
+    const cat=(dato('J')||'').match(/\b([MNO][1-4]G?|L\d[A-Z]?|T\d)\b/);
+    const catSuelta=cat?null:its.map(i=>String(i.s).trim()).find(s=>/^[MN][1-3]G?$|^O[1-4]$/.test(s));
+    r.categoria=cat?cat[1]:catSuelta||null;
+    const tE=dato('E')||'',vin=tE.replace(/\s/g,'').match(VIN);
+    r.bastidor=vin?vin[0]:vinDe(tE)||vinDe(its.map(i=>i.s).join(' '));
+    const hk=(dato('K')||'').match(HOMOL)||its.map(i=>i.s).join(' ').match(HOMOL);
+    r.homologacion=hk?hk[0].replace(/\s/g,''):null;
+    r.mmta_total=kg(dato('F.1'),60000);
+    const ej=nums(dato('F.1.1'),1000,30000);r.mmta_ejes=ej.length>=2?ej.slice(0,6):null;
+    r.mmtc=kg(dato('F.3'),60000);
+    r.mmr_barra=kg(dato('O.1.1'),45000);
+    r.mmr_semirremolque=kg(dato('O.1.2'),45000);
+    r.mmr_eje_central=kg(dato('O.1.3'),45000);
+    r.mmr_sin_frenos=kg(dato('O.1.4'),3500);
+    const txt=filasTexto(its,paso*.5).join('\n');
+    const dep=txt.match(/Dep[oó]sito\s*:?\s*(\d{2,4}?)\s*(?:[lL](?![\p{L}])|1(?=\.))/u)||txt.match(/Dep[oó]sito\s*:?\s*(\d{2,4})/i);
+    r.capacidad_deposito=dep?+dep[1]:null;
+    const de=nums(dato('M.1'),500,15000);r.distancia_ejes=de.length?de.slice(0,3):null;
+    // neumáticos en Observaciones: «Eje1: 2 / 385/65R22.5 (164 K)»; el texto va en un recuadro estrecho, se junta por líneas
+    const nd=[],ni=[],ejes=its.filter(i=>/^Eje\s*\d/i.test(String(i.s).trim()));
+    if(ejes.length){const x0=Math.min(...ejes.map(i=>i.x))-paso*3,y0=Math.min(...ejes.map(i=>i.y))-paso*2,y1=Math.max(...ejes.map(i=>i.y))+paso*3;
+      const t=filasTexto(its.filter(i=>i.x>=x0&&i.y>=y0&&i.y<=y1),paso*.5).join(' ');
+      for(const m of t.matchAll(/Eje\s*([1-6])\s*:?\s*(?:\d{1,2}\s*\/\s*)?(\d{3}\s*\/\s*\d{2,3}\s*Z?R\s*\d{2}(?:[.,]\d)?)\s*\(?\s*(\d{2,3}(?:\s*\/\s*\d{2,3})?)?\s*([A-Z])?/g)){
+        const e=+m[1]-1;if(nd[e])continue;nd[e]=m[2].replace(/\s+/g,'').replace(',','.').replace(/R(\d)/,'R $1');if(m[3])ni[e]=m[3].replace(/\s+/g,'')+'K'}} // Daniel: la letra siempre K
+    r.neumaticos=nd.length?Array.from(nd,v=>v||null):null;
+    r.indices_carga=ni.length?Array.from(ni,v=>v||null):null;
+    return r;
+  }
+  return {lineas,campos,leer,cuantos,esHojaCO2,hojaCO2,esFichaC,fichaC};
 })();
 if(typeof module!=='undefined')module.exports=CocLector;
 
@@ -2783,7 +2895,7 @@ const TESS={workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/wor
   corePath:'https://cdn.jsdelivr.net/npm/tesseract.js-core@6.1.2/',
   langPath:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/spa@1.0.0/4.0.0_best_int'};
 const TESS_JS='https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';
-let OCR_W=null, OCR_AVISO=null, COC_FOTO=false, COC_HOJA=false;
+let OCR_W=null, OCR_AVISO=null, COC_FOTO=false, COC_HOJA=false, COC_FICHA=false;
 async function ocrWorker(){
   if(OCR_W)return OCR_W;
   if(!window.Tesseract)await loadScript(window.__TESS_JS||TESS_JS);
@@ -2828,6 +2940,10 @@ const Hoja=(()=>{
     const o=document.createElement('canvas');o.width=c.height;o.height=c.width;const x=o.getContext('2d');
     x.translate(o.width/2,o.height/2);x.rotate((der?1:-1)*Math.PI/2);x.drawImage(c,-c.width/2,-c.height/2);return o;
   }
+  function volcar(c){ // boca abajo → derecho
+    const o=document.createElement('canvas');o.width=c.width;o.height=c.height;const x=o.getContext('2d');
+    x.translate(o.width,o.height);x.rotate(Math.PI);x.drawImage(c,0,0);return o;
+  }
   function corte(c){ // hoja apaisada con dos páginas: la columna en blanco del medio (o null)
     if(c.width<c.height*1.15)return null;
     const {w,h,t}=tinta(c,900),col=new Float64Array(w);for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(t[y*w+x])col[x]++;
@@ -2853,7 +2969,7 @@ const Hoja=(()=>{
       if(v>=2)for(const q of m.pix){const i=q*4;d[i]=d[i+1]=d[i+2]=255}}
     x.putImageData(im,0,0);return c;
   }
-  return {lado,girar,corte,recortar,sinMotas,peque:(c,max)=>tinta(c,max).s};
+  return {lado,girar,volcar,corte,recortar,sinMotas,peque:(c,max)=>tinta(c,max).s};
 })();
 async function legible(c){ // lectura rápida de una copia pequeña: cuántas palabras salen claras
   const w=await ocrWorker();await w.setParameters({tessedit_pageseg_mode:'3'});
@@ -2862,12 +2978,21 @@ async function legible(c){ // lectura rápida de una copia pequeña: cuántas pa
     if(wd.confidence>=75&&/\p{L}{3}/u.test(wd.text))n++;
   return n;
 }
+async function dosPaginas(fo){ // PDF derecho con dos páginas por hoja (apaisada): cada página por separado y con más resolución
+  if(!fo.pdf||!Hoja.corte(fo.c))return [fo.c];
+  let r=await paginaCanvas(fo.pdf,fo.i,4500);if(fo.volcado)r=Hoja.volcar(r);const x=Hoja.corte(r);
+  return x?[Hoja.recortar(r,0,x),Hoja.recortar(r,x,r.width)]:[fo.c];
+}
 async function enderezar(fo){ // los lienzos (una o dos páginas) que se pasan al OCR
-  const q=Hoja.lado(fo.c);if(q<1)return [fo.c]; // derecho seguro: como siempre
-  // dudoso: lectura rápida derecho y girado a cada lado; se gira solo si así se lee claramente mejor
+  const q=Hoja.lado(fo.c);
   OCR_AVISO=null;showMsg('Mirando si el COC está derecho…');
-  const s=Hoja.peque(fo.c,1200),n0=await legible(s),n1=await legible(Hoja.girar(s,false)),n2=await legible(Hoja.girar(s,true));
-  const n=Math.max(n1,n2);if(n<=n0*1.3+5&&!(q>2&&n>n0))return [fo.c]; // muy de lado (q > 2): basta con que se lea algo mejor
+  const s=Hoja.peque(fo.c,1200),n0=await legible(s);
+  // las líneas van de lado a lado (q < 1): derecho o boca abajo; si se lee bien derecho, ni se mira
+  const derecho=async()=>{if(n0<40&&await legible(Hoja.volcar(s))>n0*1.3+5){showMsg('El COC está boca abajo. Dándole la vuelta…');fo={...fo,c:Hoja.volcar(fo.c),volcado:true}}return dosPaginas(fo)};
+  if(q<1)return derecho();
+  // dudoso: lectura rápida girado a cada lado; se gira solo si así se lee claramente mejor
+  const n1=await legible(Hoja.girar(s,false)),n2=await legible(Hoja.girar(s,true));
+  const n=Math.max(n1,n2);if(n<=n0*1.3+5&&!(q>2&&n>n0))return derecho(); // muy de lado (q > 2): basta con que se lea algo mejor
   showMsg('El COC está de lado. Poniéndolo derecho…');
   const r=Hoja.girar(fo.pdf?await paginaCanvas(fo.pdf,fo.i,4500):fo.c,n2>n1); // más resolución: con dos páginas por hoja la letra sale pequeña
   if(!fo.pdf)return [r]; // foto de lado: una página; se lee como las demás fotos
@@ -2877,7 +3002,7 @@ async function enderezar(fo){ // los lienzos (una o dos páginas) que se pasan a
 readCoc=async function(files){
   const btn=$('#cocbtn');btn.classList.add('busy');
   const nombre=files.length>1?files.length+' archivos':files[0].name;
-  showMsg('Leyendo el COC…');COC_FOTO=false;COC_HOJA=false;
+  showMsg('Leyendo el COC…');COC_FOTO=false;COC_HOJA=false;COC_FICHA=false;
   try{
     const items=[];let pg=0,nf=0;
     const fotos=[]; // lienzos para el OCR
@@ -2904,7 +3029,8 @@ readCoc=async function(files){
           items.push(...(h.escaneo?await ocrTrozos(Hoja.sinMotas(FotoPrep.escaneo(h)),++pg,'11'):await ocrTrozos(FotoPrep.preparar(h),++pg)))}}
       OCR_AVISO=null;
     }
-    let data=CocLector.leer(items);
+    // la ficha técnica (tarjeta ITV) en lugar del COC: trae casi los mismos datos, con sus códigos (D.1, E, F.1…)
+    let data=CocLector.esFichaC(items)?(COC_FICHA=true,CocLector.fichaC(items)):CocLector.leer(items);
     if(!CocLector.cuantos(data)&&CocLector.esHojaCO2(CocLector.lineas(items))){
       // la hoja de CO2 en lugar del COC: se sacan los pocos datos que trae; si es escaneada, la primera página se repasa limpiando la trama
       COC_HOJA=true;let h=CocLector.hojaCO2(CocLector.lineas(items));
@@ -2931,6 +3057,7 @@ readCoc=async function(files){
 // en los paneles del COC leído de una foto, avisar de que hay que revisar cada dato
 const _askI=ask;ask=function(t,h,b){
   if(COC_FOTO&&/^(COC leído|Rellenar desde el COC)$/.test(t))h='<p class="pickno"><b>Leído de una foto:</b> comprueba cada dato antes de rellenar; desmarca los que estén mal. En el bastidor se confunden a veces la S y el 5, la B y el 8.</p>'+h;
+  if(COC_FICHA&&/^(COC leído|Rellenar desde el COC)$/.test(t))h='<p class="pickno"><b>Es la ficha técnica (tarjeta ITV), no el COC:</b> trae casi los mismos datos. El tipo, la variante y la versión salen de la casilla D.2.</p>'+h;
   if(COC_HOJA&&/^(COC leído|Rellenar desde el COC)$/.test(t))h='<p class="pickno"><b>No es el COC:</b> es la hoja de emisiones de CO2. Solo trae el bastidor, la categoría, la MMTA y el modelo; lo demás tiene que venir del COC.</p>'+h;
   return _askI(t,h,b);
 };
@@ -2964,7 +3091,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 14 oct, 15:29';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 14 oct, 16:29';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
