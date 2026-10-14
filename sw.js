@@ -1,11 +1,24 @@
 /* App COP sin conexión: la app (index.html) va primero por la red, para coger siempre la última versión, y sin red sale la
    guardada; las librerías (jszip, pdf.js, lector de fotos, letras), que llevan versión fija, se guardan la primera vez. */
-const V='cop-9d59666798';
+const V='cop-ebdd858310';
+const COMP='cop-compartido'; // el COC que llega desde «Compartir» del móvil, hasta que la app lo recoge
 const APP=['./','palfinger-datos.js','manifest.webmanifest','icon-192.png','icon-512.png','icon-maskable.png','apple-touch-icon.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(V).then(c=>c.addAll(APP)).then(()=>self.skipWaiting())));
-self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V&&k!==COMP).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
-  const r=e.request;if(r.method!=='GET')return;
+  const r=e.request;
+  // «Compartir» → COP (share_target del manifest): se guarda el archivo y se abre la app, que lo lee como «Añadir COC»
+  if(r.method==='POST'&&/\/compartir$/.test(new URL(r.url).pathname)){
+    e.respondWith((async()=>{
+      let n=0;
+      try{const fd=await r.formData(),fs=fd.getAll('coc').filter(f=>f&&f.size),c=await caches.open(COMP);
+        for(const k of await c.keys())await c.delete(k);
+        for(const f of fs)await c.put('./compartido/'+(n++),new Response(f,{headers:{'content-type':f.type||'application/octet-stream','x-nombre':encodeURIComponent(f.name||'COC.pdf')}}));
+      }catch(err){}
+      return Response.redirect('./?compartido='+n,303);
+    })());return;
+  }
+  if(r.method!=='GET')return;
   const u=new URL(r.url);
   if(u.origin===location.origin){
     // sin la caché del navegador (GitHub guarda 10 min): pregunta siempre al servidor si hay versión nueva
