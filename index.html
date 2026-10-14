@@ -128,6 +128,7 @@ details.sec>summary .count{color:inherit;opacity:.75}
 .lbl.small{font-size:12px;color:var(--muted)}
 .fld{display:inline-flex;align-items:center;gap:6px;min-width:0}
 .fld label{font-size:12px;color:var(--muted)}
+.fld.mm label{min-width:7.4em} /* altura máxima / mínima: casillas una debajo de otra, alineadas */
 input.t{font-family:var(--f-mono);font-size:15px;width:9.5em;max-width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--ink)}
 input.t.wide{width:16em}
 input.t.pend{border-color:var(--warn);background:var(--warn-soft)}
@@ -748,6 +749,11 @@ function applyPrefs(m,rels){
     const l=b.row&&b.row.items.find(i=>i.t==='lbl');if(!l)continue;
     if(/^Instala dispositivos laterales obligatorios/.test(l.text.trim()))l.app='Instala luces de posición laterales (dispositivos laterales obligatorios si longitud total del vehículo > de 6000 mm)';
     else if(/^ALUMBRADO LATERAL$/.test(l.text.trim()))l.app='ALUMBRADO LATERAL (LUZ DE POSICIÓN)'}
+  // alturas de las luces de posición laterales y de los catadióptricos laterales: la máxima y la mínima en la misma casilla (lo pidió Daniel el 14 oct)
+  for(const sec of m.sections)if(/^INSTALACI[OÓ]N DE DISPOSITIVOS DE ALUMBRADO/.test(sec.title)){let parte='';
+    for(const b of sec.blocks){if(!b.row)continue;const f=firstLbl(b.row),it=b.row.items.find(i=>i.t==='slot');
+      if(!it&&isHeading(f)){parte=f;continue}
+      if(it&&/^(ALUMBRADO LATERAL|CATADI[OÓ]PTRICO LATERAL)$/.test(parte)&&/^Altura borde superior \(h\)$/.test(f)){const sl=m.slots[it.id];sl.split=['Máx.','Mín.'];sl.splitApp=['Altura máxima','Altura mínima']}}}
   // distancias entre luces de posición laterales = las de los catadióptricos + 60 mm, con un botón junto a los catadióptricos (solo en la app)
   {const z=m.slots.filter(s=>/^INSTALACI[OÓ]N DE DISPOSITIVOS DE ALUMBRADO/.test(s.sec)&&!s.hidden&&/^Distancia máxima entre dispositivos laterales consecutivos/.test(s.label));
    if(z.length===2){m.latPos={pos:z[0].id,cat:z[1].id};z[1].latBtn=true}}
@@ -943,7 +949,7 @@ function render(){
         if(it.t==='lbl'){h+=`<span class="lbl${it.first?' first':''}${it.lim?' lim':''}${!it.first&&!it.lim&&it.text.length<4?' small':''}">${it.first&&rowSlots.length?sideWords(esc(it.app||it.text)):esc(it.app||it.text)}</span>`}
         else if(it.t==='slot'){const s=model.slots[it.id];if(s.hidden)continue;
           const wide=s.wide||/Marca|Contrase|bastidor|Homolog|Denominaci|Variante|Versi|Descripci|Lugar|validada|Tipo|Nº/i.test(s.label);
-          if(s.split){h+=s.split.map((lab,k)=>`<span class="fld${sideCls(lab)}"><label for="s${s.id}_${k}">${esc(lab)}</label><input class="t" id="s${s.id}_${k}" data-slot="${s.id}" data-part="${k}" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Medición" aria-label="${esc(s.label+' · '+lab)}"></span>`).join('');continue}
+          if(s.split){h+=s.split.map((lab,k)=>`<span class="fld${sideCls(lab)}${s.splitApp?' mm':''}"><label for="s${s.id}_${k}">${esc((s.splitApp||s.split)[k])}</label><input class="t" id="s${s.id}_${k}" data-slot="${s.id}" data-part="${k}" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Medición" aria-label="${esc(s.label+' · '+lab)}"></span>`).join('');continue}
           if(s.select){h+=`<span class="fld"><select class="t col" id="s${s.id}" data-slot="${s.id}" aria-label="${esc((s.rowLabel?s.rowLabel+' · ':'')+s.label)} · color"><option value="">Color…</option>${s.select.map(c=>`<option>${c}</option>`).join('')}</select></span>`;continue}
           // con el dato puesto el texto gris de la casilla desaparece: «Derecha», «Izquierda», «Nº»… van encima para saber siempre qué es cada número
           const top=s.topApp||(s.kind!=='colon'&&s.ph&&(s.ph!=='Medición'||hasN)?s.ph:'');
@@ -3091,7 +3097,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 14 oct, 16:29';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 14 oct, 20:49';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
