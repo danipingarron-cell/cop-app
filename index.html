@@ -161,6 +161,10 @@ select.t.col{font-family:inherit;width:auto;min-width:8em}
 .luzin .luzbig input.t{font-size:16px;font-weight:600;border:2px solid var(--accent);background:var(--panel)}
 .latpos{flex-basis:100%;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
 .latpos button{font-weight:600;border:2px solid var(--accent);color:var(--accent);background:var(--panel)}
+.pilb{flex-basis:100%;display:block;width:100%;margin-top:8px;padding:11px 12px;border-radius:10px;border:1.5px solid var(--accent);background:var(--accent-soft,var(--panel));color:var(--accent);font-weight:700;font-size:14px;text-align:left}
+.pilb small{display:block;font-weight:500;color:var(--muted);font-size:12px;margin-top:2px}
+input.t.pilcop{border:2px dashed var(--accent)!important}
+.pilnota{flex-basis:100%;font-size:12px;color:var(--accent);font-weight:600;margin-top:2px}
 .luzmsg{margin-top:8px}.luzmsg button{font-size:13px;padding:4px 10px;margin-left:6px}
 .legend{font-size:12px;color:var(--muted);margin:6px 0 0}
 .panel{background:var(--panel);border:2px solid var(--accent);border-radius:8px;padding:12px 14px;margin-top:12px}
@@ -840,6 +844,27 @@ function latPasar(){
   latNota(`✓ Puesto en el ${ptoDe(L.pos)}: ${val}`);
 }
 document.addEventListener('click',e=>{if(e.target.closest('[data-latpos]'))latPasar()});
+// piloto trasero (lo pidió Daniel, 14 oct): marcha atrás, intermitente, freno, antiniebla, posición y catadióptrico suelen llevar la misma
+// contraseña; un botón bajo la marcha atrás la copia a las otras cinco (solo a las vacías). Matrícula, gálibo y 3ª luz de freno no: cambian.
+const PILOTO=[/^Luz de marcha atr/,/^Luz indicadora de direcci/,/^Luz de freno:/,/^Luz antiniebla trasera/,/^Luz de posici.n trasera/,/^Catadi.ptrico trasero no triangular/];
+function pilotoFilas(){const rs=[...document.querySelectorAll('.row')];
+  return PILOTO.map(re=>rs.find(r=>{const t=r.querySelector('.ptxt');return t&&re.test(t.textContent.replace(/\s+/g,' ').trim())&&r.querySelector('input.t[data-slot]')}))}
+function pilotoBtn(){
+  const f=pilotoFilas();if(f.some(r=>!r))return;
+  f[0].insertAdjacentHTML('beforeend','<button type="button" class="pilb" data-piloto>⧉ Misma contraseña en todo el piloto trasero<small>Copia a intermitente, freno, antiniebla, posición y catadióptrico (solo a las vacías)</small></button>');
+}
+function pilotoCopiar(b){
+  const f=pilotoFilas();if(f.some(r=>!r))return;const de=f[0].querySelector('input.t[data-slot]'),v=de.value.trim();
+  if(!v){b.innerHTML='⧉ Misma contraseña en todo el piloto trasero<small>Primero escribe aquí la contraseña de la marcha atrás</small>';de.focus();return}
+  let n=0;
+  for(const r of f.slice(1)){const i=r.querySelector('input.t[data-slot]');if(i.value.trim())continue;
+    i.value=v;state.v['s'+i.dataset.slot]=v;i.classList.remove('pend');i.classList.add('pilcop');autoCumple(r);n++;
+    r.querySelector('.pilnota')||r.insertAdjacentHTML('beforeend','<div class="pilnota">⧉ Copiada de la marcha atrás (puedes cambiarla)</div>')}
+  save();refresh();
+  b.innerHTML=n?`✓ Copiada a ${n} ${n>1?'luces':'luz'}<small>Si alguna es distinta, cámbiala en su casilla</small>`:'⧉ Misma contraseña en todo el piloto trasero<small>Las otras cinco ya tienen contraseña: no he cambiado nada</small>';
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-piloto]');if(b)pilotoCopiar(b)});
+document.addEventListener('input',e=>{const i=e.target;if(i.classList&&i.classList.contains('pilcop')){i.classList.remove('pilcop');const n=i.closest('.row')&&i.closest('.row').querySelector('.pilnota');if(n)n.remove()}});
 // % y º: al salir de la casilla, detrás de cada número que no lo lleve (85 → 85%, -5/-5/2 → -5º/-5º/2º)
 const conUnidad=(v,u)=>v.replace(/-?\d+(?:[.,]\d+)?(?!\s*[\d.,%º°])/g,x=>x+u);
 document.addEventListener('change',e=>{
@@ -973,6 +998,7 @@ function render(){
     grps.forEach(g=>g.forEach(cb=>CB_GROUP[cb]=g));
     row.querySelectorAll('[data-slot]').forEach(i=>ROW_OF[i.dataset.slot]=row);
   });
+  pilotoBtn();
   fillUI();
 }
 let CB_GROUP={},ROW_OF={};
@@ -2890,7 +2916,8 @@ const FotoPrep=(()=>{
       v.sort();const o=v[4]<170?0:255,i=(y*W+xx)*4;d[i]=d[i+1]=d[i+2]=o}
     x.putImageData(im,0,0);return c;
   }
-  return {preparar:c=>sinRayas(aplanar(girar(c,angulo(c)))),escaneo:c=>sinRayas(limpiar(aplanar(girar(c,angulo(c))))),angulo};
+  // plano: para las fotos de una placa o una etiqueta de cerca (sin quitar rayas: las letras grandes parecerían rayas)
+  return {plano:c=>aplanar(girar(c,angulo(c))),preparar:c=>sinRayas(aplanar(girar(c,angulo(c)))),escaneo:c=>sinRayas(limpiar(aplanar(girar(c,angulo(c))))),angulo};
 })();
 if(typeof module!=='undefined')module.exports=FotoPrep;
 
@@ -3097,7 +3124,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 14 oct, 20:49';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 14 oct, 23:40';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
@@ -3129,5 +3156,192 @@ async function recibirCompartido(){
   COC_HOME=true;readCoc(fs);
 }
 {const _ic=initCoc;initCoc=async function(){await _ic();recibirCompartido()}}
+
+/* Foto en cada punto (lo pidió Daniel, 14 oct): junto a las casillas de texto que se copian de una placa o etiqueta (contraseñas,
+   marcas, tipos, neumáticos, placa de la grúa, bastidor…) sale un botón de cámara. La foto se lee en el móvil con el mismo lector
+   del COC (tesseract.js, nada sale del móvil) y la app propone el valor; no se escribe nada hasta que Daniel pulsa «Poner».
+   Si en la misma fila hay varias casillas con cámara (máquina y nº de serie, neumático e índice, marca y contraseña…), una foto
+   propone todas. Va después de indep.js (usa ocrWorker, fotoCanvas y FotoPrep). */
+const FotoPunto=(()=>{
+  const CAM='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.6"/></svg>';
+  const st=document.createElement('style');
+  st.textContent=`.camw{display:flex;gap:6px;align-items:center;min-width:0;max-width:100%}.camw>input{flex:1 1 auto;min-width:0}
+.camb{flex:none;width:40px;height:38px;display:inline-grid;place-items:center;border-radius:10px;border:1.5px solid var(--accent);background:var(--accent-soft,var(--panel));color:var(--accent);padding:0;cursor:pointer}
+.fotop{flex-basis:100%;width:100%;box-sizing:border-box;margin:6px 0 2px;padding:12px;border-radius:12px;border:2px solid var(--accent);background:var(--panel);display:grid;gap:10px;color:var(--ink)}
+.fotop .fh{display:flex;gap:10px;align-items:flex-start}
+.fotop img{width:118px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex:none;background:var(--bg)}
+.fotop .ft{font-size:12px;color:var(--muted);line-height:1.35}.fotop .ft b{display:block;font-size:14px;color:var(--ink);margin-bottom:3px}
+.fotop label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;color:var(--muted);display:block;margin-bottom:4px}
+.fotop input.fv{width:100%!important;max-width:none;box-sizing:border-box;font-size:17px!important;font-weight:600;border:2px solid var(--line)!important}
+.fotop input.fv.lleno{border-color:var(--ok)!important}.fotop input.fv:focus{border-color:var(--accent)!important}
+.fotop .chips{display:flex;flex-wrap:wrap;gap:6px}
+.fotop .chips button{font-family:var(--f-mono,monospace);font-size:13px;padding:5px 9px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-weight:500}
+.fotop .fb{display:flex;gap:8px}
+.fotop .fb button{flex:1;padding:10px 6px;border-radius:10px;font-size:14px;font-weight:700;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.fotop .fb .ok{background:var(--ok);border-color:var(--ok);color:#fff;flex:1.4}
+.fotop .bar{height:6px;border-radius:3px;background:var(--accent-soft,var(--line));overflow:hidden}.fotop .bar i{display:block;height:100%;width:5%;background:var(--accent);transition:width .3s}
+.fotop .gal{background:none;border:0;padding:0;color:var(--accent);font-size:13px;font-weight:600;text-decoration:underline;justify-self:start}
+.fotodone{flex-basis:100%;font-size:12px;color:var(--ok);font-weight:600;margin-top:2px}`;
+  document.head.appendChild(st);
+  const norm=t=>String(t||'').replace(/\s+/g,' ').trim();
+  const escH=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const pal=()=>typeof TPL_ACT!=='undefined'&&TPL_ACT==='pal';
+  function info(i){const r=i.closest('.row'),sec=i.closest('details.sec');
+    return {r,pn:norm(r&&r.querySelector('.pnum')&&r.querySelector('.pnum').textContent),pt:norm(r&&r.querySelector('.ptxt')&&r.querySelector('.ptxt').textContent),
+      lab:norm(i.placeholder||String(i.getAttribute('aria-label')||'').split('·').pop()),al:norm(i.getAttribute('aria-label')),
+      sec:norm(sec&&sec.querySelector('h2')&&sec.querySelector('h2').textContent).toUpperCase()}}
+  const en=(pn,...l)=>l.includes(pn);
+  // las casillas con cámara (la lista que se le enseñó a Daniel el 14 oct); las medidas con metro no la llevan
+  function quiere(i){
+    if(i.dataset.part!==undefined||i.readOnly||i.disabled||i.closest('.fotop,#dlg,.luzin'))return false;
+    const x=info(i);if(!x.r)return false;const L=x.lab+' '+x.al;
+    if(pal()){
+      if(/^IDENTIFICACI/.test(x.sec))return /^1\.[1-9]$/.test(x.pn);
+      if(/^MASAS/.test(x.sec))return /^7\.1\.\d$/.test(x.pn)&&/neum|índice/i.test(x.lab);
+      if(/^PROTECCI.N TRASERA/.test(x.sec))return en(x.pn,'8.2.2','8.2.3');
+      if(/ALUMBRADO/.test(x.sec))return /^(marca|contraseña)$/i.test(x.lab)||/^10\.3\.\d\.[23]$/.test(x.pn);
+      if(/^PROTECCI.N LATERAL/.test(x.sec))return x.pn==='11.1.5';
+      if(/^SISTEMAS ANTIPROYECCI/.test(x.sec))return en(x.pn,'12.1.2','12.1.3');
+      if(/ACOPLAMIENTO/.test(x.sec))return /marca|homolog|tipo|contraseña|clase|D \(kN\)|^U |serie/i.test(x.lab);
+      return false;
+    }
+    if(/^IDENTIFICACI/.test(x.sec))return true;
+    if(/^PROTECCI.N TRASERA/.test(x.sec))return en(x.pn,'5.5','5.6')||(!x.pn&&/^(Marca|Tipo|Carga máxima|Nº Homologación)$/i.test(x.lab));
+    if(/^PROTECCI.N LATERAL/.test(x.sec))return en(x.pn,'6.2','6.3','6.7');
+    if(/ALUMBRADO/.test(x.sec)){const m=x.pn.match(/^7\.(\d+)$/);return !!m&&+m[1]<=18}
+    if(/^SISTEMAS ANTIPROYECCI/.test(x.sec))return en(x.pn,'9.2','9.3');
+    if(/MEC.NICOS DE ACOPLAMIENTO/.test(x.sec))return /^(Marca|Tipo|Homologación)$/i.test(x.lab);
+    if(/^COMPATIBILIDAD/.test(x.sec))return /homolog/i.test(L);
+    return false;
+  }
+  // qué buscar en la foto para cada casilla
+  function clase(i){const x=info(i),t=x.lab+' '+(pal()?'':x.pt);
+    if(/bastidor/i.test(t))return 'vin';
+    if(/^neum/i.test(x.lab))return 'neum';
+    if(/índice carga/i.test(x.lab))return 'indice';
+    if(/^m.quina$/i.test(x.lab))return 'maquina';
+    if(/serie/i.test(x.lab))return 'serie';
+    if(/D \(kN\)/.test(x.lab))return 'D';
+    if(/^U /.test(x.lab))return 'U';
+    if(/^clase$/i.test(x.lab))return 'clase';
+    if(/carga m.xima/i.test(x.lab))return 'carga';
+    if(/contrase|homolog/i.test(t)||/ALUMBRADO/.test(x.sec)&&!pal())return 'contr';
+    if(/marca/i.test(t))return 'marca';
+    if(/contrase|homolog/i.test(x.pt))return 'contr'; // p. ej. 11.1.5 «Contraseña … y marca» con casillas Derecho / Izquierdo
+    if(/tipo|variante|versi/i.test(t))return 'tipo';
+    return 'texto';
+  }
+  // ---------- lectura ----------
+  async function leerFoto(blob,aviso){
+    const c0=await fotoCanvas(blob),k=Math.min(1,2200/Math.max(c0.width,c0.height));
+    let c=c0;if(k<1){c=document.createElement('canvas');c.width=Math.round(c0.width*k);c.height=Math.round(c0.height*k);c.getContext('2d').drawImage(c0,0,0,c.width,c.height)}
+    const p=FotoPrep.plano(c);
+    OCR_AVISO=m=>{if(m.status==='recognizing text')aviso('Leyendo la foto…',m.progress);else if(/load|initializ/i.test(m.status||''))aviso('Preparando el lector (la primera vez se descarga, unos segundos)…',0.05)};
+    try{
+      const w=await ocrWorker();let lin=[];
+      for(const psm of ['3','11']){ // texto en bloques; si sale poco, texto suelto (placas con los datos repartidos)
+        await w.setParameters({tessedit_pageseg_mode:psm,preserve_interword_spaces:'1'});
+        const {data}=await w.recognize(p,{},{blocks:true});const l=[];
+        for(const bl of data.blocks||[])for(const pa of bl.paragraphs||[])for(const li of pa.lines||[]){
+          const ws=(li.words||[]).filter(wd=>wd.text.trim()&&wd.confidence>25);if(!ws.length)continue;
+          const t=norm(ws.map(wd=>wd.text).join(' '));if(t.replace(/[^A-Za-z0-9]/g,'').length<2)continue;
+          l.push({t,h:li.bbox.y1-li.bbox.y0})}
+        if(l.map(x=>x.t).join('').length>lin.map(x=>x.t).join('').length)lin=l;
+        if(lin.map(x=>x.t).join('').length>=12)break;
+      }
+      return lin;
+    }finally{OCR_AVISO=null}
+  }
+  const CONTR=/\(?\b[eE]\s?\)?\s?(\d{1,2})\s?\)?([\s*]+|\s*-\s*)([0-9][0-9A-Z]*(?:[*\/\- ][0-9A-Z]+)*)/;
+  function contrasena(lin){
+    for(const {t} of lin){const m=t.match(CONTR);if(m&&/\d{3}/.test(m[3]))return ('E'+m[1]+(m[2].includes('*')?'*':' ')+m[3]).replace(/\s+/g,' ').trim().toUpperCase()}
+    const all=lin.map(l=>l.t).join(' ');const e=all.match(/\(?\b[eE]\s?(\d{1,2})\b\)?/),n=all.match(/\b\d{4,6}\b/);
+    return e&&n?`E${e[1]} ${n[0]}`:'';
+  }
+  function proponer(cl,lin){
+    const all=lin.map(l=>l.t).join('\n'),una=all.replace(/\n/g,' ');let m;
+    switch(cl){
+      case 'contr':return contrasena(lin);
+      case 'vin':{for(const {t} of lin){const s=t.replace(/[\s.\-]/g,'').toUpperCase();m=s.match(/[A-HJ-NPR-Z0-9]{17}/);if(m)return m[0]}return ''}
+      case 'neum':m=una.match(/(\d{3})\s*\/\s*(\d{2})\s*R\s*(\d{2}(?:[.,]\d)?)/i);return m?`${m[1]}/${m[2]}R ${m[3].replace(',','.')}`:'';
+      case 'indice':{const s=una.replace(/(\d{3})\s*\/\s*(\d{2})\s*R\s*\d{2}(?:[.,]\d)?/ig,' ');
+        m=s.match(/\b(\d{3})(?:\s*\/\s*\d{3})?\s?([F-N])\b/);return m?m[1]+'K':''} // Daniel: la letra de velocidad siempre K
+      case 'maquina':for(const {t} of lin){m=t.match(/\b(P[A-Z]{1,2}|EPSILON|EPS|TZ|M)\s?\d[\d.,]*.*$/);if(m)return norm(m[0]).toUpperCase()}return '';
+      case 'serie':{for(const {t} of lin){m=t.match(/(?:seri\w*|serial|fabr\w*|n[ºo°.]{1,2}|nr\.?|no\.)\s*[:.]?\s*([A-Z0-9][A-Z0-9\-\/]{4,})/i);if(m&&/\d{4}/.test(m[1]))return m[1].toUpperCase()}
+        const ns=(una.match(/\b\d{6,12}\b/g)||[]).sort((a,b)=>b.length-a.length);return ns[0]||''}
+      case 'D':m=una.match(/\bD\s*[=:]?\s*(\d+(?:[.,]\d+)?)\s*kN/i);return m?m[1].replace('.',','):'';
+      case 'U':m=una.match(/\bU\s*[=:]?\s*(\d+(?:[.,]\d+)?)\s*t\b/i);return m?m[1].replace('.',','):'';
+      case 'clase':m=una.match(/(?:clase|class|klasse)\s*[:.]?\s*([A-Z0-9]{1,4})\b/i);return m?m[1].toUpperCase():'';
+      case 'carga':m=una.match(/(\d+(?:[.,]\d+)?)\s*(kN|kg|t)\b/i);return m?m[1]+' '+m[2]:'';
+      case 'tipo':{for(const {t} of lin){m=t.match(/(?:tipo|type|typ)\s*[:.]?\s*(\S.*)$/i);if(m)return norm(m[1]).toUpperCase()}}
+      // sigue: la línea más grande
+      default:{const c=lin.filter(l=>/[A-Za-z]{2}/.test(l.t)&&!CONTR.test(l.t)).sort((a,b)=>b.h-a.h)[0];return c?c.t.toUpperCase():''}
+    }
+  }
+  function trozos(lin,props){ // lo que se puede tocar para ponerlo: lo encontrado y cada línea leída
+    const out=[];const add=t=>{t=norm(t);if(t&&t.length<=40&&!out.includes(t))out.push(t)};
+    props.forEach(add);
+    for(const {t} of lin){add(t);const c=t.match(CONTR);if(c)add(c[0])}
+    return out.slice(0,14);
+  }
+  // ---------- botón y panel ----------
+  const nombreDe=i=>{const x=info(i);return x.lab&&!/^(medici.n)?$/i.test(x.lab)&&x.lab!==x.pt?x.lab+(x.pn?` (${x.pn})`:''):(x.pn?x.pn+' ':'')+(x.pt||x.lab)};
+  let foto=null; // input de archivo
+  function pedirFoto(cb,galeria){
+    if(foto)foto.remove();foto=document.createElement('input');foto.type='file';foto.accept='image/*';if(!galeria)foto.setAttribute('capture','environment');
+    foto.style.cssText='position:fixed;left:-9999px;opacity:0';document.body.appendChild(foto);
+    foto.onchange=async()=>{const f=foto.files&&foto.files[0];if(!f)return;
+      let b;try{b=new Blob([await f.arrayBuffer()],{type:f.type||'image/jpeg'})}catch(e){showMsg('No se pudo abrir la foto. Prueba otra vez.',true);return} // leerla ya: en algunos móviles luego no deja
+      cb(b)};
+    foto.click();
+  }
+  function grupo(i){const r=i.closest('.row');return [...r.querySelectorAll('input[data-camfoto]')]}
+  function cerrar(r){const p=r.querySelector('.fotop');if(p){const im=p.querySelector('img');if(im&&im.src.startsWith('blob:'))URL.revokeObjectURL(im.src);p.remove()}}
+  async function hacer(i,galeria){
+    pedirFoto(async blob=>{
+      const r=i.closest('.row');if(!r)return;cerrar(r);const ins=grupo(i);const url=URL.createObjectURL(blob);
+      r.insertAdjacentHTML('beforeend',`<div class="fotop" aria-live="polite"><div class="fh"><img alt="" src="${url}"><div class="ft"><b class="fst">Leyendo la foto…</b>Se lee en el móvil, no sale a internet.</div></div><div class="bar"><i></i></div><div class="fb"><button type="button" data-fx>Cancelar</button></div></div>`);
+      const p=r.querySelector('.fotop');let cancel=false;p.querySelector('[data-fx]').onclick=()=>{cancel=true;cerrar(r)};
+      try{p.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(e){}
+      let lin;
+      try{lin=await leerFoto(blob,(t,pr)=>{if(!p.isConnected)return;p.querySelector('.fst').textContent=t;p.querySelector('.bar i').style.width=Math.max(5,Math.round((pr||0)*100))+'%'})}
+      catch(e){if(cancel||!p.isConnected)return;
+        p.querySelector('.ft').innerHTML='<b>No se pudo leer la foto</b>'+escH(/fetch|network|load/i.test(String(e&&e.message||e))?'La primera vez hace falta internet (se descarga el lector). Vuelve a intentarlo con conexión.':String(e&&e.message||e));
+        p.querySelector('.bar').remove();return}
+      if(cancel||!p.isConnected)return;
+      const props=ins.map(x=>proponer(clase(x),lin));
+      const ninguno=!lin.length;
+      p.innerHTML=`<div class="fh"><img alt="" src="${url}"><div class="ft"><b>${ninguno?'No he leído nada en la foto':'Leído de la foto'}</b>${ninguno?'Prueba más cerca, de frente y con buena luz.':props.some(Boolean)?'Revisa el valor y corrígelo si hace falta.':'No encuentro el dato: toca abajo el texto que sea o escríbelo.'}</div></div>`+
+        ins.map((x,k)=>`<div><label>${escH(nombreDe(x))}</label><input class="t fv${props[k]?' lleno':''}" data-fk="${k}" value="${escH(props[k]||x.value)}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>`).join('')+
+        (lin.length?`<div><label>Textos de la foto (toca uno para ponerlo${ins.length>1?' en la casilla marcada':''})</label><div class="chips">${trozos(lin,props).map(t=>`<button type="button">${escH(t)}</button>`).join('')}</div></div>`:'')+
+        `<div class="fb"><button type="button" class="ok" data-fok>✓ Poner${ins.length>1?' los '+ins.length:''}</button><button type="button" data-fre>📷 Otra</button><button type="button" data-fx aria-label="Cerrar">✕</button></div><button type="button" class="gal" data-fgal>Elegir una foto de la galería</button>`;
+      let act=p.querySelector('input.fv');
+      p.querySelectorAll('input.fv').forEach(f=>{f.onfocus=()=>{act=f};f.oninput=()=>f.classList.toggle('lleno',!!f.value.trim())});
+      p.querySelectorAll('.chips button').forEach(b=>b.onclick=()=>{act.value=b.textContent;act.classList.add('lleno');
+        const sig=[...p.querySelectorAll('input.fv')].find(f=>f!==act&&!f.value.trim());if(sig)act=sig}); // la siguiente vacía queda marcada
+      p.querySelector('[data-fx]').onclick=()=>cerrar(r);
+      p.querySelector('[data-fre]').onclick=()=>hacer(i);
+      p.querySelector('[data-fgal]').onclick=()=>hacer(i,true);
+      p.querySelector('[data-fok]').onclick=()=>{let n=0;
+        p.querySelectorAll('input.fv').forEach(f=>{const d=ins[+f.dataset.fk],v=norm(f.value);if(!d||!d.isConnected||v===d.value)return;
+          d.value=v;d.dispatchEvent(new Event('input',{bubbles:true}));d.dispatchEvent(new Event('change',{bubbles:true}));n++});
+        cerrar(r);if(!n)return;
+        const ok=document.createElement('div');ok.className='fotodone';ok.textContent=`✓ Puesto desde la foto${n>1?` (${n} casillas)`:''}`;r.appendChild(ok);setTimeout(()=>ok.remove(),6000)};
+      const prim=p.querySelector('input.fv');if(prim&&!props[0]){act=prim}
+    },galeria);
+  }
+  function decorar(){
+    for(const i of document.querySelectorAll('input.t[data-slot]:not([data-camfoto]):not([data-camno])')){
+      if(!quiere(i)){i.dataset.camno='';continue}
+      i.dataset.camfoto='';const w=document.createElement('span');w.className='camw';i.replaceWith(w);w.append(i);
+      const b=document.createElement('button');b.type='button';b.className='camb';b.title='Hacer foto y leerla';b.setAttribute('aria-label','Hacer foto y leer el dato');b.innerHTML=CAM;
+      b.onclick=()=>hacer(i);w.append(b);
+    }
+  }
+  let pend=false;
+  new MutationObserver(()=>{if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;decorar()})}).observe(document.body,{childList:true,subtree:true});
+  decorar();
+  return {quiere,clase,proponer,contrasena,decorar};
+})();
 </script>
 </body></html>
