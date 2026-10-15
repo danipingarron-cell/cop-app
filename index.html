@@ -797,10 +797,15 @@ function ltVal(){ // voladizo delantero + distancia entre ejes + voladizo traser
   const sum=ok?vd+vt+ej.reduce((a,b)=>a+b,0):NaN;
   return ok?(Number.isInteger(sum)?String(sum):String(Math.round(sum*10)/10).replace('.',',')):'';
 }
+function ltMedidaSiVacia(v){ // lo que midió (la longitud que traía el Word, o la que había antes del cambio) va a «Medida» si está vacía
+  if(!v||(state.lt&&state.lt.medida))return;
+  state.lt={...(state.lt||{}),medida:v};const mi=$('#ltMedida');if(mi)mi.value=v;
+}
 function ltCalc(){
   if(!LT)return;
   const val=ltVal();
   const cur=state.v['s'+LT.out]||'',prev=(state.auto&&state.auto.lt)||'';
+  if(!(state.auto&&'lt' in state.auto))ltMedidaSiVacia(cur); // COP cargado de un Word: su longitud total es la que midió (Daniel, 15 oct)
   if(!cur||cur===prev||(!prev&&cur===val)){ // si la ha cambiado a mano se respeta; la de un Word cargado que es la suma cuenta como calculada (15 oct)
     state.auto=state.auto||{};state.auto.lt=val;state.v['s'+LT.out]=val;
     const el=document.querySelector(`[data-slot="${LT.out}"]`);if(el){el.value=val;if(ROW_OF[LT.out])autoCumple(ROW_OF[LT.out])}
@@ -821,7 +826,7 @@ function ltSuma(){
 }
 document.addEventListener('click',e=>{ // «Poner la suma»: vuelve a ser la calculada
   if(!e.target.closest||!e.target.closest('.ltput')||!LT)return;const val=ltVal();if(!val)return;
-  state.v['s'+LT.out]=val;state.auto=state.auto||{};state.auto.lt=val;ltCalc();if(CJ)cjDif();save();refreshSoon();
+  ltMedidaSiVacia(String(state.v['s'+LT.out]||''));state.v['s'+LT.out]=val;state.auto=state.auto||{};state.auto.lt=val;ltCalc();if(CJ)cjDif();save();refreshSoon();
 });
 function ltDif(){ // cualquier diferencia, aunque sea de 2 mm, es «No coinciden» (Daniel lo ajusta luego a mano)
   const box=document.querySelector('.ltdif');if(!box||!LT)return;
@@ -1166,9 +1171,21 @@ function refresh(){
   const chip=(cls,txt,fn)=>{const c=document.createElement('span');c.className='chip '+cls;c.textContent=txt;if(fn){c.tabIndex=0;c.onclick=fn}sum.appendChild(c)};
   chip(nBad.length?'bad':'ok',nBad.length?`${nBad.length} medidas no cumplen`:'Ninguna medida fuera de límite',nBad.length?()=>goTo(nBad[0]):null);
   if(nPend.length)chip('warn',`${nPend.length} pendientes`,()=>goTo(nPend[0]));
-  BAD=nBad;PEND=nPend;
+  const nc=noCuadran();[...new Set(nc.map(x=>x.chip))].forEach(t=>{const x=nc.find(y=>y.chip===t);chip('warn',t,()=>{if(x.el)goTo(x.el)})});
+  BAD=nBad;PEND=nPend;NOC=nc;
 }
-let BAD=[],PEND=[];
+let BAD=[],PEND=[],NOC=[];
+function noCuadran(){ // longitud total y de la caja que no cuadran: arriba, junto a los pendientes, y en «Revisa antes de generar» (Daniel, 15 oct)
+  const out=[];if(!LT)return out;
+  const n=id=>{const v=String(state.v['s'+id]||'').trim();return v?num(v.replace(/[^\d.,]/g,'')):NaN},f=x=>String(Math.round(x*10)/10).replace('.',','),sg=d=>(d>0?'+':'')+f(d);
+  const fila=id=>ROW_OF[id]||document.querySelector(`[data-slot="${id}"]`),pt=id=>{const p=ptoDe(id);return p?p+' ':''};
+  const lt=n(LT.out),med=num(String((state.lt&&state.lt.medida)||'').replace(/[^\d.,]/g,''));
+  if(!isNaN(lt)&&!isNaN(med)&&med!==lt)out.push({chip:'Longitud total no cuadra',txt:`${pt(LT.out)}Longitud total: medida ${f(med)} mm y calculada ${f(lt)} mm (${sg(Math.round((med-lt)*10)/10)} mm)`,el:fila(LT.out)});
+  const ns=ltNoSuma();if(ns)out.push({chip:'Longitud total no cuadra',txt:`${pt(LT.out)}Longitud total: ${ns[0]} mm y la suma de voladizos y ejes da ${ns[1]} mm`,el:fila(LT.out)});
+  if(CJ){const vd=n(CJ.vd),ic=n(CJ.ic),lc=n(CJ.lc),l=n(CJ.lt);
+    if(![vd,ic,lc,l].some(isNaN)){const d=Math.round((vd+ic+lc-l)*10)/10;if(d!==0)out.push({chip:'Longitud de la caja no cuadra',txt:`${pt(CJ.lc)}Longitud de la caja: no cuadra con la longitud total (${sg(d)} mm)`,el:fila(CJ.lc)})}}
+  return out;
+}
 function goTo(el){const d=el.closest('details.sec');if(d)soloAbierto(d);el.scrollIntoView({block:'center',behavior:'smooth'});const i=el.matches('input')?el:el.querySelector('input,button');if(i)i.focus({preventScroll:true})}
 function findSlot(re){return model.slots.find(s=>re.test(s.label))}
 
@@ -1194,7 +1211,7 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('input',e=>{ // longitud medida: solo en la app, no va al Word
   if(!(e.target.dataset&&e.target.dataset.extra==='medida'))return;
-  state.lt=state.lt||{};state.lt.medida=e.target.value;ltDif();save();
+  state.lt=state.lt||{};state.lt.medida=e.target.value;ltDif();save();refreshSoon();
 });
 // Daniel escribe "-" en la medición de las filas que no aplican: al marcar NP o NA se rellenan las mediciones vacías; si la fila deja de estar en NP se quitan los guiones puestos así
 function dashNP(b){
@@ -1634,11 +1651,12 @@ function ask(title,html,buttons){
 function labelFor(el,sinNum){const row=el.closest('.row');const f=row&&row.querySelector('.lbl.first');const fl=el.closest('.fld')&&el.closest('.fld').querySelector('label');const pn=!sinNum&&f&&f.querySelector('.pnum');return [f&&((pn?pn.textContent+' ':'')+lblTxt(f)),fl&&fl.textContent].filter(Boolean).join(' · ')||'Campo'}
 $('#gen').onclick=()=>{
   refresh();
-  if(!BAD.length&&!PEND.length)return generate();
+  if(!BAD.length&&!PEND.length&&!NOC.length)return generate();
   let h='';
   if(BAD.length)h+=`<p><b>No cumplen:</b></p><ul>${BAD.map(r=>`<li>${esc(labelFor(r.querySelector('input')||r))}</li>`).join('')}</ul>`;
   if(PEND.length)h+=`<p><b>Pendientes:</b></p><ul>${PEND.map(i=>`<li>${esc(labelFor(i))}: ${esc(i.value)}</li>`).join('')}</ul>`;
-  ask('Revisa antes de generar',h,[['Volver',null,()=>goTo((BAD[0]||PEND[0]))],['Generar igualmente','primary',generate]]);
+  if(NOC.length)h+=`<p><b>No cuadran:</b></p><ul>${NOC.map(x=>`<li>${esc(x.txt)}</li>`).join('')}</ul>`;
+  ask('Revisa antes de generar',h,[['Volver',null,()=>goTo((BAD[0]||PEND[0]||NOC[0].el))],['Generar igualmente','primary',generate]]);
 };
 $('#nuevo').onclick=()=>ask('Empezar una revisión nueva','<p>Se borran todos los datos de la revisión actual de este navegador. Genera antes el Word si lo necesitas.</p>',[['Cancelar'],['Borrar y empezar','primary',()=>{state={v:{},manual:{}};save();fillUI();window.scrollTo(0,0)}]]);
 async function importDocx(file){
@@ -1825,7 +1843,9 @@ function showCoc(data,fname){
   ask('Rellenar desde el COC',h,[['Cancelar'],['Rellenar','primary',()=>{
     const lt0=LT?String(state.v['s'+LT.out]||''):'',ids=[];
     let n=0;rows.forEach((r,i)=>{if(document.getElementById('coc'+i).checked){state.v['s'+r.slot.id]=r.nv;ids.push(r.slot.id);n++}});
-    save();fillUI();
+    fillUI();
+    if(LT&&lt0&&String(state.v['s'+LT.out]||'')!==lt0){ltMedidaSiVacia(lt0);ltDif();refresh()}
+    save();
     const av=cocAvisosLong(lt0,ids);
     if(av.length)ask('Revisa la longitud total',`<p>Rellenados ${n} datos desde el COC.</p>`+av.map(t=>`<p style="color:var(--warn);font-weight:600">⚠ ${esc(t)}</p>`).join(''),[['Vale'],['Ver la longitud total','primary',()=>goTo(document.querySelector(`[data-slot="${LT.out}"]`).closest('.row'))]]);
     else showMsg(`Rellenados ${n} datos desde el COC.`);
@@ -1834,7 +1854,8 @@ function showCoc(data,fname){
 function cocAvisosLong(lt0,ids){ // lo que cambia en la longitud total (y la de la caja) al rellenar desde el COC
   if(!LT||!ids.some(id=>LT.parts.includes(id)||(CJ&&[CJ.vd,CJ.ic,CJ.lc].includes(id))))return [];
   const out=[],lt1=String(state.v['s'+LT.out]||''),pl=ptoDe(LT.out);
-  if(lt0&&lt1&&lt0!==lt1)out.push(`La longitud total${pl?' ('+pl+')':''} cambia de ${lt0} a ${lt1} mm.`);
+  const med=String((state.lt&&state.lt.medida)||'');
+  if(lt0&&lt1&&lt0!==lt1)out.push(`La longitud total calculada${pl?' ('+pl+')':''} pasa de ${lt0} a ${lt1} mm.`+(med===lt0?` Lo que mediste (${lt0}) queda en «Medida».`:''));
   const ns=ltNoSuma();if(ns)out.push(`La longitud total${pl?' ('+pl+')':''} es ${ns[0]} mm y la suma de voladizos y ejes da ${ns[1]} mm.`);
   if(CJ){const n=id=>{const v=String(state.v['s'+id]||'').trim();return v?num(v.replace(/[^\d.,]/g,'')):NaN};
     const vd=n(CJ.vd),ic=n(CJ.ic),lc=n(CJ.lc),lt=n(CJ.lt);
@@ -3160,7 +3181,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 15 oct, 15:14';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 15 oct, 15:24';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
