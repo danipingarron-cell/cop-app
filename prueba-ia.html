@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Prueba lector IA</title>
+<!-- Prueba aparte (15 oct): leer contraseñas y placas de las fotos con el lector gratis de Google (Gemini).
+     No toca la app COP. La clave se guarda solo en este móvil; a Google solo va la foto. -->
+<style>
+:root{--bg:#f2f2f6;--panel:#fff;--ink:#16161d;--muted:#5d5d6b;--line:#dcdce4;--accent:#4f46e5;--accent-soft:#ecebfd;--ok:#16a34a;--bad:#c81e1e}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d0d10;--panel:#1c1c22;--ink:#f2f2f6;--muted:#a5a5b4;--line:#33333d;--accent:#8b85ff;--accent-soft:#25234a;--ok:#4ade80;--bad:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:16px;display:grid;gap:14px}
+h1{font-size:22px;margin:4px 0 0}
+p{margin:0}.hint{color:var(--muted);font-size:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:10px}
+label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+input[type=password],input[type=text],select{width:100%;font:inherit;padding:10px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink)}
+button{font:inherit;font-weight:700;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+button.p{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+a{color:var(--accent)}
+.res{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:start}
+.res img{width:96px;height:96px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+.res b{display:block;font-size:13px;color:var(--muted);font-weight:600}
+.val{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15px;font-weight:700;overflow-wrap:anywhere}
+.v{margin-top:4px}.err{color:var(--bad);font-weight:600}.dud{color:var(--muted);font-size:13px;margin-top:4px}
+.t{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Prueba del lector con IA</h1>
+  <p class="hint">Prueba aparte, no toca la app COP. Lee las fotos con el lector gratis de Google. A Google solo va la foto; en la versión gratis Google puede usarla para mejorar su IA.</p>
+
+  <section class="card" id="cClave">
+    <label for="clave">Tu clave de Google (gratis)</label>
+    <p class="hint">Sácala en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> con una cuenta de Google: «Create API key» y la copias. Se guarda solo en este móvil.</p>
+    <input id="clave" type="password" autocomplete="off" placeholder="Pega aquí la clave">
+    <button class="p" id="guardar">Guardar clave</button>
+    <p class="hint" id="estado"></p>
+  </section>
+
+  <section class="card">
+    <label for="modelo">Lector</label>
+    <select id="modelo"><option value="">(guarda la clave primero)</option></select>
+    <div class="row"><button class="p" id="cam">Hacer foto</button><button id="gal">Galería (varias)</button></div>
+    <p class="hint">Puedes elegir varias fotos de la galería a la vez (por ejemplo las de WhatsApp).</p>
+  </section>
+
+  <div id="lista" style="display:grid;gap:10px"></div>
+</main>
+<script>
+const API='https://generativelanguage.googleapis.com/v1beta/';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const guarda=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}},lee=k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}};
+const PROMPT=`Eres el lector de una inspección de vehículos industriales (COP). La foto es una pieza o placa: piloto, catadióptrico, banda reflectante, protección lateral o trasera, guardabarros, placa del fabricante o placa de grúa.
+Transcribe exactamente las marcas que veas, aunque estén en relieve, troqueladas con puntos, giradas o en espejo (léelas al derecho). No inventes nada: si un carácter no se lee seguro, dilo en "dudas".
+Contraseñas de homologación: la E (o e) con el número de país del círculo/rectángulo, un espacio y el código tal cual, conservando * y - (ej.: "E11 73R-011025*3", "E20 10R-05 4372", "e9 30003"). Pon una entrada por cada contraseña distinta, con la categoría de la luz si aparece (IA, R, SM1, L…).
+Devuelve solo JSON con esta forma:
+{"contrasenas":[{"valor":"","categoria":""}],"marca":"","tipo":"","numero_serie":"","bastidor":"","otros":[""],"dudas":""}`;
+async function modelos(clave){
+  const r=await fetch(API+'models?pageSize=200',{headers:{'x-goog-api-key':clave}});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error((j.error&&j.error.message)||('Error '+r.status));
+  const l=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>m.name.replace(/^models\//,''))
+    .filter(n=>/^gemini/.test(n)&&!/(tts|image|embed|live|audio|aqa|learnlm|computer)/.test(n));
+  const ver=n=>{const m=n.match(/gemini-(\d+(?:\.\d+)?)/);return m?+m[1]:0};
+  const pun=n=>ver(n)*10+(/flash/.test(n)?3:0)-(/lite/.test(n)?2:0)-(/preview|exp/.test(n)?1:0);
+  return l.sort((a,b)=>pun(b)-pun(a));
+}
+async function cargar(){
+  const clave=lee('ia-clave');if(!clave)return;
+  $('#clave').value=clave;$('#estado').textContent='Comprobando la clave…';
+  try{const l=await modelos(clave);
+    $('#modelo').innerHTML=l.map(n=>`<option>${esc(n)}</option>`).join('');
+    const ant=lee('ia-modelo');if(ant&&l.includes(ant))$('#modelo').value=ant;
+    $('#estado').textContent=`Clave correcta. ${l.length} lectores disponibles; arriba el recomendado.`;
+  }catch(e){$('#estado').innerHTML='<span class="err">La clave no vale: '+esc(e.message)+'</span>'}
+}
+$('#guardar').onclick=()=>{guarda('ia-clave',$('#clave').value.trim());cargar()};
+$('#modelo').onchange=()=>guarda('ia-modelo',$('#modelo').value);
+async function reducir(f){
+  let src;try{src=await createImageBitmap(f,{imageOrientation:'from-image'})}catch(e){src=new Image();src.src=URL.createObjectURL(f);await src.decode()}
+  const k=Math.min(1,1600/Math.max(src.width,src.height)),c=document.createElement('canvas');
+  c.width=Math.round(src.width*k);c.height=Math.round(src.height*k);c.getContext('2d').drawImage(src,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg',0.88);
+}
+async function leer(dataUrl){
+  const clave=lee('ia-clave'),modelo=$('#modelo').value;if(!clave||!modelo)throw new Error('Guarda antes tu clave.');
+  const r=await fetch(API+'models/'+encodeURIComponent(modelo)+':generateContent',{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':clave},
+    body:JSON.stringify({contents:[{parts:[{text:PROMPT},{inline_data:{mime_type:'image/jpeg',data:dataUrl.split(',')[1]}}]}],generationConfig:{temperature:0,responseMimeType:'application/json'}})});
+  const j=await r.json().catch(()=>({}));
+  if(r.status===429)throw new Error('Has llegado al límite gratis de Google (por minuto o por día). Espera un minuto y vuelve a probar esta foto, o elige otro lector arriba.');
+  if(!r.ok)throw new Error((j.error&&j.error.message)||('Error '+r.status));
+  const t=(((j.candidates||[])[0]||{}).content||{parts:[]}).parts.map(p=>p.text||'').join('');
+  try{return JSON.parse(t.replace(/^```(json)?|```$/g,'').trim())}catch(e){return {otros:[t],dudas:'No ha devuelto el formato esperado.'}}
+}
+function pinta(box,r,seg){
+  const fila=(n,v)=>v?`<div class="v"><b>${n}</b><span class="val">${esc(v)}</span></div>`:'';
+  const cs=(r.contrasenas||[]).filter(c=>c&&c.valor).map(c=>c.valor+(c.categoria?'  ('+c.categoria+')':'')).join('\n');
+  box.innerHTML=fila('Contraseña'+((r.contrasenas||[]).length>1?'s':''),cs).replace(/\n/g,'<br>')+fila('Marca',r.marca)+fila('Tipo',r.tipo)+fila('Nº de serie',r.numero_serie)+fila('Bastidor',r.bastidor)+
+    fila('Otros textos',(r.otros||[]).filter(Boolean).join(' · '))+(r.dudas?`<div class="dud">Dudas: ${esc(r.dudas)}</div>`:'')+`<div class="t">${seg} s · ${esc($('#modelo').value)}</div>`;
+}
+async function procesar(files){
+  for(const f of files){
+    const it=document.createElement('div');it.className='card res';it.innerHTML='<img alt=""><div class="out">Leyendo…</div>';$('#lista').append(it);
+    let d;try{d=await reducir(f)}catch(e){it.querySelector('.out').innerHTML='<span class="err">No se pudo abrir la foto.</span>';continue}
+    it.querySelector('img').src=d;const t0=performance.now();
+    try{pinta(it.querySelector('.out'),await leer(d),((performance.now()-t0)/1000).toFixed(1))}
+    catch(e){it.querySelector('.out').innerHTML='<span class="err">'+esc(e.message)+'</span>'}
+  }
+}
+function elegir(cam){const i=document.createElement('input');i.type='file';i.accept='image/*';if(cam)i.setAttribute('capture','environment');else i.multiple=true;
+  i.onchange=()=>procesar([...(i.files||[])]);i.click()}
+$('#cam').onclick=()=>elegir(true);$('#gal').onclick=()=>elegir(false);
+cargar();
+</script>
+</body>
+</html>
