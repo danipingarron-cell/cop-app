@@ -3181,7 +3181,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 15 oct, 22:37';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 15 oct, 22:55';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
@@ -3245,6 +3245,11 @@ const FotoPunto=(()=>{
 /* lector de Google */
 .fotop .iak{display:grid;gap:8px}.fotop .iak p{margin:0;font-size:13px;color:var(--muted);line-height:1.4}.fotop .iak a{color:var(--accent)}
 .fotop .iak input.fv{font-size:15px!important;font-weight:500;font-family:inherit}.fotop .iae{color:var(--bad,#c81e1e);font-weight:600}.fotop .dud{font-size:12px;color:var(--muted);margin-top:4px}.fotop .ia{color:var(--accent);font-weight:700}
+.fotop .fextra{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.fotop .fxr{display:grid;gap:4px}
+.fotop .fxr label{margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink);font-weight:600;display:flex;gap:8px;align-items:center}
+.fotop .fxr input[type=checkbox]{width:22px;height:22px;accent-color:var(--ok);margin:0}
+.fotop .fxr input.fv{margin-left:32px;width:calc(100% - 32px)!important;font-size:15px!important}.fotop .fxr small{margin-left:32px;color:var(--muted);font-size:12px}
 .fotodone{flex-basis:100%;font-size:12px;color:var(--ok);font-weight:600;margin-top:2px}`;
   document.head.appendChild(st);
   const norm=t=>String(t||'').replace(/\s+/g,' ').trim();
@@ -3369,7 +3374,8 @@ Lee las marcas exactamente como están, aunque estén en relieve, troqueladas co
 Hay que rellenar estas casillas, en este orden:
 ${ins.map((x,k)=>{const n=nombreDe(x),t=info(x).pt;return `${k+1}. ${n}${t&&!n.includes(t)?' ('+t+')':''}: ${QUE[clase(x)]||QUE.texto}`}).join('\n')}
 Contraseñas: la E (o e) con el número del círculo o rectángulo, un espacio y el código tal cual, conservando * y - (ej.: "E11 73R-011025*3", "E20 10R-05 4372", "e9 30003"). Si hay varias, en la casilla va la que corresponde a lo que pide la casilla y las demás en "textos".
-Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":["los demás textos que se lean en la foto, cortos"],"dudas":""}`;
+Si la foto es la placa del fabricante del vehículo (la que lleva bastidor, contraseña y masas en kg), rellena también "placa"; si no, "placa": null. En esas placas la 1.ª masa es la del vehículo, la 2.ª la del conjunto y las que empiezan por "1-", "2-"… son las de cada eje. Masas solo con el número de kg.
+Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":["los demás textos que se lean en la foto, cortos"],"dudas":"","placa":{"marca":"","bastidor":"","contrasena":"","mma":"","mmtc":"","ejes":[""]}}`;
   async function leerIA(blob,ins,aviso){
     const clave=iaClave();let modelo=lsG('ia-modelo');
     if(!modelo){modelo=await iaElegir(clave);lsS('ia-modelo',modelo)}
@@ -3399,7 +3405,26 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
       if((cl==='D'||cl==='U')&&v)v=v.replace(/[^\d.,]/g,'').replace('.',',');
       if(cl==='vin')v=v.replace(/[\s.\-]/g,'').toUpperCase();
       return v});
-    return {val,lin:(o.textos||[]).map(x=>({t:norm(x),h:0})).filter(x=>x.t),dudas:norm(o.dudas),modelo};
+    return {val,lin:(o.textos||[]).map(x=>({t:norm(x),h:0})).filter(x=>x.t),dudas:norm(o.dudas),modelo,placa:o.placa&&typeof o.placa==='object'?o.placa:null};
+  }
+  // Placa del fabricante (lo pidió Daniel, 15 oct): con una foto, los demás datos de la placa a sus casillas de este COP.
+  // Solo se proponen; se ponen los que él deja marcados (los que ya tienen otro valor salen sin marcar).
+  function destinos(pl,ins){
+    if(!pl)return [];const D=[],ya=new Set(ins);
+    const all=[...document.querySelectorAll('input[data-slot]')].filter(i=>!i.readOnly&&!i.disabled&&i.type!=='checkbox'&&i.type!=='radio');
+    const pn=(n,re)=>all.filter(i=>{const r=i.closest('.row');return r&&norm(r.querySelector('.pnum')&&r.querySelector('.pnum').textContent)===n&&(!re||re.test(i.placeholder||''))});
+    const aria=re=>all.find(i=>re.test(i.getAttribute('aria-label')||''));
+    const kg=v=>norm(v).replace(/[^\d]/g,''),vin=v=>norm(v).replace(/[\s.\-]/g,'').toUpperCase();
+    const add=(i,n,v)=>{v=norm(v);if(i&&v&&!ya.has(i)){ya.add(i);D.push({i,n,v})}};
+    const ejes=Array.isArray(pl.ejes)?pl.ejes:[];
+    if(pal()){
+      add(pn('1.1')[0],'Marca (1.1)',pl.marca);add(pn('1.3')[0],'Nº de bastidor (1.3)',vin(pl.bastidor));add(pn('1.5')[0],'C. homologación 1ª fase (1.5)',pl.contrasena);
+      ejes.forEach((v,k)=>add(pn('7.1.'+(k+1),/MMTA/)[0],`MMTA eje ${k+1} (7.1.${k+1})`,kg(v)));add(pn('7.1.6',/MMTA/)[0],'MMTA total (7.1.6)',kg(pl.mma));
+    }else{
+      add(aria(/^Marca \(fase/),'Marca',pl.marca);add(aria(/^Nº de bastidor/),'Nº de bastidor',vin(pl.bastidor));add(aria(/^Nº de Homologación fase anterior/),'Nº de homologación fase anterior',pl.contrasena);
+      add(pn('4.14')[0],'MMTA total (4.14)',kg(pl.mma));const ej=pn('4.15');ejes.forEach((v,k)=>add(ej[k],`MMTA eje ${k+1} (4.15)`,kg(v)));add(pn('4.16')[0],'MMTC (4.16)',kg(pl.mmtc));
+    }
+    return D.filter(d=>d.v!==norm(d.i.value)); // lo que ya pone eso no sale
   }
   // dónde se pega la clave (desde el panel de la foto)
   function formClave(p,despues){
@@ -3486,12 +3511,15 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
           p.querySelector('.bar').remove();return}
         if(cancel||!p.isConnected)return;
         props=ins.map(x=>proponer(clase(x),lin))}
-      const ninguno=ia?!props.some(Boolean)&&!lin.length:!lin.length;
+      const extra=ia?destinos(ia.placa,ins):[];
+      const ninguno=ia?!props.some(Boolean)&&!lin.length&&!extra.length:!lin.length;
       const nota=ia?`<div class="dud"><span class="ia">Leído con Google</span>${ia.dudas?' · Dudas: '+escH(ia.dudas):''}</div>`:sinRed?'<div class="dud">Sin internet: leído en el móvil.</div>':'';
       p.innerHTML=`<div class="fh"><img alt="" src="${url}"><div class="ft"><b>${ninguno?'No he leído nada en la foto':'Leído de la foto'}</b>${ninguno?'Prueba más cerca, de frente y con buena luz.':props.some(Boolean)?'Revisa el valor y corrígelo si hace falta.':'No encuentro el dato: toca abajo el texto que sea o escríbelo.'}${nota}</div></div>`+
         ins.map((x,k)=>`<div><label>${escH(nombreDe(x))}</label><input class="t fv${props[k]?' lleno':''}" data-fk="${k}" value="${escH(props[k]||x.value)}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>`).join('')+
-        (lin.length?`<div><label>Textos de la foto (toca uno para ponerlo${ins.length>1?' en la casilla marcada':''})</label><div class="chips">${trozos(lin,props).map(t=>`<button type="button">${escH(t)}</button>`).join('')}</div></div>`:'')+
-        `<div class="fb"><button type="button" class="ok" data-fok>✓ Poner${ins.length>1?' los '+ins.length:''}</button><button type="button" data-fre>📷 Otra</button><button type="button" data-fx aria-label="Cerrar">✕</button></div><button type="button" class="gal" data-fgal>Elegir una foto de la galería</button>`;
+        (extra.length?`<div class="fextra"><label>También en la foto: marca lo que quieras poner</label>${extra.map((d,k)=>{const ahora=norm(d.i.value);
+          return `<div class="fxr"><label><input type="checkbox" data-fc="${k}"${ahora?'':' checked'}>${escH(d.n)}</label><input class="t fv lleno" data-fe="${k}" value="${escH(d.v)}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">${ahora?`<small>Ahora pone: ${escH(ahora)}</small>`:''}</div>`}).join('')}</div>`:'')+
+        (lin.length&&!extra.length?`<div><label>Textos de la foto (toca uno para ponerlo${ins.length>1?' en la casilla marcada':''})</label><div class="chips">${trozos(lin,props).map(t=>`<button type="button">${escH(t)}</button>`).join('')}</div></div>`:'')+
+        `<div class="fb"><button type="button" class="ok" data-fok>✓ Poner${extra.length?' marcados':ins.length>1?' los '+ins.length:''}</button><button type="button" data-fre>📷 Otra</button><button type="button" data-fx aria-label="Cerrar">✕</button></div><button type="button" class="gal" data-fgal>Elegir una foto de la galería</button>`;
       let act=p.querySelector('input.fv');
       p.querySelectorAll('input.fv').forEach(f=>{f.onfocus=()=>{act=f};f.oninput=()=>f.classList.toggle('lleno',!!f.value.trim())});
       p.querySelectorAll('.chips button').forEach(b=>b.onclick=()=>{act.value=b.textContent;act.classList.add('lleno');
@@ -3502,6 +3530,9 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
       p.querySelector('[data-fok]').onclick=()=>{let n=0;
         p.querySelectorAll('input.fv').forEach(f=>{const d=ins[+f.dataset.fk],v=norm(f.value);if(!d||!d.isConnected||v===d.value)return;
           d.value=v;d.dispatchEvent(new Event('input',{bubbles:true}));d.dispatchEvent(new Event('change',{bubbles:true}));n++});
+        p.querySelectorAll('input[data-fe]').forEach(f=>{const d=extra[+f.dataset.fe],c=p.querySelector(`[data-fc="${f.dataset.fe}"]`),v=norm(f.value);
+          if(!d||!c||!c.checked||!d.i.isConnected||!v||v===d.i.value)return;
+          d.i.value=v;d.i.dispatchEvent(new Event('input',{bubbles:true}));d.i.dispatchEvent(new Event('change',{bubbles:true}));n++});
         cerrar(r);if(!n)return;
         const ok=document.createElement('div');ok.className='fotodone';ok.textContent=`✓ Puesto desde la foto${n>1?` (${n} casillas)`:''}`;r.appendChild(ok);setTimeout(()=>ok.remove(),6000)};
       const prim=p.querySelector('input.fv');if(prim&&!props[0]){act=prim}
