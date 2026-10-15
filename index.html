@@ -120,6 +120,8 @@ details.sec>summary .count{color:inherit;opacity:.75}
 .fld.ltc input{border:2px dashed var(--accent)!important}
 .ltdif,.cjdif{flex-basis:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;font-weight:600;font-size:14px}
 .ltdif.ok,.cjdif.ok{background:var(--ok-soft);color:var(--ok)} .ltdif.mal,.cjdif.mal{background:var(--warn-soft);color:var(--warn)}
+.ltsum{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;font-weight:600;font-size:14px;background:var(--warn-soft);color:var(--warn)}
+.ltsum[hidden]{display:none} .ltsum span{flex:1 1 12em} .ltsum button{border:1.5px solid var(--warn);background:var(--panel);color:var(--warn);border-radius:8px;padding:6px 12px;font:inherit;font-weight:700;cursor:pointer}
 .ltnota{flex-basis:100%;font-size:12px;color:var(--muted);margin:-2px 0 0}
 .pnum{display:inline-flex;align-items:center;justify-content:center;margin-right:8px;padding:2px 7px;border-radius:6px;background:var(--ink);color:var(--panel);font:700 12px var(--f-mono);vertical-align:1px}
 .lbl{min-width:0;font-size:14px}
@@ -788,19 +790,39 @@ function splitVal(sl,v){
 }
 function joinSplit(sl,vals){return vals.map((v,k)=>v.trim()?sl.split[k]+':'+v.trim():'').filter(Boolean).join('\n')}
 function applyDefaults(){for(const [k,v] of Object.entries(DEFAULTS))if(state.v[k]===undefined)state.v[k]=v}
-function ltCalc(){
-  if(!LT)return;
+function ltVal(){ // voladizo delantero + distancia entre ejes + voladizo trasero ('' si falta algo)
   const n=id=>{const v=String(state.v['s'+id]||'').trim();return v?num(v.replace(/[^\d.,]/g,'')):NaN};
   const vd=n(LT.vd),vt=n(LT.vt),ej=LT.ejes.map(n).filter(x=>!isNaN(x));
   const ok=!isNaN(vd)&&!isNaN(vt)&&!isNaN(n(LT.ejes[0]));
-  const sum=ok?vd+vt+ej.reduce((a,b)=>a+b,0):NaN,val=ok?(Number.isInteger(sum)?String(sum):String(Math.round(sum*10)/10).replace('.',',')):'';
+  const sum=ok?vd+vt+ej.reduce((a,b)=>a+b,0):NaN;
+  return ok?(Number.isInteger(sum)?String(sum):String(Math.round(sum*10)/10).replace('.',',')):'';
+}
+function ltCalc(){
+  if(!LT)return;
+  const val=ltVal();
   const cur=state.v['s'+LT.out]||'',prev=(state.auto&&state.auto.lt)||'';
-  if(!cur||cur===prev){ // si la ha cambiado a mano se respeta
+  if(!cur||cur===prev||(!prev&&cur===val)){ // si la ha cambiado a mano se respeta; la de un Word cargado que es la suma cuenta como calculada (15 oct)
     state.auto=state.auto||{};state.auto.lt=val;state.v['s'+LT.out]=val;
     const el=document.querySelector(`[data-slot="${LT.out}"]`);if(el){el.value=val;if(ROW_OF[LT.out])autoCumple(ROW_OF[LT.out])}
   }
-  ltDif();
+  ltDif();ltSuma();
 }
+function ltNoSuma(){ // la longitud total no es la suma (puesta a mano o venía así de un Word): [total, suma, diferencia] o null
+  if(!LT)return null;
+  const cur=String(state.v['s'+LT.out]||'').trim(),val=ltVal();if(!cur||!val)return null;
+  const a=num(cur.replace(/[^\d.,]/g,'')),b=num(val.replace(/[^\d.,]/g,''));if(isNaN(a)||isNaN(b)||a===b)return null;
+  return [cur,val,Math.round((a-b)*10)/10];
+}
+function ltSuma(){
+  const box=document.querySelector('.ltsum');if(!box)return;const r=ltNoSuma();
+  if(!r){box.hidden=true;return}
+  const [,val,d]=r;
+  box.innerHTML=`<span>⚠ No es la suma de voladizos y ejes (${esc(val)} mm): ${d>0?'+':''}${String(d).replace('.',',')} mm</span><button type="button" class="ltput">Poner ${esc(val)}</button>`;box.hidden=false;
+}
+document.addEventListener('click',e=>{ // «Poner la suma»: vuelve a ser la calculada
+  if(!e.target.closest||!e.target.closest('.ltput')||!LT)return;const val=ltVal();if(!val)return;
+  state.v['s'+LT.out]=val;state.auto=state.auto||{};state.auto.lt=val;ltCalc();if(CJ)cjDif();save();refreshSoon();
+});
 function ltDif(){ // cualquier diferencia, aunque sea de 2 mm, es «No coinciden» (Daniel lo ajusta luego a mano)
   const box=document.querySelector('.ltdif');if(!box||!LT)return;
   const a=num(String(state.v['s'+LT.out]||'').replace(/[^\d.,]/g,'')),b=num(String((state.lt&&state.lt.medida)||'').replace(/[^\d.,]/g,''));
@@ -825,7 +847,7 @@ function bnCalc(){ // 5.10: (anchura del eje − anchura del dispositivo) / 2; s
   const n=id=>{const v=String(state.v['s'+id]||'').trim();return v?num(v.replace(/[^\d.,]/g,'')):NaN};
   const e=n(B.eje),d=n(B.disp),x=(e-d)/2,val=isNaN(x)?'':String(Math.round(x*10)/10).replace('.',',');
   const cur=state.v['s'+B.out]||'',prev=(state.auto&&state.auto.bn)||'';
-  if(cur&&cur!==prev)return;
+  if(cur&&cur!==prev&&!(!prev&&cur===val))return;
   state.auto=state.auto||{};state.auto.bn=val;state.v['s'+B.out]=val;
   const el=document.querySelector(`[data-slot="${B.out}"]`);if(el){el.value=val;if(ROW_OF[B.out])autoCumple(ROW_OF[B.out])}
 }
@@ -876,8 +898,8 @@ function plateCalc(){
   if(!PLATE)return;
   const sup=num(String(state.v['s'+PLATE.sup]||'').replace(/[^\d.,]/g,''));const h=(PLATE.cb.find(([cb])=>state.v['c'+cb])||[])[1];
   const cur=state.v['s'+PLATE.inf]||'', prev=state.auto&&state.auto.inf;
-  if(cur&&cur!==prev)return; // la ha escrito él a mano
   const val=(!isNaN(sup)&&sup&&h)?String(sup-h):'';
+  if(cur&&cur!==prev&&!(!prev&&cur===val))return; // la ha escrito él a mano (la de un Word cargado que cuadra cuenta como calculada)
   state.auto=state.auto||{};state.auto.inf=val;state.v['s'+PLATE.inf]=val;
   const el=document.querySelector(`[data-slot="${PLATE.inf}"]`);if(el){el.value=val;if(ROW_OF[PLATE.inf])autoCumple(ROW_OF[PLATE.inf])}
 }
@@ -979,7 +1001,7 @@ function render(){
           // con el dato puesto el texto gris de la casilla desaparece: «Derecha», «Izquierda», «Nº»… van encima para saber siempre qué es cada número
           const top=s.topApp||(s.kind!=='colon'&&s.ph&&(s.ph!=='Medición'||hasN)?s.ph:'');
           h+=`<span class="fld${top?' stk':''}${s.ltOut?' lt ltc':''}${sideCls(top||(s.kind==='colon'?s.label:''))}">${s.kind==='colon'?`<label for="s${s.id}">${esc(s.label)}</label>`:top?`<label for="s${s.id}">${esc(top)}</label>`:''}<input class="t${wide?' wide':''}" id="s${s.id}" data-slot="${s.id}" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="${esc(s.phApp||s.ph||'')}"${s.unit?` data-unit="${s.unit}"`:''} aria-label="${esc((s.rowLabel?s.rowLabel+' · ':'')+s.label)}"></span>`;
-          if(s.ltOut)h+=`<span class="fld stk lt"><label for="ltMedida">Medida</label><input class="t" id="ltMedida" data-extra="medida" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Medición" aria-label="Longitud total · medida"></span><div class="ltdif" hidden></div><p class="ltnota">Calculada = voladizo delantero + distancia entre ejes + voladizo trasero. En el Word, en «Longitud total», va la calculada (si la cambias a mano, va la que pongas).</p>`;
+          if(s.ltOut)h+=`<span class="fld stk lt"><label for="ltMedida">Medida</label><input class="t" id="ltMedida" data-extra="medida" autocomplete="off" inputmode="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="Medición" aria-label="Longitud total · medida"></span><div class="ltdif" hidden></div><div class="ltsum" hidden></div><p class="ltnota">Calculada = voladizo delantero + distancia entre ejes + voladizo trasero. En el Word, en «Longitud total», va la calculada (si la cambias a mano, va la que pongas).</p>`;
           if(s.cjOut)h+=`<div class="cjdif" hidden></div><p class="ltnota cjnota" hidden></p>`;
           // al final de la fila, después del límite y del Cumple
           if(s.bnOut)tail+=`<p class="ltnota">Se calcula sola: (anchura del eje − anchura del dispositivo) / 2. Si la cambias a mano, se respeta.</p>`;
@@ -1164,7 +1186,7 @@ document.addEventListener('input',e=>{
     if(!cur||cur===prev){state.v['s'+mr]=e.target.value;state.auto=state.auto||{};state.auto['m'+mr]=e.target.value;const o=document.querySelector(`[data-slot="${mr}"]`);if(o){o.value=e.target.value;if(ROW_OF[mr])autoCumple(ROW_OF[mr])}}
   }
   if(PLATE&&+id===PLATE.sup)plateCalc();
-  if(LT&&LT.parts.includes(+id))ltCalc();else if(LT&&+id===LT.out)ltDif();
+  if(LT&&LT.parts.includes(+id))ltCalc();else if(LT&&+id===LT.out){ltDif();ltSuma()}
   if(CJ)cjDif();
   if(model.bordeNeu&&(+id===model.bordeNeu.eje||+id===model.bordeNeu.disp))bnCalc();
   if(LUZ&&+id===LUZ.anchura){const a=$('#luz_anch');if(a)a.value=e.target.value;lucesCalc()}
@@ -1801,9 +1823,23 @@ function showCoc(data,fname){
   const h=`<p>Datos encontrados en «${esc(fname)}». Revisa y desmarca lo que no quieras usar.</p>`+
     rows.map((r,i)=>`<label style="display:flex;gap:8px;align-items:baseline;padding:4px 0"><input type="checkbox" id="coc${i}" ${r.cur?'':'checked'}><span><b>${esc(r.name)}:</b> <span style="font-family:var(--f-mono)">${esc(r.nv)}</span>${r.cur?` <span style="color:var(--warn)">(ahora: ${esc(r.cur)})</span>`:''}</span></label>`).join('');
   ask('Rellenar desde el COC',h,[['Cancelar'],['Rellenar','primary',()=>{
-    let n=0;rows.forEach((r,i)=>{if(document.getElementById('coc'+i).checked){state.v['s'+r.slot.id]=r.nv;n++}});
-    save();fillUI();showMsg(`Rellenados ${n} datos desde el COC.`);
+    const lt0=LT?String(state.v['s'+LT.out]||''):'',ids=[];
+    let n=0;rows.forEach((r,i)=>{if(document.getElementById('coc'+i).checked){state.v['s'+r.slot.id]=r.nv;ids.push(r.slot.id);n++}});
+    save();fillUI();
+    const av=cocAvisosLong(lt0,ids);
+    if(av.length)ask('Revisa la longitud total',`<p>Rellenados ${n} datos desde el COC.</p>`+av.map(t=>`<p style="color:var(--warn);font-weight:600">⚠ ${esc(t)}</p>`).join(''),[['Vale'],['Ver la longitud total','primary',()=>goTo(document.querySelector(`[data-slot="${LT.out}"]`).closest('.row'))]]);
+    else showMsg(`Rellenados ${n} datos desde el COC.`);
   }]]);
+}
+function cocAvisosLong(lt0,ids){ // lo que cambia en la longitud total (y la de la caja) al rellenar desde el COC
+  if(!LT||!ids.some(id=>LT.parts.includes(id)||(CJ&&[CJ.vd,CJ.ic,CJ.lc].includes(id))))return [];
+  const out=[],lt1=String(state.v['s'+LT.out]||''),pl=ptoDe(LT.out);
+  if(lt0&&lt1&&lt0!==lt1)out.push(`La longitud total${pl?' ('+pl+')':''} cambia de ${lt0} a ${lt1} mm.`);
+  const ns=ltNoSuma();if(ns)out.push(`La longitud total${pl?' ('+pl+')':''} es ${ns[0]} mm y la suma de voladizos y ejes da ${ns[1]} mm.`);
+  if(CJ){const n=id=>{const v=String(state.v['s'+id]||'').trim();return v?num(v.replace(/[^\d.,]/g,'')):NaN};
+    const vd=n(CJ.vd),ic=n(CJ.ic),lc=n(CJ.lc),lt=n(CJ.lt);
+    if(![vd,ic,lc,lt].some(isNaN)){const d=Math.round((vd+ic+lc-lt)*10)/10,pc=ptoDe(CJ.lc);if(d!==0)out.push(`La longitud de la caja${pc?' ('+pc+')':''} ya no cuadra con la longitud total: ${d>0?'+':''}${String(d).replace('.',',')} mm.`)}}
+  return out;
 }
 async function readCoc(files){
   const sample=SAMPLE||window.__mockSample;if(!sample)return;
@@ -3124,7 +3160,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
   const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
   t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
   document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 14 oct, 23:40';$('#homeNote').after(v);}
+  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 15 oct, 15:10';$('#homeNote').after(v);}
 function abrirDuda(previa){
   ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
     [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
