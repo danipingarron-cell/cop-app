@@ -3220,33 +3220,8 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
     sw.register('sw.js',{updateViaCache:'none'}).then(reg=>{
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
-// dudas: una ventana más debajo de las 4 opciones (Daniel la quería más pequeña). Al pulsarla se abre el panel para escribir la pregunta;
-// «Preguntar a Claude» abre Claude (con el plan de Daniel) con la pregunta y el vehículo del COP abierto como contexto, y la deja copiada
-// por si Claude no la recoge del enlace
-{const st=document.createElement('style');
-  st.textContent='button.tile.duda{grid-column:1/-1;min-height:0;flex-direction:row;align-items:center;gap:14px;padding:12px 16px}button.tile.duda .ic{margin-bottom:0;flex:none}button.tile.duda .tx{display:flex;flex-direction:column;gap:2px}#dlg textarea.duda{width:100%;min-height:96px;margin-top:4px;padding:10px 12px;font:inherit;font-size:16px;border:0;border-radius:12px;background:var(--field,var(--bg));color:var(--ink);resize:vertical}.homever{text-align:center;font-size:12px;opacity:.7;margin-top:2px}';
-  document.head.appendChild(st);
-  const t=document.createElement('button');t.type='button';t.className='tile duda';t.id='tDuda';
-  t.innerHTML='<span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.2"/><path d="M12 16.5h.01"/></svg></span><span class="tx"><b>Pregúntale a Claude</b><span class="d">¿Alguna duda? Se abre el chat</span></span>';
-  document.querySelector('#home .tiles').appendChild(t);
-  const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 22 oct, 13:57';$('#homeNote').after(v);}
-function abrirDuda(previa){
-  ask('Pregúntale a Claude',`<textarea class="duda" id="dudaQ" rows="3" placeholder="Escribe tu pregunta, por ejemplo: ¿a qué altura tiene que ir el antiniebla trasero en un N3G?">${esc(previa||'')}</textarea><p class="hint">Se abre Claude con tu pregunta. Necesita internet.</p>`,
-    [['Cancelar'],['Preguntar a Claude','primary',preguntarClaude]]);
-  try{$('#dudaQ').focus({preventScroll:true})}catch(e){}
-}
-$('#tDuda').onclick=()=>abrirDuda();
-async function preguntarClaude(){
-  const q=$('#dudaQ').value.trim();if(!q)return abrirDuda();
-  if(!navigator.onLine){showMsg('Para preguntar a Claude hace falta internet.',true);return}
-  const v=re=>{const s=findSlot(re);return s?String(state.v['s'+s.id]||'').replace(/\s+/g,' ').trim():''};
-  const veh=[v(/^Marca \(fase/i),v(/^Denominaci[oó]n comercial/i)].filter(Boolean).join(' '),cat=v(/^Categor[ií]a del veh/i);
-  const ctx=veh||cat?`\n\n(Estoy rellenando un control COP PRC-08.02${veh?' de un '+veh:''}${cat?', categoría '+cat:''}.)`:'';
-  const t=q+ctx;
-  window.open('https://claude.ai/new?q='+encodeURIComponent(t),'_blank','noopener');
-  try{await navigator.clipboard.writeText(t)}catch(e){}
-  showMsg('Abriendo Claude con tu pregunta. Si no sale escrita, mantén pulsado en el cuadro de Claude y pega: ya está copiada.');
-}
+// «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 25 oct, 11:59';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -3424,12 +3399,12 @@ ${ins.map((x,k)=>{const n=nombreDe(x),t=info(x).pt;return `${k+1}. ${n}${t&&!n.i
 Contraseñas: la E (o e) con el número del círculo o rectángulo, un espacio y el código tal cual, conservando * y - (ej.: "E11 73R-011025*3", "E20 10R-05 4372", "e9 30003"). Si hay varias, en la casilla va la que corresponde a lo que pide la casilla y las demás en "textos".
 Si la foto es la placa del fabricante del vehículo (la que lleva bastidor, contraseña y masas en kg), rellena también "placa"; si no, "placa": null. En esas placas la 1.ª masa es la del vehículo, la 2.ª la del conjunto y las que empiezan por "1-", "2-"… son las de cada eje. Masas solo con el número de kg.
 Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":["los demás textos que se lean en la foto, cortos"],"dudas":"","placa":{"marca":"","bastidor":"","contrasena":"","mma":"","mmtc":"","ejes":[""]}}`;
-  async function leerIA(blob,ins,aviso){
+  async function iaPedir(blob,prompt,aviso){ // foto + instrucciones → el JSON que devuelve Google (también lo usa el pesaje)
     const clave=iaClave();let modelo=lsG('ia-modelo');
     if(!modelo){modelo=await iaElegir(clave);lsS('ia-modelo',modelo)}
     const c0=await fotoCanvas(blob),k=Math.min(1,1600/Math.max(c0.width,c0.height));let c=c0;
     if(k<1){c=document.createElement('canvas');c.width=Math.round(c0.width*k);c.height=Math.round(c0.height*k);c.getContext('2d').drawImage(c0,0,0,c.width,c.height)}
-    const parts=[{text:iaPrompt(ins)},{inline_data:{mime_type:'image/jpeg',data:c.toDataURL('image/jpeg',0.88).split(',')[1]}}],cfg={temperature:0,responseMimeType:'application/json'};
+    const parts=[{text:prompt},{inline_data:{mime_type:'image/jpeg',data:c.toDataURL('image/jpeg',0.88).split(',')[1]}}],cfg={temperature:0,responseMimeType:'application/json'};
     // los Gemini 3 piensan antes de contestar: para leer una placa basta poco y tarda mucho menos
     const leer=async m=>{try{return await gen(clave,m,parts,/gemini-3/.test(m)?{...cfg,thinkingConfig:{thinkingLevel:'low'}}:cfg)}
       catch(e){if(e.status===400&&/thinking/i.test(e.message))return gen(clave,m,parts,cfg);throw e}};
@@ -3448,6 +3423,10 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
     catch(e){if(e instanceof TypeError)throw e;const x=new Error(textoError(e));x.clave=e.status!==429&&!(e.status>=500);throw x}
     const t=(((j.candidates||[])[0]||{}).content||{parts:[]}).parts.map(x=>x.text||'').join('');
     let o;try{o=JSON.parse(t.replace(/^```(json)?|```$/g,'').trim())}catch(e){o={textos:[t]}}
+    return {o,modelo};
+  }
+  async function leerIA(blob,ins,aviso){
+    const {o,modelo}=await iaPedir(blob,iaPrompt(ins),aviso);
     const val=ins.map((x,k)=>{let v=norm((o.valores||[])[k]);const cl=clase(x);
       if(cl==='indice'){const m=v.match(/\d{2,3}/);v=m?m[0]+'K':''} // Daniel: la letra de velocidad siempre K
       if((cl==='D'||cl==='U')&&v)v=v.replace(/[^\d.,]/g,'').replace('.',',');
@@ -3606,7 +3585,7 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
   let pend=false;
   new MutationObserver(()=>{if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;decorar()})}).observe(document.body,{childList:true,subtree:true});
   decorar();
-  return {quiere,clase,proponer,contrasena,decorar};
+  return {quiere,clase,proponer,contrasena,decorar,iaPedir,iaClave,formClave,pedirFoto};
 })();
 
 /* Fotos de la revisión (lo pidió Daniel, 14 oct): en el apartado Fotografías de los dos COP, un solo botón «Fotos revisión» para hacer
@@ -3787,6 +3766,362 @@ const FotosRev=(()=>{
   // al borrar un COP se borran sus fotos
   const _borrarDoc=borrarDoc;borrarDoc=async function(d){await _borrarDoc.apply(this,arguments);if(LIST&&!LIST.some(x=>x.id===d.id))try{await borrarDe(d.id)}catch(e){}};
   return {fotosDe,cuantas,pintar,borrarDe};
+})();
+
+/* Pesajes (lo pidió Daniel, 25 oct): el «Informe de pesada» de SGS / GMR Homologaciones, aparte de los COP.
+   Daniel hace dos fotos, la del bastidor y la del ticket de la báscula (un papel por eje, con RUEDA 1, RUEDA 2, BRUTO, TARA y NETO,
+   y a mano «S/C» = sin conductor y el combustible), la app las lee con el lector de Google de la cámara (la misma clave) y
+   rellena marca, bastidor, la tara de cada eje (el NETO de su ticket), conductor, depósito y la fecha del pesaje. Él lo repasa
+   y sale el PDF como su plantilla (pdf-lib y el logo van en pesaje-datos.js), con la foto del ticket en medio.
+   El sello (lleva firma) no va en la app, que está en internet: Daniel lo saca una vez de un PDF de pesaje anterior y queda solo en su móvil.
+   Lo fijo (básculas, técnico, responsable, Madrid) es siempre igual; la fecha es la del ticket.
+   Los pesajes se guardan en el móvil (IndexedDB, con sus fotos) y no se borran solos. Va después de foto-punto.js. */
+const Pesaje=(()=>{
+  const SRC='pesaje-datos.js',K_DB='cop-pesajes';
+  const FIJO={basculas:'con dos básculas marca Ascell Sensor, modelo DFW, referencia B2W1 y B2W2 respectivamente',
+    tecnico:'Daniel Pingarrón Amieiro',responsable:'Rafael Arroyo Hernandez',lugar:'Madrid'};
+  const DEP=[['vacio','Vacío'],['1/4','1/4'],['1/2','1/2'],['3/4','3/4'],['lleno','Lleno']];
+  const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  // marca por las 3 primeras letras del bastidor (cuando la foto es del chasis y no sale el logotipo)
+  const WMI={VF6:'RENAULT',VF1:'RENAULT',VF8:'RENAULT',WDB:'MERCEDES-BENZ',WDF:'MERCEDES-BENZ',WDD:'MERCEDES-BENZ',W1T:'MERCEDES-BENZ',W1V:'MERCEDES-BENZ',
+    WMA:'MAN',WMW:'MAN',YS2:'SCANIA',XLR:'DAF',YV2:'VOLVO',YV1:'VOLVO',YV3:'VOLVO',ZCF:'IVECO',ZCN:'IVECO',JLF:'MITSUBISHI FUSO',JL6:'MITSUBISHI FUSO',
+    TYB:'MITSUBISHI FUSO',WF0:'FORD',NM0:'FORD',WV1:'VOLKSWAGEN',WV2:'VOLKSWAGEN',ZFA:'FIAT',VF7:'CITROËN',VF3:'PEUGEOT',VR3:'PEUGEOT',VR7:'CITROËN',
+    JTF:'TOYOTA',SB1:'TOYOTA',VNE:'IVECO',VS5:'RENAULT',NLR:'ISUZU',JAA:'ISUZU',XMC:'MITSUBISHI'};
+  const CAM='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.6"/></svg>';
+  const GAL='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>';
+  const BAS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20h18"/><path d="M6 20v-3h12v3"/><path d="M12 17V6"/><path d="M5 9l3-5 3 5a3 3 0 0 1-6 0zM13 9l3-5 3 5a3 3 0 0 1-6 0z"/><path d="M8 4h8"/></svg>';
+  const norm=t=>String(t==null?'':t).replace(/\s+/g,' ').trim();
+  const kgN=v=>{const s=String(v==null?'':v).replace(/kg/i,'').replace(/[.\s]/g,'').replace(',','.');const n=Math.round(+s);return s&&isFinite(n)?n:null};
+  const miles=n=>n==null?'-':String(n).replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+  const hoy=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+  const fechaLarga=f=>{const m=/^(\d{4})-(\d\d)-(\d\d)$/.exec(f||'');return m?`${+m[3]} de ${MESES[+m[2]-1]} de ${m[1]}`:''};
+  const fechaCorta=f=>{const m=/^(\d{4})-(\d\d)-(\d\d)$/.exec(f||'');return m?`${m[3]}/${m[2]}/${m[1]}`:''};
+  const deTicket=t=>{const m=/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/.exec(t||'');if(!m)return '';const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0')};
+
+  // ---------- guardado (IndexedDB: el localStorage va casi lleno con los COP) ----------
+  let DBP=null;
+  function db(){if(!DBP)DBP=new Promise((ok,ko)=>{const r=indexedDB.open(K_DB,1);r.onupgradeneeded=()=>r.result.createObjectStore('p',{keyPath:'id'});r.onsuccess=()=>ok(r.result);r.onerror=()=>{DBP=null;ko(r.error)}});return DBP}
+  const req=r=>new Promise((ok,ko)=>{r.onsuccess=()=>ok(r.result);r.onerror=()=>ko(r.error)});
+  async function todos(){try{const d=await db();return (await req(d.transaction('p').objectStore('p').getAll())).sort((a,b)=>b.cambiado-a.cambiado)}catch(e){return []}}
+  async function poner(p){const d=await db();await req(d.transaction('p','readwrite').objectStore('p').put(p))}
+  async function quitar(id){const d=await db();await req(d.transaction('p','readwrite').objectStore('p').delete(id))}
+  const nuevo=()=>({id:'pes-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6),creado:Date.now(),cambiado:Date.now(),
+    marca:'',bastidor:'',ejes:[{kg:null},{kg:null}],conductor:'',deposito:'',otros:'',fecha:hoy(),fotoBast:null,fotosTicket:[],leido:{},dudas:'',pdf:false});
+  let P=null,GT=0;
+  function guardarYa(){clearTimeout(GT);if(!P)return;P.cambiado=Date.now();poner(P).catch(e=>showMsg('No se ha podido guardar el pesaje en el móvil: '+(e&&e.message||e),true))}
+  const guardar=()=>{clearTimeout(GT);GT=setTimeout(guardarYa,600)};
+
+  // ---------- sello (solo en el móvil: localStorage, unos 10 KB) ----------
+  const K_SELLO='pesaje-sello-v1';
+  const sello=()=>{try{return localStorage.getItem(K_SELLO)||''}catch(e){return ''}};
+  async function selloDePdf(file){ // la imagen casi cuadrada del PDF (el logo es alargado y la foto del ticket, alta); si hay varias, la de más abajo
+    const lib=await pdfLib(),pdf=await lib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise,pg=await pdf.getPage(1);
+    const ops=await pg.getOperatorList(),O=lib.OPS,cand=[];let m=[1,0,0,1,0,0];const pila=[];
+    for(let i=0;i<ops.fnArray.length;i++){const f=ops.fnArray[i],a=ops.argsArray[i];
+      if(f===O.save)pila.push(m);else if(f===O.restore)m=pila.pop()||[1,0,0,1,0,0];
+      else if(f===O.transform){const [a1,b1,c1,d1,e1,f1]=a;m=[m[0]*a1+m[2]*b1,m[1]*a1+m[3]*b1,m[0]*c1+m[2]*d1,m[1]*c1+m[3]*d1,m[0]*e1+m[2]*f1+m[4],m[1]*e1+m[3]*f1+m[5]]}
+      else if(f===O.paintImageXObject){const w=Math.hypot(m[0],m[1]),h=Math.hypot(m[2],m[3]);if(w>40&&h>40&&w/h>0.8&&w/h<1.25)cand.push({id:a[0],y:m[5],w,h})}}
+    if(!cand.length)throw new Error('No se ha encontrado el sello en ese PDF.');
+    cand.sort((a,b)=>a.y-b.y);const id=cand[0].id;
+    await pg.render({canvasContext:document.createElement('canvas').getContext('2d'),viewport:pg.getViewport({scale:0.3})}).promise; // así se cargan las imágenes
+    const im=await new Promise(r=>{const o=id.startsWith('g_')?pg.commonObjs:pg.objs;o.get(id,r)});
+    const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const x=c.getContext('2d');
+    if(im.bitmap)x.drawImage(im.bitmap,0,0);
+    else{const d=x.createImageData(im.width,im.height),src=im.data,n=im.width*im.height;
+      if(src.length>=n*4)d.data.set(src.subarray(0,n*4));else for(let i=0,j=0;i<n;i++,j+=3){d.data[i*4]=src[j];d.data[i*4+1]=src[j+1];d.data[i*4+2]=src[j+2];d.data[i*4+3]=255}
+      x.putImageData(d,0,0)}
+    const f=document.createElement('canvas');f.width=c.width;f.height=c.height;const fx=f.getContext('2d');fx.fillStyle='#fff';fx.fillRect(0,0,f.width,f.height);fx.drawImage(c,0,0);
+    return f.toDataURL('image/jpeg',0.92).split(',')[1];
+  }
+  function pedirSello(){
+    const i=document.createElement('input');i.type='file';i.accept='application/pdf,.pdf';i.style.cssText='position:fixed;left:-9999px;opacity:0';document.body.appendChild(i);
+    i.onchange=async()=>{const f=i.files&&i.files[0];i.remove();if(!f)return;
+      try{const b=await selloDePdf(f);localStorage.setItem(K_SELLO,b);showMsg('Sello guardado en este móvil: ya sale en los PDF.');P?pintar():abrirLista()}
+      catch(e){showMsg('No se ha podido sacar el sello: '+(e&&e.message||e),true)}};
+    i.click();
+  }
+  const selloHtml=()=>sello()?`<div class="sello"><img alt="Sello" src="data:image/jpeg;base64,${sello()}"><span>Sello guardado en este móvil</span><button type="button" class="otra" data-psello>Cambiar</button></div>`
+    :`<div class="sello falta"><span><b>Falta el sello.</b> Ponlo una vez: elige un PDF de pesaje anterior y la app saca de él el sello. Se queda solo en este móvil.</span><button type="button" data-psello>Elegir PDF</button></div>`;
+  async function reducir(blob){ // lado largo 1600 px: se lee igual y el PDF no pesa
+    const c0=await fotoCanvas(blob),k=Math.min(1,1600/Math.max(c0.width,c0.height));let c=c0;
+    if(k<1){c=document.createElement('canvas');c.width=Math.round(c0.width*k);c.height=Math.round(c0.height*k);c.getContext('2d').drawImage(c0,0,0,c.width,c.height)}
+    return await new Promise(r=>c.toBlob(r,'image/jpeg',0.85));
+  }
+
+  // ---------- lectura de las fotos ----------
+  const P_TICKET=`Eres el lector de los tickets de una báscula de pesaje de vehículos por ejes. En la foto hay uno o varios tickets impresos, uno por eje, en el orden en que se pesaron (el de arriba es el 1.er eje), y puede haber notas escritas a mano.
+Cada ticket lleva RUEDA 1 y RUEDA 2 (kg), BRUTO, TARA y NETO (kg) y la fecha y la hora (dd/mm/aa hh:mm:ss).
+Las notas a mano dicen si se pesó con conductor o sin él ("S/C" = sin conductor, "C/C" = con conductor) y cuánto combustible tenía el depósito (p. ej. "1/4 combustible", "1/2", "3/4", "lleno", "vacío").
+Lee los números exactamente como están. No inventes nada: si algo no se ve, déjalo "" y explícalo en "dudas".
+Devuelve solo JSON: {"ejes":[{"rueda1":"","rueda2":"","bruto":"","tara":"","neto":"","fecha":"dd/mm/aa","hora":"hh:mm:ss"}],"conductor":"si | no | (vacío si no lo pone)","deposito":"vacio | 1/4 | 1/2 | 3/4 | lleno | (vacío si no lo pone)","notas":"lo escrito a mano, tal cual","dudas":""}`;
+  const P_BAST=`En la foto está el número de bastidor (VIN) de un vehículo industrial: troquelado en el chasis o en una placa o etiqueta. Lee el VIN de 17 caracteres exactamente (sin espacios ni guiones; un VIN no lleva I, O ni Q). Si en la foto se ve la marca del vehículo (logotipo o placa del fabricante), ponla en mayúsculas.
+No inventes nada: si un carácter no es seguro, dilo en "dudas".
+Devuelve solo JSON: {"bastidor":"","marca":"","dudas":""}`;
+  const vinDe=t=>{const m=String(t||'').toUpperCase().replace(/[\s.\-*]/g,'').match(/[A-HJ-NPR-Z0-9]{17}/);return m?m[0]:''};
+  async function lineas(blob){ // sin clave de Google: el lector del móvil (tesseract), líneas de texto
+    const c=await fotoCanvas(blob),w=await ocrTrozos(c,1,'6'),L=[];
+    for(const x of w.sort((a,b)=>a.y-b.y)){const l=L.find(l=>Math.abs(l.y-x.y)<x.h*0.6);if(l){l.p.push(x)}else L.push({y:x.y,p:[x]})}
+    return L.map(l=>l.p.sort((a,b)=>a.x-b.x).map(x=>x.s).join(' '));
+  }
+  function ticketDeLineas(L){ // «BRUTO 4530 kg», «RUEDA 1 2275 kg»… cada NETO cierra un eje
+    const o={ejes:[],conductor:'',deposito:'',notas:'',dudas:'Leído con el lector del móvil: repasa los pesos.'};let e={};
+    const num=l=>{const m=l.replace(/[Oo]/g,'0').match(/(\d[\d.]{2,6})\s*k?g?\s*$/i);return m?m[1].replace(/\./g,''):''};
+    for(const l of L){const u=l.toUpperCase();
+      if(/RUEDA\s*1/.test(u))e.rueda1=num(l);else if(/RUEDA\s*2/.test(u))e.rueda2=num(l);
+      else if(/BRUTO/.test(u))e.bruto=num(l);else if(/TARA/.test(u))e.tara=num(l);
+      else if(/NETO/.test(u)){e.neto=num(l);o.ejes.push(e);e={}}
+      else if(/\d{1,2}\/\d{1,2}\/\d{2}/.test(u)){const f=u.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})\s*(\d{1,2}:\d{2}(:\d{2})?)?/);const t=o.ejes[o.ejes.length-1];if(t&&!t.fecha){t.fecha=f[1];t.hora=f[2]||''}}
+      if(/S\s*\/\s*C/.test(u))o.conductor='no';if(/C\s*\/\s*C/.test(u))o.conductor='si';
+      const d=u.match(/\b([13])\s*\/\s*([24])\b/);if(d&&/COMB|DEP/.test(u))o.deposito=d[1]+'/'+d[2];
+    }
+    return o;
+  }
+  async function leerTicket(blob,aviso){
+    if(FotoPunto.iaClave()){const {o}=await FotoPunto.iaPedir(blob,P_TICKET,aviso);return o}
+    aviso&&aviso('Leyendo en el móvil…');return ticketDeLineas(await lineas(blob));
+  }
+  async function leerBast(blob,aviso){
+    if(FotoPunto.iaClave()){const {o}=await FotoPunto.iaPedir(blob,P_BAST,aviso);return o}
+    aviso&&aviso('Leyendo en el móvil…');const L=await lineas(blob);return {bastidor:vinDe(L.join(' ')),marca:'',dudas:'Leído con el lector del móvil: repasa el bastidor.'};
+  }
+  function ponTicket(o){ // lo leído pasa al pesaje; lo que ya tocó a mano también se cambia (es una foto nueva), pero se avisa
+    const ej=(o.ejes||[]).filter(e=>e&&(e.neto||e.bruto));
+    const hm=e=>{const f=deTicket(e.fecha),h=norm(e.hora);return f&&h?f+' '+h.padStart(8,'0'):''};if(ej.every(hm))ej.sort((a,b)=>hm(a)<hm(b)?-1:hm(a)>hm(b)?1:0); // por la hora del ticket (si la lleva cada uno)
+    if(ej.length){
+      P.ejes=ej.map(e=>{const r1=kgN(e.rueda1),r2=kgN(e.rueda2),br=kgN(e.bruto),ta=kgN(e.tara);let kg=kgN(e.neto);if(kg==null&&br!=null)kg=br-(ta||0);
+        return {kg,r1,r2,bruto:br,tara:ta,hora:norm(e.hora)}});
+      const f=deTicket(ej[0].fecha);if(f)P.fecha=f;
+    }
+    const c=norm(o.conductor).toLowerCase();if(c==='si'||c==='sí'||c==='no')P.conductor=c==='no'?'no':'si';
+    const d=norm(o.deposito).toLowerCase().replace('vacío','vacio');if(DEP.some(([k])=>k===d))P.deposito=d;
+    P.leido.ticket={ejes:ej.length,notas:norm(o.notas),cond:!!c,dep:DEP.some(([k])=>k===d)};
+    P.dudas=[P.leido.bast&&P.leido.bast.dudas,norm(o.dudas)].filter(Boolean).join(' ');P.leido.ticketDudas=norm(o.dudas);
+  }
+  function ponBast(o){
+    const v=vinDe(o.bastidor)||norm(o.bastidor).toUpperCase().replace(/\s/g,'');
+    if(v)P.bastidor=v;
+    const m=WMI[v.slice(0,3)]||norm(o.marca).toUpperCase();if(m)P.marca=m;
+    P.leido.bast={dudas:norm(o.dudas)+(v&&v.length!==17?` El bastidor leído tiene ${v.length} caracteres (deben ser 17).`:'')};
+    P.dudas=[P.leido.bast.dudas,P.leido.ticketDudas].filter(Boolean).join(' ');
+  }
+
+  // ---------- pantalla ----------
+  const st=document.createElement('style');
+  st.textContent=`html[data-vista="pes"] #homeMain,html[data-vista="pes"] #homeMis{display:none!important}html:not([data-vista="pes"]) #pesaje{display:none!important}
+button.tile.pes{grid-column:1/-1;flex-direction:row;align-items:center;min-height:0;gap:14px}button.tile.pes .ic{margin:0;flex:none}button.tile.pes>span:last-child{display:grid;gap:3px}
+@media (min-width:760px){button.tile.pes{grid-column:auto;flex-direction:column;align-items:flex-start;min-height:158px}}
+#pesaje{display:grid;gap:14px;margin-top:6px;color:var(--ink)}
+#pesaje .pnew{width:100%;justify-content:center;padding:14px;border-radius:14px;font-size:16px;font-weight:700}
+#pesaje .hh{margin:6px 0 0}
+#pesaje .pit{background:var(--panel);border-radius:14px;padding:12px 14px;display:grid;gap:4px;box-shadow:var(--shadow,none);border:1px solid var(--line)}
+#pesaje .pit b{font-size:15px}#pesaje .pit .m{font-size:13px;color:var(--muted)}
+#pesaje .pit .acts{display:flex;gap:6px;margin-top:6px}#pesaje .pit .acts button{flex:1;justify-content:center;padding:9px 4px;border-radius:10px;font-size:13px;font-weight:600}
+#pesaje .pit .acts .del{flex:none;color:var(--bad);border-color:var(--bad)}
+#pesaje .vacio{font-size:14px;color:var(--muted);margin:0}
+#pesaje .card{background:var(--panel);border-radius:16px;padding:14px;display:grid;gap:12px;box-shadow:var(--shadow,none);border:1px solid var(--line)}
+#pesaje .card h3{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+#pesaje .fotos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#pesaje .foto{border:2px dashed var(--accent);border-radius:14px;padding:10px;display:grid;gap:8px;align-content:start;background:var(--accent-soft,var(--bg))}
+#pesaje .foto.hay{border-style:solid;border-color:var(--ok);background:var(--ok-soft,var(--bg))}
+#pesaje .foto b{font-size:15px}#pesaje .foto .est{font-size:12px;color:var(--muted);line-height:1.35}#pesaje .foto.hay .est{color:var(--ok);font-weight:600}
+#pesaje .foto .est.lee{color:var(--accent);font-weight:600}#pesaje .foto .est.mal{color:var(--bad);font-weight:600}
+#pesaje .foto .mini{display:flex;gap:4px}#pesaje .foto img{width:100%;height:78px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block;min-width:0}
+#pesaje .foto .bb{display:flex;gap:6px}#pesaje .foto .bb button{flex:1;justify-content:center;padding:9px 4px;border-radius:10px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:4px}
+#pesaje .foto .bb .cam{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+#pesaje .foto .otra{background:none;border:0;padding:0;color:var(--accent);font-size:12px;font-weight:600;text-decoration:underline;justify-self:start;box-shadow:none}
+#pesaje label.f{display:grid;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}
+#pesaje label.f input{width:100%;box-sizing:border-box;font-size:17px;padding:10px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font-weight:400}
+#pesaje .dos{display:grid;gap:10px}
+#pesaje .eje{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+#pesaje .eje .n{font-weight:700;font-size:15px;min-width:62px}
+#pesaje .eje input{width:100%;box-sizing:border-box;font-size:18px;padding:9px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+#pesaje .eje .x{width:36px;height:36px;padding:0;border-radius:50%;justify-content:center;font-size:14px}
+#pesaje .eje .det{grid-column:2/-1;font-size:12px;color:var(--muted);margin-top:-6px}#pesaje .eje .det.mal{color:var(--bad);font-weight:600}
+#pesaje .tot{display:flex;justify-content:space-between;align-items:baseline;border-top:1.5px solid var(--line);padding-top:10px;font-size:15px;font-weight:700}
+#pesaje .tot span:last-child{font-size:22px;font-variant-numeric:tabular-nums}
+#pesaje .mas{background:none;border:0;padding:0;color:var(--accent);font-size:14px;font-weight:600;justify-self:start;box-shadow:none}
+#pesaje .seg{display:flex;gap:6px;flex-wrap:wrap}#pesaje .seg button{flex:1;min-width:52px;justify-content:center;padding:10px 4px;border-radius:10px;font-size:14px;font-weight:600}
+#pesaje .seg button.on{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+#pesaje .lbl{font-size:13px;font-weight:600;color:var(--muted);margin-bottom:-4px}
+#pesaje .duda{font-size:13px;line-height:1.4;padding:10px 12px;border-radius:10px;background:var(--warn-soft,#fff4e0);color:var(--ink);border:1.5px solid var(--warn,#e08a00)}
+#pesaje .nota{font-size:12px;color:var(--muted);line-height:1.4;margin:0}
+#pesaje .gen{width:100%;justify-content:center;padding:15px;border-radius:14px;font-size:17px;font-weight:700}
+#pesaje .sello{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted)}#pesaje .sello img{width:44px;height:44px;border-radius:50%;background:#fff;object-fit:contain}
+#pesaje .sello.falta{padding:10px 12px;border-radius:12px;border:1.5px solid var(--warn,#e08a00);color:var(--ink);flex-wrap:wrap}#pesaje .sello.falta button{padding:8px 14px;border-radius:10px;font-weight:700;font-size:13px}
+#pesaje .atras{background:none;border:0;padding:0;color:var(--accent);font-size:14px;font-weight:600;justify-self:start;box-shadow:none}`;
+  document.head.appendChild(st);
+  const tiles=document.querySelector('#homeMain .tiles');
+  tiles.insertAdjacentHTML('beforeend',`<button type="button" class="tile pes" id="tPes"><span class="ic">${BAS}</span><span><b>Pesaje</b><span class="d">Fotos del bastidor y del ticket: sale el informe de pesada en PDF</span></span></button>`);
+  document.getElementById('home').insertAdjacentHTML('beforeend','<div id="pesaje"></div>');
+  const box=document.getElementById('pesaje');
+  document.getElementById('tPes').onclick=()=>abrirLista();
+  const cab=(t,s)=>{$('#hT').textContent=t;$('#hsub').textContent=s};
+
+  async function abrirLista(){
+    if(P)guardarYa();P=null;vista('pes');cab('Pesajes','Informes de pesada');
+    const L=await todos();
+    box.innerHTML=`<button type="button" class="primary pnew" data-pnuevo>${CAM} Nuevo pesaje</button>
+${selloHtml()}
+<h2 class="hh">Tus pesajes</h2>${L.length?L.map(p=>`<div class="pit" data-pid="${esc(p.id)}"><b>${esc(titulo(p))}</b><span class="m">${esc([fechaCorta(p.fecha),p.ejes.length===1?'1 eje':p.ejes.length+' ejes',miles(total(p))+' kg',p.pdf?'PDF creado':''].filter(Boolean).join(' · '))}</span>
+<div class="acts"><button type="button" data-pabrir>Abrir</button><button type="button" data-ppdf>PDF</button><button type="button" class="del" data-pborrar aria-label="Borrar">Borrar</button></div></div>`).join('')
+      :'<p class="vacio">Aún no hay pesajes. Se guardan solos en este móvil, con sus fotos, y no se borran: los quitas tú aquí.</p>'}`;
+    box.querySelector('[data-psello]').onclick=pedirSello;
+    box.querySelector('[data-pnuevo]').onclick=()=>{P=nuevo();pintar();guardarYa()};
+    for(const it of box.querySelectorAll('.pit')){const p=L.find(x=>x.id===it.dataset.pid);
+      it.querySelector('[data-pabrir]').onclick=()=>{P=p;pintar()};
+      it.querySelector('[data-ppdf]').onclick=()=>{P=p;crear()};
+      it.querySelector('[data-pborrar]').onclick=()=>ask('Borrar este pesaje',`<p><b>${esc(titulo(p))}</b></p><p class="hint">Se borra del móvil con sus fotos. El PDF que ya enviaste no cambia.</p>`,
+        [['Cancelar'],['Borrar','primary',async()=>{await quitar(p.id);abrirLista()}]]);
+    }
+    window.scrollTo(0,0);
+  }
+  const titulo=p=>[p.marca,p.bastidor].filter(Boolean).join(' · ')||'Pesaje sin identificar';
+  const total=p=>{const v=p.ejes.map(e=>e.kg).filter(n=>n!=null);return v.length?v.reduce((a,b)=>a+b,0):null};
+  const url=b=>{try{return URL.createObjectURL(b)}catch(e){return ''}};
+
+  function pintar(){
+    vista('pes');cab('Pesaje',titulo(P));
+    const lb=P.leido||{},tk=lb.ticket;
+    const estB=P.fotoBast?(lb.bast?'Leído: '+(P.bastidor||'sin bastidor'):'Foto puesta'):'Marca y bastidor';
+    const estT=P.fotosTicket.length?(tk?`Leído: ${tk.ejes===1?'1 eje':tk.ejes+' ejes'}${tk.cond?', conductor':''}${tk.dep?', depósito':''}`:'Foto puesta'):'Pesos por eje, conductor y combustible';
+    box.innerHTML=`<button type="button" class="atras" data-patras>‹ Tus pesajes</button>
+<div class="card"><h3>Fotos</h3><div class="fotos">
+ <div class="foto${P.fotoBast?' hay':''}" data-pf="bast"><b>Bastidor</b>${P.fotoBast?`<div class="mini"><img alt="Foto del bastidor" src="${url(P.fotoBast)}"></div>`:''}<span class="est">${esc(estB)}</span>
+  <div class="bb"><button type="button" class="cam" data-pcam>${CAM}${P.fotoBast?'Otra':'Foto'}</button><button type="button" data-pgal aria-label="Galería">${GAL}</button></div></div>
+ <div class="foto${P.fotosTicket.length?' hay':''}" data-pf="ticket"><b>Ticket</b>${P.fotosTicket.length?`<div class="mini">${P.fotosTicket.map((b,i)=>`<img alt="Foto del ticket ${i+1}" src="${url(b)}">`).join('')}</div>`:''}<span class="est">${esc(estT)}</span>
+  <div class="bb"><button type="button" class="cam" data-pcam>${CAM}${P.fotosTicket.length?'Otra':'Foto'}</button><button type="button" data-pgal aria-label="Galería">${GAL}</button></div>
+  ${P.fotosTicket.length?'<button type="button" class="otra" data-pmas>+ Añadir otro trozo del ticket</button>':''}</div>
+</div>${FotoPunto.iaClave()?'':'<p class="nota">Sin la clave de Google las fotos se leen con el lector del móvil, que con los tickets falla más. <button type="button" class="otra" data-pclave>Poner la clave</button></p><div data-pclavebox></div>'}</div>
+${P.dudas?`<div class="duda"><b>Revisa:</b> ${esc(P.dudas)}</div>`:''}
+<div class="card"><h3>Vehículo</h3><div class="dos"><label class="f">Marca<input data-pk="marca" value="${esc(P.marca)}" autocapitalize="characters"></label><label class="f">N.º de bastidor<input data-pk="bastidor" value="${esc(P.bastidor)}" autocapitalize="characters" spellcheck="false"></label></div></div>
+<div class="card"><h3>Tara por eje (kg)</h3>${P.ejes.map((e,i)=>`<div class="eje" data-pi="${i}"><span class="n">${i+1}.º eje</span><input inputmode="numeric" value="${e.kg==null?'':e.kg}" aria-label="Tara del ${i+1}.º eje en kg">${P.ejes.length>1?`<button type="button" class="x" data-px aria-label="Quitar el ${i+1}.º eje">✕</button>`:'<span></span>'}${detalle(e)}</div>`).join('')}
+<button type="button" class="mas" data-peje>+ Añadir eje</button>
+<div class="tot"><span>Tara total</span><span data-ptot>${miles(total(P))} kg</span></div></div>
+<div class="card"><h3>Observaciones</h3>
+<div class="lbl">Conductor</div><div class="seg" data-pseg="conductor"><button type="button" data-pv="si">Sí</button><button type="button" data-pv="no">No</button></div>
+<div class="lbl">Depósito</div><div class="seg" data-pseg="deposito">${DEP.map(([k,n])=>`<button type="button" data-pv="${k}">${n}</button>`).join('')}</div>
+<label class="f">Otros<input data-pk="otros" value="${esc(P.otros)}"></label>
+<label class="f">Fecha del pesaje<input type="date" data-pk="fecha" value="${esc(P.fecha)}"></label>
+<p class="nota">Siempre igual: básculas Ascell Sensor DFW (B2W1 y B2W2), técnico ${esc(FIJO.tecnico)}, responsable ${esc(FIJO.responsable)}, ${esc(FIJO.lugar)}.</p></div>
+${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>Crear PDF</button>`;
+    for(const s of box.querySelectorAll('[data-pseg]'))marcar(s);
+    box.querySelector('[data-patras]').onclick=()=>abrirLista();
+    for(const f of box.querySelectorAll('.foto')){const q=f.dataset.pf;
+      f.querySelector('[data-pcam]').onclick=()=>FotoPunto.pedirFoto(b=>foto(q,b,false));
+      f.querySelector('[data-pgal]').onclick=()=>FotoPunto.pedirFoto(b=>foto(q,b,false),true);
+      const m=f.querySelector('[data-pmas]');if(m)m.onclick=()=>FotoPunto.pedirFoto(b=>foto(q,b,true));}
+    const ck=box.querySelector('[data-pclave]');if(ck)ck.onclick=()=>FotoPunto.formClave(box.querySelector('[data-pclavebox]'),()=>pintar());
+    for(const i of box.querySelectorAll('input[data-pk]'))i.oninput=()=>{let v=i.value;if(i.dataset.pk==='bastidor'||i.dataset.pk==='marca'){v=v.toUpperCase()}P[i.dataset.pk]=i.dataset.pk==='bastidor'?v.replace(/\s/g,''):v;
+      if(i.dataset.pk==='bastidor'&&!P.marca&&WMI[P.bastidor.slice(0,3)]){P.marca=WMI[P.bastidor.slice(0,3)];box.querySelector('[data-pk=marca]').value=P.marca}cab('Pesaje',titulo(P));guardar()};
+    for(const r of box.querySelectorAll('.eje')){const i=+r.dataset.pi,inp=r.querySelector('input');
+      inp.oninput=()=>{P.ejes[i].kg=kgN(inp.value);box.querySelector('[data-ptot]').textContent=miles(total(P))+' kg';guardar()};
+      const x=r.querySelector('[data-px]');if(x)x.onclick=()=>{P.ejes.splice(i,1);guardarYa();pintar()}}
+    box.querySelector('[data-peje]').onclick=()=>{P.ejes.push({kg:null});guardarYa();pintar();const l=box.querySelectorAll('.eje input');l[l.length-1].focus()};
+    for(const s of box.querySelectorAll('[data-pseg]'))for(const b of s.querySelectorAll('button'))b.onclick=()=>{const k=s.dataset.pseg;P[k]=P[k]===b.dataset.pv?'':b.dataset.pv;marcar(s);guardar()};
+    box.querySelector('[data-pcrear]').onclick=()=>crear();
+    const bs=box.querySelector('[data-psello]');if(bs)bs.onclick=pedirSello;
+  }
+  function detalle(e){ // lo del ticket, para ver que cuadra: rueda 1 + rueda 2 = bruto, bruto − tara = neto
+    if(e.r1==null&&e.bruto==null)return '';
+    const p=[];let mal='';
+    if(e.r1!=null||e.r2!=null){p.push(`Ruedas ${miles(e.r1)} + ${miles(e.r2)}`);if(e.r1!=null&&e.r2!=null&&e.bruto!=null&&e.r1+e.r2!==e.bruto)mal=`Las ruedas suman ${miles(e.r1+e.r2)} y el bruto es ${miles(e.bruto)}.`}
+    if(e.bruto!=null)p.push('bruto '+miles(e.bruto)+(e.tara?' − tara '+miles(e.tara):''));
+    if(e.bruto!=null&&e.kg!=null&&e.bruto-(e.tara||0)!==e.kg)mal+=` Bruto menos tara da ${miles(e.bruto-(e.tara||0))}.`;
+    return `<span class="det${mal?' mal':''}">${esc(mal||'Ticket: '+p.join(', ')+(e.hora?' · '+e.hora:''))}</span>`;
+  }
+  function marcar(s){const v=P[s.dataset.pseg];for(const b of s.querySelectorAll('button')){b.classList.toggle('on',b.dataset.pv===v);b.setAttribute('aria-pressed',String(b.dataset.pv===v))}}
+  async function foto(q,blob,mas){
+    const p=P;let b;try{b=await reducir(blob)}catch(e){showMsg('No se pudo abrir la foto. Prueba otra vez.',true);return}
+    if(q==='bast')p.fotoBast=b;else p.fotosTicket=mas?[...p.fotosTicket,b]:[b];
+    guardarYa();if(P!==p)return;pintar();
+    const est=box.querySelector(`.foto[data-pf="${q}"] .est`),av=t=>{if(est){est.className='est lee';est.textContent=t}};
+    av(FotoPunto.iaClave()?'Leyendo con Google…':'Leyendo en el móvil…');
+    try{
+      if(q==='bast')ponBast(await leerBast(blob,av));
+      else{const o=await leerTicket(blob,av);if(mas&&P.leido.ticket){const ya=P.ejes;ponTicket(o);P.ejes=[...ya,...P.ejes];P.leido.ticket.ejes=P.ejes.length}else ponTicket(o)}
+      guardarYa();if(P===p)pintar();
+    }catch(e){if(est){est.className='est mal';est.textContent=(e instanceof TypeError?'Sin internet: no se ha podido leer. ':'')+(e&&e.message||e)+' Puedes escribirlo a mano.'}}
+  }
+
+  // ---------- el PDF (como la plantilla de Daniel: A4, Arial 10, tabla de taras, foto del ticket y observaciones) ----------
+  let DATA=null,DP=null;
+  function cargar(){
+    if(DATA)return Promise.resolve(DATA);
+    if(!DP)DP=new Promise((ok,ko)=>{if(window.PES_DATA)return ok(DATA=window.PES_DATA);const s=document.createElement('script');s.src=SRC;
+      s.onload=()=>{DATA=window.PES_DATA;DATA?ok(DATA):ko(new Error('sin datos'))};
+      s.onerror=()=>{DP=null;s.remove();ko(new Error('No se ha podido cargar la plantilla del pesaje. Revisa la conexión y vuelve a probar.'))};document.head.appendChild(s)});
+    return DP;
+  }
+  const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+  async function pdfDe(p){
+    const D=await cargar(),{PDFDocument,StandardFonts,rgb}=PDFLib;
+    const pdf=await PDFDocument.create(),W=595.32,H=841.92,pg=pdf.addPage([W,H]);
+    pdf.setTitle('Informe de pesada '+[p.marca,p.bastidor].filter(Boolean).join(' '));pdf.setAuthor('');pdf.setCreator('App COP');pdf.setProducer('App COP');
+    const R=await pdf.embedFont(StandardFonts.Helvetica),B=await pdf.embedFont(StandardFonts.HelveticaBold),negro=rgb(0,0,0);
+    const txt=(t,x,top,f,s)=>pg.drawText(t,{x,y:H-top-s*0.905,size:s,font:f,color:negro}); // «top» como en Word: arriba de la línea
+    const ancho=(t,f,s)=>f.widthOfTextAtSize(t,s);
+    const ML=85.1,MR=510.3;
+    const logo=await pdf.embedJpg(b64(D.logo));pg.drawImage(logo,{x:85,y:H-70,width:148,height:35});
+    pg.drawRectangle({x:83.7,y:H-77.4,width:428.1,height:0.5,color:negro});
+    txt('GMR Homologaciones',MR-ancho('GMR Homologaciones',B,16),79.5,B,16);
+    txt('INFORME DE PESADA',(W-ancho('INFORME DE PESADA',B,26))/2,105,B,26);
+    // párrafo como en Word: 1.ª línea con marca y bastidor en negrita (justificada), 2.ª las básculas
+    const linea=(ws,top,just)=>{const hueco=MR-ML,w10=ws.reduce((t,x)=>t+ancho(x.w,x.f,10),0),e10=ancho(' ',R,10);
+      const z=Math.min(10,10*hueco/(w10+e10*0.6*(ws.length-1))); // si no cabe (marca larga), la letra un poco más pequeña, en la misma línea
+      const sz=w10*z/10,esp=e10*z/10,g=just&&ws.length>1?Math.max(esp*0.6,(hueco-sz)/(ws.length-1)):esp;
+      let x=ML;for(const w of ws){pg.drawText(w.w,{x,y:H-top-9.05,size:z,font:w.f,color:negro});x+=ancho(w.w,w.f,z)+g}};
+    const pal=(t,f)=>t.split(' ').filter(Boolean).map(w=>({w,f}));
+    const l1=[...pal('SGS ha realizado el pesaje del vehículo marca',R),...pal(p.marca||'-',B),...pal('N.º de bastidor',R),{w:(p.bastidor||'-')+',',f:B}];
+    linea(l1,156.5,true);linea(pal(FIJO.basculas,R),168.4,false);
+    const top=190.5;txt('Resultando las siguientes taras por eje y totales:',ML,top,R,10);
+    // tabla: siempre 1.º, 2.º y 3.º eje (con «-» si no hay) y los que pasen de 3
+    const filas=[];const n=Math.max(3,p.ejes.length);
+    for(let i=0;i<n;i++){const e=p.ejes[i];filas.push([`Tara ${i+1}º eje (kg)`,e&&e.kg!=null?miles(e.kg):'-'])}
+    filas.push(['Tara total (kg)',miles(total(p))]);
+    const T0=210,X0=85.35,X1=297.75,X2=510.1,RH=35;let y=T0;
+    const raya=(x0,y0,x1,y1)=>pg.drawLine({start:{x:x0,y:H-y0},end:{x:x1,y:H-y1},thickness:0.5,color:negro});
+    filas.forEach(([l,v],k)=>{const h=k===filas.length-1?36:RH;raya(X0,y,X2,y);
+      txt(l,(X0+X1-ancho(l,B,10))/2,y+(h-10)/2,B,10);txt(v,(X1+X2-ancho(v,B,10))/2,y+(h-10)/2,B,10);
+      raya(X0,y,X0,y+h);raya(X1,y,X1,y+h);raya(X2,y,X2,y+h);y+=h});
+    raya(X0,y,X2,y);
+    // foto(s) del ticket, centradas en el hueco (en el ejemplo: 156 × 207 pt)
+    const fT=y+32,fH=Math.max(150,207-(n-3)*35),fW=MR-ML;
+    if(p.fotosTicket.length){
+      const ims=[];for(const b of p.fotosTicket)ims.push(await pdf.embedJpg(new Uint8Array(await b.arrayBuffer())));
+      const gap=8;let k=fH/Math.max(...ims.map(i=>i.height));let tw=ims.reduce((s,i)=>s+i.width*k,0)+gap*(ims.length-1);
+      if(tw>fW){k*=(fW-gap*(ims.length-1))/(tw-gap*(ims.length-1));tw=fW}
+      let x=(W-tw)/2;for(const im of ims){const w=im.width*k,h=im.height*k;pg.drawImage(im,{x,y:H-fT-h,width:w,height:h});x+=w+gap}
+    }
+    // observaciones (las casillas como ☐ / ☒ de Word)
+    let o=fT+fH+11;
+    const caja=(x,top,on)=>{const q=7.4,x0=x+1.2,yb=H-top-9.05-0.7;pg.drawRectangle({x:x0,y:yb,width:q,height:q,borderColor:negro,borderWidth:0.45});
+      if(on){const m=1.3;pg.drawLine({start:{x:x0+m,y:yb+m},end:{x:x0+q-m,y:yb+q-m},thickness:0.5,color:negro});pg.drawLine({start:{x:x0+m,y:yb+q-m},end:{x:x0+q-m,y:yb+m},thickness:0.5,color:negro})}};
+    txt('Observaciones:',ML,o,R,10);o+=21;
+    txt('Conductor:',120.5,o,R,10);txt('SI',191,o,R,10);caja(201.5,o,p.conductor==='si');txt('NO',262,o,R,10);caja(278,o,p.conductor==='no');o+=22;
+    txt('Depósito:',120.5,o,R,10);
+    [[191,217.6],[262,276.7],[333,347.6],[404,418.4],[475,499.7]].forEach(([xt,xc],k)=>{txt(DEP[k][1],xt,o,R,10);caja(xc,o,p.deposito===DEP[k][0])});o+=21;
+    txt('Otros:',120.5,o,R,10);if(norm(p.otros))txt(norm(p.otros),164,o,R,10);o+=20;
+    txt('Técnico:  '+FIJO.tecnico,120.5,o,R,10);o+=21;
+    if(sello()){const se=await pdf.embedJpg(b64(sello()));pg.drawImage(se,{x:412,y:H-o-82,width:81,height:79})}
+    txt(`Responsable:  ${FIJO.responsable}, ${FIJO.lugar}, a ${fechaLarga(p.fecha)||'___ de __________ de ____'}.`,ML,o,R,10);
+    return new Blob([await pdf.save()],{type:'application/pdf'});
+  }
+  async function crear(){
+    if(!P)return;guardarYa();const p=P;
+    const falta=[!p.marca&&'la marca',!p.bastidor&&'el bastidor',!p.ejes.some(e=>e.kg!=null)&&'los pesos',!p.conductor&&'si llevaba conductor',!p.deposito&&'el depósito',!sello()&&'el sello (ponlo en «Tus pesajes»)'].filter(Boolean);
+    showMsg('Preparando el PDF…');
+    let blob;try{blob=await pdfDe(p)}catch(e){showMsg('No se pudo preparar el PDF: '+(e&&e.message||e),true);return}
+    $('#msg').hidden=true;p.pdf=true;guardarYa();
+    const cl=x=>(x||'').replace(/[\\/:*?"<>|]+/g,'.').replace(/\s+/g,'_');
+    const name=`pesaje_${cl(p.marca.toLowerCase())||'vehiculo'}_${cl(p.bastidor)}.pdf`.replace(/_+/g,'_').replace('_.pdf','.pdf');
+    const subject=`PESAJE ${p.marca||'VEHÍCULO'} ${p.bastidor}`.trim();
+    const body=['INFORME DE PESADA','Marca: '+p.marca,'Nº de bastidor: '+p.bastidor,...p.ejes.map((e,i)=>`Tara ${i+1}º eje: ${miles(e.kg)} kg`),'Tara total: '+miles(total(p))+' kg',
+      'Fecha del pesaje: '+fechaCorta(p.fecha),'','PDF adjunto: '+name].join('\n');
+    const L={blob,name,subject,body,pdf:true,mime:'application/pdf'};
+    ask('PDF listo',`<p><b>${esc(name)}</b></p>${falta.length?`<p class="hint" style="color:var(--bad)">Falta ${esc(falta.join(', '))}.</p>`:''}<p class="hint">Por correo va adjunto, con el asunto «${esc(subject)}».</p>`,
+      [['Solo guardar','',()=>saveWord(L)],['Enviar por correo','primary',()=>sendWord(L)]]);
+  }
+  return {abrirLista,selloDePdf,pdfDe,ponTicket,ponBast,ticketDeLineas,get P(){return P},set P(v){P=v},pintar};
 })();
 </script>
 </body></html>
