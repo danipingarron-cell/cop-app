@@ -2452,21 +2452,36 @@ function plEditar(p,leido){
 const PL_PROMPT=`Es el plano de un camión carrozado (vista lateral con cotas en mm y, a veces, una tabla de datos técnicos). Lee las cotas y devuelve solo JSON:
 {"modelo":"modelo del equipo o del vehículo que pone el cajetín, p. ej. SY45 RZ5-160","ref":"número del plano","vd":voladizo delantero (del frontal del vehículo al centro del primer eje),"ejes":[distancia entre ejes consecutivos en orden 1-2, 2-3, 3-4; si una cota abarca varios ejes (p. ej. del 1.º al 3.º), réstale las que ya tengas],"vt":voladizo trasero (del último eje a la parte de atrás),"lt":longitud total,"an":anchura total,"al":altura total,"tara":peso total del vehículo en kg}
 Solo números, sin unidades ni puntos de miles; null si no está. No inventes nada.`;
+const PL_TROZOS=`
+La 1.ª imagen es el plano entero; las demás son trozos ampliados del mismo plano, de izquierda a derecha y de arriba abajo, solapados.
+Usa el plano entero para saber qué mide cada cota y los trozos para leer bien las cifras (en la letra del plano un 7 se parece a un 1).
+Las cotas de los trozos no son medidas distintas: son las mismas del plano entero.`;
 function plElegir(){openPicker('coc');$('#dlgT').textContent='Plano del carrocero (PDF o foto)';PICK.onFiles=fs=>plLeer(fs[0])}
-async function plImagen(f){
-  if(!/pdf$/i.test(f.type)&&!/\.pdf$/i.test(f.name))return f;
-  const lib=await pdfLib(),pdf=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
-  let c;if(typeof paginaCanvas==='function')c=await paginaCanvas(pdf,1,2400);
-  else{const pg=await pdf.getPage(1),v0=pg.getViewport({scale:1}),vp=pg.getViewport({scale:2400/Math.max(v0.width,v0.height)});c=document.createElement('canvas');c.width=Math.ceil(vp.width);c.height=Math.ceil(vp.height);await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise}
-  return await new Promise(r=>c.toBlob(r,'image/jpeg',0.9));
+// lo que se manda al lector: el plano entero y, por si la letra pequeña no se lee bien (25 oct: en la tabla un 7 parecía un 1), el
+// plano en 6 trozos ampliados (3 × 2, solapados). Del PDF cada trozo se dibuja aparte a más resolución, sin hacer un lienzo enorme.
+async function plImagenes(f){
+  const lienzo=(w,h)=>{const c=document.createElement('canvas');c.width=Math.max(1,Math.round(w));c.height=Math.max(1,Math.round(h));const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);return c};
+  const trozos=(W,H,dibuja)=>{const out=[],C=W>=H?3:2,R=W>=H?2:3,ov=.08,tw=W/C,th=H/R;
+    for(let r=0;r<R;r++)for(let c=0;c<C;c++){const x0=Math.max(0,c*tw-ov*tw),y0=Math.max(0,r*th-ov*th);out.push(dibuja(x0,y0,Math.min(W-x0,tw*(1+2*ov)),Math.min(H-y0,th*(1+2*ov))))}
+    return out};
+  if(!/pdf$/i.test(f.type)&&!/\.pdf$/i.test(f.name)){ // foto: los trozos salen de la foto (no ganan más detalle del que tiene)
+    const c0=typeof fotoCanvas==='function'?await fotoCanvas(f):null;if(!c0)return [f];
+    return [{img:c0,max:1600},...trozos(c0.width,c0.height,(x0,y0,w,h)=>{const c=lienzo(w,h);c.getContext('2d').drawImage(c0,-x0,-y0);return {img:c,max:1600}})]}
+  const lib=await pdfLib(),pdf=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise,pg=await pdf.getPage(1),v0=pg.getViewport({scale:1});
+  const dibuja=async(x0,y0,w,h)=>{const k=1600/Math.max(w,h),vp=pg.getViewport({scale:k}),c=lienzo(w*k,h*k);
+    await pg.render({canvasContext:c.getContext('2d'),viewport:vp,transform:[1,0,0,1,-x0*k,-y0*k]}).promise;return {img:c,max:1600}};
+  const out=[await dibuja(0,0,v0.width,v0.height)];
+  for(const t of trozos(v0.width,v0.height,(x0,y0,w,h)=>[x0,y0,w,h]))out.push(await dibuja(...t));
+  return out;
 }
 async function plLeer(f){
   if(!f)return;const st=state;
   try{
     const google=typeof FotoPunto!=='undefined'&&FotoPunto.iaClave(),claude=!google&&typeof SAMPLE!=='undefined'&&SAMPLE;
     if(!google&&!claude){plEditar(state.plano||{v:{}});showMsg('Para leer el plano hace falta el lector de Google (la clave que pusiste para las fotos). Mientras, escribe las medidas a mano.',true);return}
-    showMsg('Leyendo el plano…');const img=await plImagen(f);
-    const o=google?(await FotoPunto.iaPedir(img,PL_PROMPT,t=>showMsg(t))).o:await SAMPLE.json(PL_PROMPT,{images:[img]});
+    showMsg('Leyendo el plano…');const imgs=await plImagenes(f),pr=PL_PROMPT+(imgs.length>1?PL_TROZOS:'');
+    const blob=c=>new Promise(r=>c.toBlob(r,'image/jpeg',0.9));
+    const o=google?(await FotoPunto.iaPedir(imgs,pr,t=>showMsg(t),{ms:60000})).o:await SAMPLE.json(pr,{images:await Promise.all(imgs.map(x=>x.img?blob(x.img):x))});
     if(state!==st)return;$('#msg').hidden=true;
     const n=x=>{const v=plNum(x);return isNaN(v)||v<=0?undefined:v},ej=Array.isArray(o.ejes)?o.ejes:[];
     const v={vd:n(o.vd),e12:n(ej[0]),e23:n(ej[1]),e34:n(ej[2]),vt:n(o.vt),lt:n(o.lt),an:n(o.an),al:n(o.al),tara:n(o.tara)};
@@ -3377,10 +3392,64 @@ async function enderezar(fo){ // los lienzos (una o dos páginas) que se pasan a
   const x=Hoja.corte(r),hs=x?[Hoja.recortar(r,0,x),Hoja.recortar(r,x,r.width)]:[r];
   hs.forEach(h=>h.escaneo=true);return hs;
 }
+// ---------- COC escaneado o en foto leído por Google (25 oct, Daniel: «Prepara las dos») ----------
+let COC_GOOGLE=null,COC_N=0;
+const cocGoogleSi=()=>typeof FotoPunto!=='undefined'&&!!FotoPunto.iaClave()&&navigator.onLine!==false;
+async function ocrPagina(h,pg){ // el lector del móvil, una página ya derecha
+  // escaneo enderezado: limpio, sin la trama de puntos, y con el OCR que busca texto suelto (los datos van lejos de su etiqueta)
+  return h.escaneo?await ocrTrozos(Hoja.sinMotas(FotoPrep.escaneo(h)),pg,'11'):await ocrTrozos(FotoPrep.preparar(h),pg);
+}
+function cocMitades(h){ // la página entera y sus mitades de arriba y de abajo, solapadas y ampliadas (la letra pequeña llega nítida)
+  const corta=(y0,y1)=>{const c=document.createElement('canvas');c.width=h.width;c.height=Math.round(y1-y0);c.getContext('2d').drawImage(h,0,-Math.round(y0));return {img:c,max:2000}};
+  return [{img:h,max:1600},corta(0,h.height*.53),corta(h.height*.47,h.height)];
+}
+async function cocGoogle(pags,items){
+  const ps=pags.slice(0,8),imgs=ps.flatMap(cocMitades),txt=items.map(i=>i.s).join(' ').trim();
+  const pr=COC_PROMPT+`
+
+Las imágenes son las páginas del COC, escaneadas o en foto (${ps.length}). De cada página van tres imágenes seguidas: la página entera y, ampliadas, su mitad de arriba y su mitad de abajo (solapadas). Usa la página entera para saber a qué punto pertenece cada dato y las mitades para leer bien las cifras y las letras (en el bastidor no confundas S con 5, B con 8, O con 0 ni I con 1).
+Si en lugar del COC es la ficha técnica (tarjeta ITV), saca los mismos datos de sus casillas con código (D.1, D.2, D.3, E, J, K, F.1, F.3, O.1…).
+Añade también la clave "dudas": una frase corta con los datos que no se lean seguros ("" si ninguno).`+(txt?`
+
+Además, texto de los PDF que sí lo traen:
+${txt.slice(0,20000)}`:'');
+  const {o}=await FotoPunto.iaPedir(imgs,pr,t=>showMsg(t),{ms:90000});
+  if(!o||typeof o!=='object'||Array.isArray(o))throw new Error('no ha devuelto los datos');
+  const dudas=String(o.dudas||'').trim();delete o.dudas;delete o.textos;
+  for(const k of Object.keys(o))if(o[k]===''||/^null$/i.test(String(o[k])))o[k]=null;
+  if(dudas)Object.defineProperty(o,'_dudas',{value:dudas,enumerable:false});
+  return o;
+}
+const cocNorm=v=>{const t=String(v||'').toUpperCase().replace(/[\s.,\-_/*]/g,''),m=t.match(/^(\d+)(KG|MM|L)?$/);return m?String(+m[1]):t};
+async function cocRepasar(n,pags,its0,g){ // el lector del móvil repasa lo que leyó Google y se marca lo que lee distinto
+  const linea=t=>{if(n!==COC_N)return;const d=$('#dlg');let e=d&&!d.hidden&&d.querySelector('[data-cocrep]');if(e)e.textContent=t};
+  const items=[...its0];let pg=0;
+  try{
+    for(let k=0;k<pags.length;k++){if(n!==COC_N)return;
+      OCR_AVISO=m=>{if(m.status==='recognizing text')linea(`El lector del móvil lo está repasando: página ${k+1} de ${pags.length}, ${Math.round(m.progress*100)} %…`);
+        else if(/load|initializ/i.test(m.status||''))linea('El lector del móvil lo está repasando…')};
+      items.push(...await ocrPagina(pags[k],++pg))}
+  }catch(e){linea('El lector del móvil no ha podido repasarlo.');return}finally{OCR_AVISO=null}
+  if(n!==COC_N)return;
+  const l=CocLector.esFichaC(items)?CocLector.fichaC(items):CocLector.leer(items),difs=[],igual=[];
+  for(const [key,name] of cocTargets()){const a=cocValue(g,key),b=cocValue(l,key);if(!a||!b||/^null$/i.test(b))continue;
+    (cocNorm(a)===cocNorm(b)?igual:difs).push({name,a,b})}
+  const d=$('#dlg'),abierto=d&&!d.hidden&&d.querySelector('[data-cocrep]');
+  if(abierto){
+    abierto.innerHTML=difs.length?`<b>El lector del móvil lee distinto ${difs.length===1?'1 dato':difs.length+' datos'}</b> (marcados con ⚠ abajo): míralos en el COC.${igual.length?` Coinciden ${igual.length}.`:''}`
+      :`El lector del móvil lo ha repasado: ${igual.length?`coinciden ${igual.length===1?'el dato':'los '+igual.length+' datos'} que ha podido leer`:'no ha podido leer ningún dato para comparar'}.`;
+    abierto.classList.toggle('mal',!!difs.length);
+    // la fila de cada dato: «<b>Nombre:</b> valor» (Rellenar desde el COC) o «Nombre: <b>valor</b>» (COC leído, sin COP abierto)
+    const filas=[...d.querySelectorAll('#dlgB label, #dlgB ul.cocl li')];
+    for(const x of difs){const f=filas.find(e=>e.textContent.trim().startsWith(x.name+':'));
+      if(f)f.insertAdjacentHTML('beforeend',`<span class="cocdif">⚠ el móvil lee «${esc(x.b)}»</span>`)}
+  }else if(difs.length)showMsg(`Ojo: al repasar el COC, el lector del móvil lee distinto ${difs.map(x=>`${x.name} («${x.b}»; Google: «${x.a}»)`).join(', ')}. Compruébalo en el COC.`,true);
+}
+document.head.insertAdjacentHTML('beforeend','<style>.cocdif{display:block;margin-top:2px;color:var(--warn);font-weight:700;font-size:13px}.pickno.cocrep{background:var(--panel);border:1px dashed var(--line);font-size:13px}.pickno.cocrep.mal{border:1.5px solid var(--warn);color:var(--warn)}</style>');
 readCoc=async function(files){
   const btn=$('#cocbtn');btn.classList.add('busy');
   const nombre=files.length>1?files.length+' archivos':files[0].name;
-  showMsg('Leyendo el COC…');COC_FOTO=false;COC_HOJA=false;COC_FICHA=false;
+  showMsg('Leyendo el COC…');COC_FOTO=false;COC_HOJA=false;COC_FICHA=false;COC_GOOGLE=null;
   try{
     const items=[];let pg=0,nf=0;
     const fotos=[]; // lienzos para el OCR
@@ -3397,14 +3466,20 @@ readCoc=async function(files){
     if(fotos.length){
       COC_FOTO=true;
       let parte='';
-      OCR_AVISO=m=>{if(m.status==='recognizing text')showMsg(`Leyendo la foto ${nf} de ${fotos.length}${parte}… ${Math.round(m.progress*100)} %`);
+      OCR_AVISO=m=>{if(m.status==='recognizing text')showMsg(`Leyendo ${parte||'la foto'}… ${Math.round(m.progress*100)} %`);
         else if(/load|initializ/i.test(m.status||''))showMsg('Preparando el lector de fotos (la primera vez se descarga, unos segundos)…')};
       var primera=document.createElement('canvas');primera.width=fotos[0].c.width;primera.height=fotos[0].c.height;primera.getContext('2d').drawImage(fotos[0].c,0,0); // por si hay que repasarla
-      for(const fo of fotos){nf++;parte='';showMsg(`Leyendo la foto ${nf} de ${fotos.length}…`);const av=OCR_AVISO;
-        const hs=await enderezar(fo);OCR_AVISO=av;
-        for(let k=0;k<hs.length;k++){if(hs.length>1)parte=` (página ${k+1} de ${hs.length})`;const h=hs[k];
-          // escaneo enderezado: limpio, sin la trama de puntos, y con el OCR que busca texto suelto (los datos van lejos de su etiqueta)
-          items.push(...(h.escaneo?await ocrTrozos(Hoja.sinMotas(FotoPrep.escaneo(h)),++pg,'11'):await ocrTrozos(FotoPrep.preparar(h),++pg)))}}
+      // cada hoja derecha y, si trae dos páginas, partida (las páginas que se leen)
+      const pags=[];for(const fo of fotos){nf++;showMsg(`Mirando la foto ${nf} de ${fotos.length}…`);const av=OCR_AVISO;pags.push(...await enderezar(fo));OCR_AVISO=av}
+      // con la clave de Google (la de las fotos) lo lee Google, más rápido y más fiable que el lector del móvil; el del móvil lo
+      // repasa después y marca lo que lee distinto. Sin clave, sin internet o si Google falla, lo lee el móvil como antes.
+      if(cocGoogleSi()){const n=++COC_N;
+        showMsg(`Leyendo el COC con Google (${pags.length} ${pags.length>1?'páginas':'página'})…`);
+        let g=null,err=null;try{g=await cocGoogle(pags,items)}catch(e){err=e}
+        if(g&&CocLector.cuantos(g)){COC_GOOGLE=g;showCoc(g,nombre);$('#msg').hidden=true;cocRepasar(n,pags,items,g);return}
+        showMsg(`${err?'Google no ha podido leerlo ('+((err&&err.message)||err)+')':'Google no ha sacado datos'}. Lo leo con el lector del móvil…`);
+        await new Promise(r=>setTimeout(r,1200))}
+      nf=0;for(const h of pags){nf++;parte=pags.length>1?`la página ${nf} de ${pags.length}`:'la foto';items.push(...await ocrPagina(h,++pg))}
       OCR_AVISO=null;
     }
     // la ficha técnica (tarjeta ITV) en lugar del COC: trae casi los mismos datos, con sus códigos (D.1, E, F.1…)
@@ -3434,7 +3509,8 @@ readCoc=async function(files){
 };
 // en los paneles del COC leído de una foto, avisar de que hay que revisar cada dato
 const _askI=ask;ask=function(t,h,b){
-  if(COC_FOTO&&/^(COC leído|Rellenar desde el COC)$/.test(t))h='<p class="pickno"><b>Leído de una foto:</b> comprueba cada dato antes de rellenar; desmarca los que estén mal. En el bastidor se confunden a veces la S y el 5, la B y el 8.</p>'+h;
+  if(COC_GOOGLE&&/^(COC leído|Rellenar desde el COC)$/.test(t))h=`<p class="pickno"><b>Leído por Google</b> (con tu clave). Comprueba cada dato con el COC.${COC_GOOGLE._dudas?` Google tiene dudas: ${esc(COC_GOOGLE._dudas)}`:''}</p><p class="pickno cocrep" data-cocrep>El lector del móvil lo va a repasar y marcará con ⚠ lo que lea distinto…</p>`+h;
+  else if(COC_FOTO&&/^(COC leído|Rellenar desde el COC)$/.test(t))h='<p class="pickno"><b>Leído de una foto:</b> comprueba cada dato antes de rellenar; desmarca los que estén mal. En el bastidor se confunden a veces la S y el 5, la B y el 8.</p>'+h;
   if(COC_FICHA&&/^(COC leído|Rellenar desde el COC)$/.test(t))h='<p class="pickno"><b>Es la ficha técnica (tarjeta ITV), no el COC:</b> trae casi los mismos datos. El tipo, la variante y la versión salen de la casilla D.2.</p>'+h;
   if(COC_HOJA&&/^(COC leído|Rellenar desde el COC)$/.test(t))h='<p class="pickno"><b>No es el COC:</b> es la hoja de emisiones de CO2. Solo trae el bastidor, la categoría, la MMTA y el modelo; lo demás tiene que venir del COC.</p>'+h;
   return _askI(t,h,b);
@@ -3461,7 +3537,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 25 oct, 22:42';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 25 oct, 23:56';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -3639,15 +3715,21 @@ ${ins.map((x,k)=>{const n=nombreDe(x),t=info(x).pt;return `${k+1}. ${n}${t&&!n.i
 Contraseñas: la E (o e) con el número del círculo o rectángulo, un espacio y el código tal cual, conservando * y - (ej.: "E11 73R-011025*3", "E20 10R-05 4372", "e9 30003"). Si hay varias, en la casilla va la que corresponde a lo que pide la casilla y las demás en "textos".
 Si la foto es la placa del fabricante del vehículo (la que lleva bastidor, contraseña y masas en kg), rellena también "placa"; si no, "placa": null. En esas placas la 1.ª masa es la del vehículo, la 2.ª la del conjunto y las que empiezan por "1-", "2-"… son las de cada eje. Masas solo con el número de kg.
 Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":["los demás textos que se lean en la foto, cortos"],"dudas":"","placa":{"marca":"","bastidor":"","contrasena":"","mma":"","mmtc":"","ejes":[""]}}`;
-  async function iaPedir(blob,prompt,aviso){ // foto + instrucciones → el JSON que devuelve Google (también lo usa el pesaje)
-    const clave=iaClave();let modelo=lsG('ia-modelo');
+  // foto + instrucciones → el JSON que devuelve Google (también lo usan el pesaje, el plano de Putzmeister y el COC escaneado).
+  // blob puede ser una lista de fotos o lienzos, o de {img, max}: la hoja entera y trozos ampliados de ella (25 oct: así le llega
+  // nítida la letra pequeña). op = {max: lado largo de cada imagen (1600), ms: tiempo máximo por lector (25 s)}
+  async function iaPedir(blob,prompt,aviso,op){
+    op=op||{};const clave=iaClave();let modelo=lsG('ia-modelo');
     if(!modelo){modelo=await iaElegir(clave);lsS('ia-modelo',modelo)}
-    const c0=await fotoCanvas(blob),k=Math.min(1,1600/Math.max(c0.width,c0.height));let c=c0;
-    if(k<1){c=document.createElement('canvas');c.width=Math.round(c0.width*k);c.height=Math.round(c0.height*k);c.getContext('2d').drawImage(c0,0,0,c.width,c.height)}
-    const parts=[{text:prompt},{inline_data:{mime_type:'image/jpeg',data:c.toDataURL('image/jpeg',0.88).split(',')[1]}}],cfg={temperature:0,responseMimeType:'application/json'};
+    const imgs=[];
+    for(const it of [].concat(blob)){const b=it&&it.img||it,mx=it&&it.max||op.max||1600;
+      const c0=b instanceof HTMLCanvasElement?b:await fotoCanvas(b),k=Math.min(1,mx/Math.max(c0.width,c0.height));let c=c0;
+      if(k<1){c=document.createElement('canvas');c.width=Math.round(c0.width*k);c.height=Math.round(c0.height*k);c.getContext('2d').drawImage(c0,0,0,c.width,c.height)}
+      imgs.push({inline_data:{mime_type:'image/jpeg',data:c.toDataURL('image/jpeg',0.88).split(',')[1]}})}
+    const parts=[{text:prompt},...imgs],cfg={temperature:0,responseMimeType:'application/json'};
     // los Gemini 3 piensan antes de contestar: para leer una placa basta poco y tarda mucho menos
-    const leer=async m=>{try{return await gen(clave,m,parts,/gemini-3/.test(m)?{...cfg,thinkingConfig:{thinkingLevel:'low'}}:cfg)}
-      catch(e){if(e.status===400&&/thinking/i.test(e.message))return gen(clave,m,parts,cfg);throw e}};
+    const leer=async m=>{try{return await gen(clave,m,parts,/gemini-3/.test(m)?{...cfg,thinkingConfig:{thinkingLevel:'low'}}:cfg,op.ms)}
+      catch(e){if(e.status===400&&/thinking/i.test(e.message))return gen(clave,m,parts,cfg,op.ms);throw e}};
     const duro=e=>e instanceof TypeError||e.status===429||malaClave(e);
     let j;
     try{try{j=await leer(modelo)}
