@@ -3537,7 +3537,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 25 oct, 23:56';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 26 oct, 00:19';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -3624,6 +3624,16 @@ const FotoPunto=(()=>{
   }
   // qué buscar en la foto para cada casilla
   function clase(i){const x=info(i),t=x.lab+' '+(pal()?'':x.pt);
+    // 25 oct (Daniel: en el general lee peor que en Palfinger): pedir a cada casilla justo lo que va en ella
+    if(/ALUMBRADO/.test(x.sec)){ // contraseñas de las luces y de las bandas, como las escribe Daniel en sus COP
+      if(pal()?/^10\.3\.\d\.3$/.test(x.pn):en(x.pn,'7.11','7.18'))return 'banda';
+      if(pal()?/contrase/i.test(x.lab)&&/^10\.[14]\./.test(x.pn):/^7\.(\d+)$/.test(x.pn)&&x.pn!=='7.12')return 'luz'}
+    if(/categor/i.test(x.lab))return 'categoria';
+    if(/denominaci/i.test(x.lab))return 'denom';
+    if(/^variante$/i.test(x.lab))return 'variante';
+    if(/^versi.n$/i.test(x.lab))return 'version';
+    if(/homologaci.n completado/i.test(x.lab))return 'ultfase';
+    if(/^corta, media/i.test(x.lab))return 'cabina';
     if(/bastidor/i.test(t))return 'vin';
     if(/^neum/i.test(x.lab))return 'neum';
     if(/índice carga/i.test(x.lab))return 'indice';
@@ -3707,12 +3717,19 @@ const FotoPunto=(()=>{
   const QUE={contr:'contraseña de homologación',vin:'número de bastidor (VIN, 17 caracteres)',neum:'medida del neumático, como "315/80R 22.5"',
     indice:'índice de carga del neumático, solo el número (p. ej. "156")',maquina:'modelo de la máquina o grúa (p. ej. "PK 23500")',serie:'número de serie',
     D:'valor D en kN, solo el número',U:'valor U en t, solo el número',clase:'clase',carga:'carga máxima con su unidad',marca:'marca o fabricante (nombre o logotipo)',
-    tipo:'tipo o modelo',texto:'el texto principal'};
+    tipo:'tipo o modelo',texto:'el texto principal',
+    luz:'contraseña del piloto o catadióptrico como se escribe en el COP: la E con su número y el número de homologación, sin las letras de la función ni su serie (R 02, IA 02, S1, AR, F, 2a…). Ej.: "E20 R 02 19011" → "E20 19011"; "E20 IA 02 19009" → "E20 19009"; la luz de matrícula "E9 00 4127" se queda "E9 00 4127"',
+    banda:'contraseña de la banda o lámina reflectante: solo el código 104R con su número, sin la E del país (ej.: "104R-000001")',
+    categoria:'categoría del vehículo: N1, N2, N3, O1, O2, O3 u O4 (con G si es todoterreno, como "N3G"); si no se ve, ""',
+    denom:'denominación comercial: el nombre comercial del modelo (como "Canter" o "XD 450 FAN"), no la marca; si no se ve, ""',
+    variante:'código de la variante (no el del tipo ni el de la versión)',version:'código de la versión (no el del tipo ni el de la variante)',
+    ultfase:'contraseña de homologación de la última fase (la del carrocero), no la del chasis; si no se ve, ""',
+    cabina:'tipo de cabina: CORTA, MEDIA, CON LITERA o DOBLE'};
   const iaPrompt=ins=>`Eres el lector de una inspección de conformidad de producción (COP) de vehículos industriales. En la foto hay una pieza o una placa: piloto, catadióptrico, banda reflectante, protección lateral o trasera, guardabarros, neumático, placa del fabricante, de la grúa o del enganche.
 Lee las marcas exactamente como están, aunque estén en relieve, troqueladas con puntos, con reflejos, giradas o en espejo (léelas al derecho). No inventes nada: si un dato no se ve, déjalo "" y explícalo en "dudas"; si un carácter no es seguro, dilo en "dudas".
 Hay que rellenar estas casillas, en este orden:
 ${ins.map((x,k)=>{const n=nombreDe(x),t=info(x).pt;return `${k+1}. ${n}${t&&!n.includes(t)?' ('+t+')':''}: ${QUE[clase(x)]||QUE.texto}`}).join('\n')}
-Contraseñas: la E (o e) con el número del círculo o rectángulo, un espacio y el código tal cual, conservando * y - (ej.: "E11 73R-011025*3", "E20 10R-05 4372", "e9 30003"). Si hay varias, en la casilla va la que corresponde a lo que pide la casilla y las demás en "textos".
+Contraseñas: la E (o e) con el número del círculo o rectángulo, un espacio y el código tal cual, conservando * y - (ej.: "E11 73R-011025*3", "E2 58R-0319194", "E9 30003"); en pilotos y bandas, como diga su casilla. Si hay varias, en la casilla va la que corresponde a lo que pide la casilla y las demás en "textos".
 Si la foto es la placa del fabricante del vehículo (la que lleva bastidor, contraseña y masas en kg), rellena también "placa"; si no, "placa": null. En esas placas la 1.ª masa es la del vehículo, la 2.ª la del conjunto y las que empiezan por "1-", "2-"… son las de cada eje. Masas solo con el número de kg.
 Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":["los demás textos que se lean en la foto, cortos"],"dudas":"","placa":{"marca":"","bastidor":"","contrasena":"","mma":"","mmtc":"","ejes":[""]}}`;
   // foto + instrucciones → el JSON que devuelve Google (también lo usan el pesaje, el plano de Putzmeister y el COC escaneado).
@@ -3753,6 +3770,8 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
       if(cl==='indice'){const m=v.match(/\d{2,3}/);v=m?m[0]+'K':''} // Daniel: la letra de velocidad siempre K
       if((cl==='D'||cl==='U')&&v)v=v.replace(/[^\d.,]/g,'').replace('.',',');
       if(cl==='vin')v=v.replace(/[\s.\-]/g,'').toUpperCase();
+      if(cl==='banda')v=v.replace(/^[Ee]\s?\d{1,2}\s+(?=104R)/i,'');
+      if(cl==='categoria')v=v.toUpperCase();
       return v});
     return {val,lin:(o.textos||[]).map(x=>({t:norm(x),h:0})).filter(x=>x.t),dudas:norm(o.dudas),modelo,placa:o.placa&&typeof o.placa==='object'?o.placa:null};
   }
@@ -3798,7 +3817,10 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
   function proponer(cl,lin){
     const all=lin.map(l=>l.t).join('\n'),una=all.replace(/\n/g,' ');let m;
     switch(cl){
-      case 'contr':return contrasena(lin);
+      case 'contr':case 'luz':case 'ultfase':return contrasena(lin);
+      case 'banda':m=una.match(/104\s?R\s?-?\s?(\d{6})/i);return m?'104R-'+m[1]:'';
+      case 'categoria':m=una.match(/\b([NO][1-4]G?)\b/);return m?m[1]:'';
+      case 'cabina':m=una.match(/\b(CORTA|MEDIA|CON LITERA|DOBLE)\b/i);return m?m[1].toUpperCase():'';
       case 'vin':{for(const {t} of lin){const s=t.replace(/[\s.\-]/g,'').toUpperCase();m=s.match(/[A-HJ-NPR-Z0-9]{17}/);if(m)return m[0]}return ''}
       case 'neum':m=una.match(/(\d{3})\s*\/\s*(\d{2})\s*R\s*(\d{2}(?:[.,]\d)?)/i);return m?`${m[1]}/${m[2]}R ${m[3].replace(',','.')}`:'';
       case 'indice':{const s=una.replace(/(\d{3})\s*\/\s*(\d{2})\s*R\s*\d{2}(?:[.,]\d)?/ig,' ');
@@ -3832,7 +3854,12 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
       cb(b)};
     foto.click();
   }
-  function grupo(i){const r=i.closest('.row');return [...r.querySelectorAll('input[data-camfoto]')]}
+  function grupo(i){const r=i.closest('.row'),x=info(i);
+    // general: en «Identificación» cada fila del Word junta dos datos distintos (marca y bastidor, categoría y homologación…):
+    // la foto lee solo su casilla, como en Palfinger (si es la placa, los demás datos salen abajo en «También en la foto»);
+    // tipo, variante y versión sí van juntos
+    if(!pal()&&/^IDENTIFICACI/.test(x.sec)&&!/^(tipo|variante|versi.n)$/i.test(x.lab))return [i];
+    return [...r.querySelectorAll('input[data-camfoto]')]}
   function cerrar(r){const p=r.querySelector('.fotop');if(p){const im=p.querySelector('img');if(im&&im.src.startsWith('blob:'))URL.revokeObjectURL(im.src);p.remove()}}
   async function hacer(i,galeria){
     pedirFoto(async blob=>{
