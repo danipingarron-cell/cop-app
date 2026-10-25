@@ -3221,7 +3221,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 25 oct, 11:59';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 25 oct, 12:47';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -3833,17 +3833,75 @@ const Pesaje=(()=>{
     const f=document.createElement('canvas');f.width=c.width;f.height=c.height;const fx=f.getContext('2d');fx.fillStyle='#fff';fx.fillRect(0,0,f.width,f.height);fx.drawImage(c,0,0);
     return f.toDataURL('image/jpeg',0.92).split(',')[1];
   }
+  async function selloDePagina(file){ // si no se puede sacar la imagen del PDF: la página en dibujo, y el sello azul de la parte de abajo
+    const lib=await pdfLib(),pdf=await lib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise,c=await paginaCanvas(pdf,1,1800);
+    const y=Math.round(c.height*0.8),b=document.createElement('canvas');b.width=c.width;b.height=c.height-y;b.getContext('2d').drawImage(c,0,y,c.width,b.height,0,0,c.width,b.height);
+    return recorteSello(b).toDataURL('image/jpeg',0.92).split(',')[1];
+  }
   function pedirSello(){
-    const i=document.createElement('input');i.type='file';i.accept='application/pdf,.pdf';i.style.cssText='position:fixed;left:-9999px;opacity:0';document.body.appendChild(i);
+    const i=document.createElement('input');i.type='file';i.accept='application/pdf,.pdf,image/*';i.style.cssText='position:fixed;left:-9999px;opacity:0';document.body.appendChild(i);
     i.onchange=async()=>{const f=i.files&&i.files[0];i.remove();if(!f)return;
-      try{const b=await selloDePdf(f);localStorage.setItem(K_SELLO,b);showMsg('Sello guardado en este móvil: ya sale en los PDF.');P?pintar():abrirLista()}
+      try{const esPdf=/pdf/i.test(f.type)||/\.pdf$/i.test(f.name||'');showMsg('Buscando el sello…');
+        const b=esPdf?await selloDePdf(f).catch(()=>selloDePagina(f)):recorteSello(await fotoCanvas(f)).toDataURL('image/jpeg',0.92).split(',')[1];localStorage.setItem(K_SELLO,b);showMsg('Sello guardado en este móvil: ya sale en los PDF.');P?pintar():abrirLista()}
       catch(e){showMsg('No se ha podido sacar el sello: '+(e&&e.message||e),true)}};
     i.click();
   }
   const selloHtml=()=>sello()?`<div class="sello"><img alt="Sello" src="data:image/jpeg;base64,${sello()}"><span>Sello guardado en este móvil</span><button type="button" class="otra" data-psello>Cambiar</button></div>`
-    :`<div class="sello falta"><span><b>Falta el sello.</b> Ponlo una vez: elige un PDF de pesaje anterior y la app saca de él el sello. Se queda solo en este móvil.</span><button type="button" data-psello>Elegir PDF</button></div>`;
-  async function reducir(blob){ // lado largo 1600 px: se lee igual y el PDF no pesa
-    const c0=await fotoCanvas(blob),k=Math.min(1,1600/Math.max(c0.width,c0.height));let c=c0;
+    :`<div class="sello falta"><span><b>Falta el sello.</b> Ponlo una vez: elige un PDF de pesaje anterior (o una foto o captura donde se vea el sello) y la app lo saca de ahí. Se queda solo en este móvil.</span><button type="button" data-psello>Elegir archivo</button></div>`;
+  // ---------- recortes (en el móvil, sin internet) ----------
+  // mancha más grande de una máscara (4 vecinos), con sus huecos rellenos: el papel del ticket con el texto dentro, o el sello
+  function mancha(m,w,h){
+    const lab=new Int32Array(w*h),q=new Int32Array(w*h);let mejor=0,area=0,id=0;
+    for(let s=0;s<w*h;s++){if(!m[s]||lab[s])continue;id++;let a=0,n=0;q[n++]=s;lab[s]=id;
+      for(let k=0;k<n;k++){const i=q[k],x=i%w;a++;for(const j of [x>0?i-1:-1,x<w-1?i+1:-1,i-w,i+w])if(j>=0&&j<w*h&&m[j]&&!lab[j]){lab[j]=id;q[n++]=j}}
+      if(a>area){area=a;mejor=id}}
+    if(!mejor)return null;
+    const fuera=new Uint8Array(w*h);let n=0; // lo que no es la mancha y se toca desde el borde
+    for(let x=0;x<w;x++)for(const y of [0,h-1]){const i=y*w+x;if(lab[i]!==mejor&&!fuera[i]){fuera[i]=1;q[n++]=i}}
+    for(let y=0;y<h;y++)for(const x of [0,w-1]){const i=y*w+x;if(lab[i]!==mejor&&!fuera[i]){fuera[i]=1;q[n++]=i}}
+    for(let k=0;k<n;k++){const i=q[k],x=i%w;for(const j of [x>0?i-1:-1,x<w-1?i+1:-1,i-w,i+w])if(j>=0&&j<w*h&&!fuera[j]&&lab[j]!==mejor){fuera[j]=1;q[n++]=j}}
+    let x0=w,y0=h,x1=-1,y1=-1,t=0;const den=new Uint8Array(w*h);
+    for(let i=0;i<w*h;i++)if(!fuera[i]){den[i]=1;t++;const x=i%w,y=(i-x)/w;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+    return {den,area:t,x0,y0,x1,y1};
+  }
+  function pequena(c,max){const k=Math.min(1,max/Math.max(c.width,c.height)),w=Math.max(1,Math.round(c.width*k)),h=Math.max(1,Math.round(c.height*k));
+    const s=document.createElement('canvas');s.width=w;s.height=h;const x=s.getContext('2d');x.drawImage(c,0,0,w,h);return {d:x.getImageData(0,0,w,h).data,w,h,k:c.width/w}}
+  // ticket (lo pidió Daniel, 25 oct): solo el papel, lo de alrededor en blanco. El papel es lo claro (umbral de Otsu)
+  function recorteTicket(c){
+    const {d,w,h,k}=pequena(c,320),L=new Uint8Array(w*h),hi=new Float64Array(256);
+    for(let i=0;i<w*h;i++){const v=(d[i*4]*77+d[i*4+1]*150+d[i*4+2]*29)>>8;L[i]=v;hi[v]++}
+    let sum=0;for(let v=0;v<256;v++)sum+=v*hi[v];let sB=0,wB=0,mx=0,t=128;
+    for(let v=0;v<256;v++){wB+=hi[v];if(!wB)continue;const wF=w*h-wB;if(!wF)break;sB+=v*hi[v];const mB=sB/wB,mF=(sum-sB)/wF,b=wB*wF*(mB-mF)*(mB-mF);if(b>mx){mx=b;t=v}}
+    const m=new Uint8Array(w*h);for(let i=0;i<w*h;i++)m[i]=L[i]>t?1:0;
+    const r=mancha(m,w,h);if(!r||r.area<w*h*0.12||r.area>w*h*0.93)return c; // no se distingue el papel: se deja la foto entera
+    return pegar(c,r,w,h,k,0.004);
+  }
+  function pegar(c,r,w,h,k,marg){ // la mancha a tamaño real, con lo de fuera en blanco
+    const mk=document.createElement('canvas');mk.width=w;mk.height=h;const mx=mk.getContext('2d'),id=mx.createImageData(w,h);
+    for(let i=0;i<w*h;i++){id.data[i*4+3]=r.den[i]?255:0}mx.putImageData(id,0,0);
+    const g=Math.round(Math.max(c.width,c.height)*marg),X=Math.max(0,Math.floor(r.x0*k)-g),Y=Math.max(0,Math.floor(r.y0*k)-g),
+      W=Math.min(c.width,Math.ceil((r.x1+1)*k)+g)-X,H=Math.min(c.height,Math.ceil((r.y1+1)*k)+g)-Y;
+    const o=document.createElement('canvas');o.width=W;o.height=H;const ox=o.getContext('2d');
+    ox.drawImage(c,X,Y,W,H,0,0,W,H);ox.globalCompositeOperation='destination-in';ox.imageSmoothingEnabled=true;ox.drawImage(mk,X/k,Y/k,W/k,H/k,0,0,W,H);
+    ox.globalCompositeOperation='destination-over';ox.fillStyle='#fff';ox.fillRect(0,0,W,H);return o;
+  }
+  // sello desde una foto o captura: la mancha azul más grande (el aro del sello, juntando lo que está cerca)
+  function recorteSello(c){
+    const {d,w,h,k}=pequena(c,360),m=new Uint8Array(w*h);
+    for(let i=0;i<w*h;i++){const R=d[i*4],G=d[i*4+1],B=d[i*4+2];m[i]=B>R+40&&B>G+10&&R<185?1:0}
+    const R=4,m2=new Uint8Array(w*h); // juntar trazos del sello
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(m[y*w+x])for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<w&&Y<h)m2[Y*w+X]=1}
+    const r=mancha(m2,w,h);if(!r||r.area<200)throw new Error('No se ve el sello en esa imagen.');
+    const g=Math.round(R*k*1.5),X=Math.max(0,r.x0*k-g|0),Y=Math.max(0,r.y0*k-g|0),W=Math.min(c.width,(r.x1+1)*k+g|0)-X,H=Math.min(c.height,(r.y1+1)*k+g|0)-Y; // con margen: el borde del aro es más claro
+    const o=document.createElement('canvas');o.width=W;o.height=H;const ox=o.getContext('2d');ox.fillStyle='#fff';ox.fillRect(0,0,W,H);ox.drawImage(c,X,Y,W,H,0,0,W,H);
+    // fondo del papel a blanco: lo que no es tinta azul se aclara
+    const im=ox.getImageData(0,0,W,H),q=im.data;for(let i=0;i<q.length;i+=4){const a=q[i],b=q[i+1],z=q[i+2];if(!(z>a+12&&z>b)){q[i]=q[i+1]=q[i+2]=255}}ox.putImageData(im,0,0);
+    return o;
+  }
+  async function reducirTicket(blob){const c=recorteTicket(await fotoCanvas(blob));return achicar(c)}
+  async function reducir(blob){return achicar(await fotoCanvas(blob))}
+  async function achicar(c0){ // lado largo 1600 px: se lee igual y el PDF no pesa
+    const k=Math.min(1,1600/Math.max(c0.width,c0.height));let c=c0;
     if(k<1){c=document.createElement('canvas');c.width=Math.round(c0.width*k);c.height=Math.round(c0.height*k);c.getContext('2d').drawImage(c0,0,0,c.width,c.height)}
     return await new Promise(r=>c.toBlob(r,'image/jpeg',0.85));
   }
@@ -4031,7 +4089,7 @@ ${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>C
   }
   function marcar(s){const v=P[s.dataset.pseg];for(const b of s.querySelectorAll('button')){b.classList.toggle('on',b.dataset.pv===v);b.setAttribute('aria-pressed',String(b.dataset.pv===v))}}
   async function foto(q,blob,mas){
-    const p=P;let b;try{b=await reducir(blob)}catch(e){showMsg('No se pudo abrir la foto. Prueba otra vez.',true);return}
+    const p=P;let b;try{b=q==='ticket'?await reducirTicket(blob):await reducir(blob)}catch(e){showMsg('No se pudo abrir la foto. Prueba otra vez.',true);return}
     if(q==='bast')p.fotoBast=b;else p.fotosTicket=mas?[...p.fotosTicket,b]:[b];
     guardarYa();if(P!==p)return;pintar();
     const est=box.querySelector(`.foto[data-pf="${q}"] .est`),av=t=>{if(est){est.className='est lee';est.textContent=t}};
@@ -4121,7 +4179,7 @@ ${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>C
     ask('PDF listo',`<p><b>${esc(name)}</b></p>${falta.length?`<p class="hint" style="color:var(--bad)">Falta ${esc(falta.join(', '))}.</p>`:''}<p class="hint">Por correo va adjunto, con el asunto «${esc(subject)}».</p>`,
       [['Solo guardar','',()=>saveWord(L)],['Enviar por correo','primary',()=>sendWord(L)]]);
   }
-  return {abrirLista,selloDePdf,pdfDe,ponTicket,ponBast,ticketDeLineas,get P(){return P},set P(v){P=v},pintar};
+  return {abrirLista,recorteTicket,recorteSello,selloDePdf,pdfDe,ponTicket,ponBast,ticketDeLineas,get P(){return P},set P(v){P=v},pintar};
 })();
 </script>
 </body></html>
