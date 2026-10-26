@@ -2833,7 +2833,11 @@ async function nuevoCop(t){
   const q=t==='pal'?'COP nuevo de Palfinger.':t==='putz'?'COP nuevo de Putzmeister.':'COP nuevo en blanco.';
   showMsg(habia?q+' El que tenías abierto sigue guardado en «Cargar COP».':q);
 }
-document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-nuevo]');if(!b)return;$('#dlg').hidden=true;nuevoCop(b.dataset.nuevo)});
+// Putzmeister: la compañera de Daniel le pasa el Word prerrellenado; se pregunta por él aquí mismo (26 oct: lo buscaba en «Añadir COC»)
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-nuevo]');if(!b)return;$('#dlg').hidden=true;
+  if(b.dataset.nuevo!=='putz')return nuevoCop(b.dataset.nuevo);
+  ask('Nuevo COP de Putzmeister','<p>¿Tienes el Word que te ha preparado tu compañera? Cárgalo y se queda todo lo que puso ella.</p>',
+    [['Cancelar'],['En blanco','',()=>nuevoCop('putz')],['Cargar su Word','primary',()=>{openPicker('docx');PICK.onFiles=fs=>importarWord(fs[0],'putz')}]])});
 $('#tCargar').onclick=async()=>{await READY;flush().then(()=>{if(document.documentElement.dataset.vista==='mis')renderMis()});vista('mis')};
 $('#tCoc').onclick=async()=>{
   await READY;
@@ -2893,7 +2897,7 @@ async function borrarDoc(d){
   if(era){CUR=null;curSave();state=vacio();_save();fillUI()}
   renderMis();showMsg(`Borrado: ${titulo(d)}.`);
 }
-async function importarWord(file){
+async function importarWord(file,desde){
   showMsg('Leyendo «'+file.name+'»…');
   try{
     const z=await JSZip.loadAsync(await file.arrayBuffer());
@@ -2905,7 +2909,8 @@ async function importarWord(file){
       abrirEstado({v:nv,manual:Object.fromEntries(Object.keys(nv).filter(k=>k[0]==='c').map(k=>[k,true])),...(putz?{tpl:'putz'}:{})},nuevoCur('word'));
       showMsg(`Cargado «${file.name}» como COP nuevo${putz?' de Putzmeister':''}.`);
     };
-    ask('Cargar un Word anterior',`<p>«${esc(file.name)}» ${putz?'es un COP de Putzmeister y ':''}tiene ${Object.keys(v).length} datos rellenos.</p><p>Puedes cargarlo completo para corregirlo, o usarlo como base para otro vehículo parecido (sin identificación ni fecha). Se abre como un COP nuevo de tu lista.</p>`,
+    if(desde==='putz'&&putz)return abrir(true); // el Word de la compañera: completo, sin preguntar
+    ask('Cargar un Word anterior',`${desde==='putz'&&!putz?'<p><b>Este Word no lleva la cabecera de Putzmeister:</b> se abrirá como COP general.</p>':''}<p>«${esc(file.name)}» ${putz?'es un COP de Putzmeister y ':''}tiene ${Object.keys(v).length} datos rellenos.</p><p>Puedes cargarlo completo para corregirlo, o usarlo como base para otro vehículo parecido (sin identificación ni fecha). Se abre como un COP nuevo de tu lista.</p>`,
       [['Cancelar'],['Como base','',()=>abrir(false)],['Completo','primary',()=>abrir(true)]]);
   }catch(err){showMsg('No se pudo leer el Word: '+((err&&err.message)||err),true)}
 }
@@ -3537,7 +3542,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 26 oct, 00:19';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 26 oct, 15:13';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
