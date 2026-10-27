@@ -345,10 +345,9 @@ button.linkb{align-self:center;border:0;background:none;box-shadow:none;color:va
       <p class="hint homenote" id="homeNote"></p>
     </div>
     <div id="homeMis">
+      <div class="pick"><button type="button" id="misWord">Cargar un Word anterior</button><button type="button" id="misPdf">Cargar un PDF de Palfinger anterior</button></div>
       <h2 class="hh">Tus COP</h2>
       <div id="misList"></div>
-      <h2 class="hh">Otros</h2>
-      <div class="pick"><button type="button" id="misWord">Cargar un Word anterior</button><button type="button" id="misPdf">Cargar un PDF de Palfinger anterior</button></div>
       <div class="pruebas" id="misPruebas"></div>
     </div>
   </section>
@@ -3542,7 +3541,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 26 oct, 15:13';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 27 oct, 17:44';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
