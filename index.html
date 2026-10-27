@@ -3541,7 +3541,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 27 oct, 17:44';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 27 oct, 17:47';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -3557,9 +3557,110 @@ async function recibirCompartido(){
 }
 {const _ic=initCoc;initCoc=async function(){await _ic();recibirCompartido()}}
 
+/* Lector de fotos sin internet (17 oct, lo pidió Daniel): PaddleOCR (modelos PP-OCRv3 y orientación v2.0, licencia Apache 2.0) con onnxruntime-web.
+   Con sus 10 fotos reales leyó 4 bien y 4 a medias; tesseract no leyó ninguna. La primera vez se descarga
+   (unos 25 MB: el motor de jsdelivr y los modelos de ./ocr/) y sw.js lo guarda aparte, así que no se borra al actualizar la app.
+   Lo usa la foto de cada casilla cuando no hay clave de Google o no hay internet. leer(canvas) → [{t,h}] como el lector de antes. */
+const LectorLocal=(()=>{
+  const ORT='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';
+  let carga=null;
+  function iniciar(aviso){
+    if(carga)return carga;
+    carga=(async()=>{
+      if(aviso)aviso('Preparando el lector (la primera vez se descarga, unos segundos)…',0.05);
+      if(!window.ort)await loadScript((window.__ORT||ORT)+'ort.wasm.min.js');
+      ort.env.wasm.wasmPaths=new URL(window.__ORT||ORT,location.href).href;ort.env.wasm.numThreads=1;
+      const base=window.__OCR_BASE||'./ocr/';
+      const [det,rec,cls,keys]=await Promise.all([ort.InferenceSession.create(base+'det.onnx'),ort.InferenceSession.create(base+'rec.onnx'),ort.InferenceSession.create(base+'cls.onnx'),
+        fetch(base+'keys.txt').then(r=>{if(!r.ok)throw new Error('No se pudo descargar el lector');return r.text()})]);
+      const chars=['',...keys.split('\n').filter((c,k,a)=>k<a.length-1||c),' '];
+      return {det,rec,cls,chars,vale:chars.map((c,k)=>!k||(c.length===1&&c.charCodeAt(0)<0x250)||c==='°')}; // solo letras latinas, números y signos: las placas no llevan chino
+    })();
+    carga.catch(()=>{carga=null}); // sin internet la primera vez: que se pueda reintentar
+    return carga;
+  }
+  // imagen → tensor 1×3×H×W en orden BGR (como se entrenó PaddleOCR)
+  function tensor(c,mean,std){
+    const w=c.width,h=c.height,d=c.getContext('2d').getImageData(0,0,w,h).data,n=w*h,f=new Float32Array(3*n);
+    for(let i=0;i<n;i++){const r=d[i*4]/255,g=d[i*4+1]/255,b=d[i*4+2]/255;f[i]=(b-mean[0])/std[0];f[n+i]=(g-mean[1])/std[1];f[2*n+i]=(r-mean[2])/std[2]}
+    return new ort.Tensor('float32',f,[1,3,h,w]);
+  }
+  const escala=(src,w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(src,0,0,w,h);return c};
+  // rectángulo girado mínimo (cv2.minAreaRect) de unos puntos: envolvente convexa + calibres giratorios
+  function rectMin(pts){
+    pts.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]),lo=[],up=[];
+    for(const q of pts){while(lo.length>1&&cr(lo[lo.length-2],lo[lo.length-1],q)<=0)lo.pop();lo.push(q)}
+    for(let i=pts.length-1;i>=0;i--){const q=pts[i];while(up.length>1&&cr(up[up.length-2],up[up.length-1],q)<=0)up.pop();up.push(q)}
+    const H=lo.slice(0,-1).concat(up.slice(0,-1));let best=null;
+    for(let i=0;i<H.length;i++){const a=H[i],b=H[(i+1)%H.length];let ux=b[0]-a[0],uy=b[1]-a[1];const L=Math.hypot(ux,uy);if(!L)continue;ux/=L;uy/=L;
+      let u0=1e9,u1=-1e9,v0=1e9,v1=-1e9;for(const q of H){const u=q[0]*ux+q[1]*uy,v=-q[0]*uy+q[1]*ux;if(u<u0)u0=u;if(u>u1)u1=u;if(v<v0)v0=v;if(v>v1)v1=v}
+      const ar=(u1-u0)*(v1-v0);if(!best||ar<best.ar)best={ar,ux,uy,u0,u1,v0,v1}}
+    if(!best)return null;let {ux,uy,u0,u1,v0,v1}=best;const cu=(u0+u1)/2,cv=(v0+v1)/2;let w=u1-u0,h=v1-v0;
+    let cx=cu*ux-cv*uy,cy=cu*uy+cv*ux,ang=Math.atan2(uy,ux);
+    while(ang>Math.PI/4){ang-=Math.PI/2;[w,h]=[h,w]}while(ang<=-Math.PI/4){ang+=Math.PI/2;[w,h]=[h,w]} // el lado «ancho» es el más horizontal
+    return {cx,cy,w,h,ang};
+  }
+  // dónde hay texto: mapa de probabilidad → zonas giradas (como DBPostProcess de PaddleOCR: umbral 0.3, dilatación, caja ≥0.5, unclip 1.6)
+  async function zonas(M,img){
+    let k=Math.min(1,(window.__DETMAX||2048)/Math.max(img.width,img.height));if(Math.min(img.width,img.height)*k<736)k=Math.min(736/Math.min(img.width,img.height),2048/Math.max(img.width,img.height));
+    const W=Math.max(32,Math.round(img.width*k/32)*32),H=Math.max(32,Math.round(img.height*k/32)*32);
+    const out=await M.det.run({x:tensor(escala(img,W,H),[0.485,0.456,0.406],[0.229,0.224,0.225])});
+    const p=out[M.det.outputNames[0]].data,bm=new Uint8Array(W*H);
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=y*W+x;if(p[i]>0.3){bm[i]=1;if(x+1<W)bm[i+1]=bm[i+1]||2;if(y+1<H)bm[i+W]=bm[i+W]||2;if(x+1<W&&y+1<H)bm[i+W+1]=bm[i+W+1]||2}} // umbral + dilatación 2×2
+    const lab=new Int32Array(W*H),cajas=[],pila=[];let id=0;const sx=img.width/W,sy=img.height/H;
+    for(let s=0;s<W*H;s++){if(!bm[s]||lab[s])continue;id++;let sum=0,n=0;const pts=[];pila.push(s);lab[s]=id;
+      while(pila.length){const i=pila.pop(),x=i%W,y=(i-x)/W;sum+=p[i];n++;
+        if(x===0||y===0||x===W-1||y===H-1||!bm[i-1]||!bm[i+1]||!bm[i-W]||!bm[i+W])pts.push([x,y]); // solo el borde
+        for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=W||yy>=H)continue;const j=yy*W+xx;if(bm[j]&&!lab[j]){lab[j]=id;pila.push(j)}}}
+      if(n<9||sum/n<0.5)continue;const r=rectMin(pts);if(!r||Math.min(r.w,r.h)<3)continue;
+      const dd=r.w*r.h*1.6/(2*(r.w+r.h));r.w+=2*dd;r.h+=2*dd;if(Math.min(r.w,r.h)<5)continue;
+      // a la foto original (escala casi igual en x e y)
+      cajas.push({cx:r.cx*sx,cy:r.cy*sy,w:r.w*(sx+sy)/2,h:r.h*(sx+sy)/2,ang:r.ang})}
+    return cajas.slice(0,120);
+  }
+  // qué pone en una zona: recorte girado, alto 48, CTC
+  async function texto(M,img,c){
+    let cr=document.createElement('canvas');cr.width=Math.max(1,Math.round(c.w));cr.height=Math.max(1,Math.round(c.h));
+    const g=cr.getContext('2d');g.imageSmoothingQuality='high';g.translate(cr.width/2,cr.height/2);g.rotate(-c.ang);g.drawImage(img,-c.cx,-c.cy);
+    if(cr.height/cr.width>=1.5){const r=document.createElement('canvas');r.width=cr.height;r.height=cr.width;const x=r.getContext('2d');x.translate(0,r.height);x.rotate(-Math.PI/2);x.drawImage(cr,0,0);cr=r} // vertical: se tumba
+    // ¿está del revés? (modelo de orientación de PaddleOCR: 0° o 180°)
+    {const cw=Math.min(192,Math.ceil(48*cr.width/cr.height)),q=document.createElement('canvas');q.width=192;q.height=48;q.getContext('2d').drawImage(cr,0,0,cw,48);
+      const t=tensor(q,[0.5,0.5,0.5],[0.5,0.5,0.5]);if(cw<192){const n=48*192;for(let ch=0;ch<3;ch++)for(let yy=0;yy<48;yy++)t.data.fill(0,ch*n+yy*192+cw,ch*n+yy*192+192)}
+      const o=(await M.cls.run({x:t}))[M.cls.outputNames[0]].data;
+      if(o[1]>o[0]&&o[1]>0.9){const r=document.createElement('canvas');r.width=cr.width;r.height=cr.height;const x=r.getContext('2d');x.translate(r.width,r.height);x.rotate(Math.PI);x.drawImage(cr,0,0);cr=r}}
+    const rw=Math.min(1600,Math.ceil(48*cr.width/cr.height)),W=Math.max(320,rw),pad=document.createElement('canvas');pad.width=W;pad.height=48;
+    const x=pad.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(cr,0,0,rw,48);
+    const t=tensor(pad,[0.5,0.5,0.5],[0.5,0.5,0.5]);
+    if(rw<W){const n=48*W;for(let ch=0;ch<3;ch++)for(let yy=0;yy<48;yy++)t.data.fill(0,ch*n+yy*W+rw,ch*n+yy*W+W)} // relleno = 0, como en PaddleOCR
+    const o=(await M.rec.run({x:t}))[M.rec.outputNames[0]],[,T,C]=o.dims,d=o.data;let s='',prev=0,sc=0,n=0;
+    for(let i=0;i<T;i++){let m=0,mv=-1;for(let j=0;j<C;j++){const v=d[i*C+j];if(v>mv&&M.vale[j]){mv=v;m=j}}if(m&&m!==prev){s+=M.chars[m]||'';sc+=mv;n++}prev=m}
+    return {t:s.trim(),sc:n?sc/n:0};
+  }
+  // con internet, se descarga sola una vez (sw.js la guarda) para que funcione cuando haga falta sin internet
+  async function precargar(){
+    try{if(!navigator.onLine||navigator.connection&&navigator.connection.saveData||!('caches' in window))return;
+      const base=new URL(window.__OCR_BASE||'./ocr/',location.href).href,ortb=new URL(window.__ORT||ORT,location.href).href;
+      const urls=[ortb+'ort.wasm.min.js',ortb+'ort-wasm-simd-threaded.wasm',ortb+'ort-wasm-simd-threaded.mjs',base+'det.onnx',base+'rec.onnx',base+'cls.onnx',base+'keys.txt'];
+      const c=await caches.open('cop-ocr');
+      for(const u of urls)if(!await c.match(u,{ignoreSearch:true})){const r=await fetch(u);if(r.ok&&!await c.match(u,{ignoreSearch:true}))await c.put(u,r)}
+    }catch(e){}
+  }
+  async function leer(img,aviso){
+    const M=await iniciar(aviso);if(aviso)aviso('Leyendo la foto…',0.2);
+    const cs=await zonas(M,img),lin=[];
+    // orden de lectura: por filas (centros a menos de media altura) y de izquierda a derecha
+    cs.sort((a,b)=>Math.abs(a.cy-b.cy)<Math.min(a.h,b.h)/2?a.cx-b.cx:a.cy-b.cy);
+    for(let k=0;k<cs.length;k++){const r=await texto(M,img,cs[k]);if(aviso)aviso('Leyendo la foto…',0.2+0.8*(k+1)/cs.length);
+      if(r.t&&r.sc>0.5&&r.t.replace(/[^A-Za-z0-9]/g,'').length>=2)lin.push({t:r.t,h:cs[k].h})}
+    return lin;
+  }
+  return {leer,iniciar,precargar};
+})();
+if(navigator.serviceWorker)setTimeout(()=>LectorLocal.precargar(),15000);
+
 /* Foto en cada punto (lo pidió Daniel, 14 oct): junto a las casillas de texto que se copian de una placa o etiqueta (contraseñas,
    marcas, tipos, neumáticos, placa de la grúa, bastidor…) sale un botón de cámara. La foto se lee en el móvil con el mismo lector
-   del COC (tesseract.js, nada sale del móvil) y la app propone el valor; no se escribe nada hasta que Daniel pulsa «Poner».
+   del COC (desde el 27 oct PaddleOCR, lector-local.js; tesseract.js si no carga; nada sale del móvil) y la app propone el valor; no se escribe nada hasta que Daniel pulsa «Poner».
    Si en la misma fila hay varias casillas con cámara (máquina y nº de serie, neumático e índice, marca y contraseña…), una foto
    propone todas. Va después de indep.js (usa ocrWorker, fotoCanvas y FotoPrep). */
 const FotoPunto=(()=>{
@@ -3657,6 +3758,12 @@ const FotoPunto=(()=>{
   async function leerFoto(blob,aviso){
     const c0=await fotoCanvas(blob),k=Math.min(1,2200/Math.max(c0.width,c0.height));
     let c=c0;if(k<1){c=document.createElement('canvas');c.width=Math.round(c0.width*k);c.height=Math.round(c0.height*k);c.getContext('2d').drawImage(c0,0,0,c.width,c.height)}
+    // lector moderno (PaddleOCR, 17 oct): lee mucho mejor que tesseract; si no se puede cargar (primera vez sin internet), el de antes
+    if(typeof LectorLocal!=='undefined'&&!window.__SIN_PADDLE)try{
+      const k2=Math.min(1,2048/Math.max(c.width,c.height));let c2=c;
+      if(k2<1){c2=document.createElement('canvas');c2.width=Math.round(c.width*k2);c2.height=Math.round(c.height*k2);c2.getContext('2d').drawImage(c,0,0,c2.width,c2.height)}
+      return (await LectorLocal.leer(c2,aviso)).map(l=>({t:norm(l.t),h:l.h}));
+    }catch(e){console.warn('lector moderno',e)}
     const p=FotoPrep.plano(c);
     OCR_AVISO=m=>{if(m.status==='recognizing text')aviso('Leyendo la foto…',m.progress);else if(/load|initializ/i.test(m.status||''))aviso('Preparando el lector (la primera vez se descarga, unos segundos)…',0.05)};
     try{
@@ -3815,9 +3922,15 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
   const CONTR=/\(?\b[eE]\s?\)?\s?(\d{1,2})\s?\)?([\s*]+|\s*-\s*)([0-9][0-9A-Z]*(?:[*\/\- ][0-9A-Z]+)*)/;
   function contrasena(lin){
     for(const {t} of lin){const m=t.match(CONTR);if(m&&/\d{3}/.test(m[3]))return ('E'+m[1]+(m[2].includes('*')?'*':' ')+m[3]).replace(/\s+/g,' ').trim().toUpperCase()}
+    for(const {t} of lin){const m=t.match(/\b[eE](\d{6,8})\b/);if(m){const d=m[1],k=d.length-2>=5?2:1;return `E${d.slice(0,k)} ${d.slice(k)}`}} // pegada: «E2019009» = E20 19009
     const all=lin.map(l=>l.t).join(' ');const e=all.match(/\(?\b[eE]\s?(\d{1,2})\b\)?/),n=all.match(/\b\d{4,6}\b/);
-    return e&&n?`E${e[1]} ${n[0]}`:'';
+    if(e&&n)return `E${e[1]} ${n[0]}`;
+    for(const {t} of lin){const m=t.match(/\b(\d{1,3}R)\s*[-·.]?\s*(\d{5,6})\b/);if(m)return m[1]+'-'+m[2]} // sin la E: «104R-000001»
+    return '';
   }
+  // el dato va en la línea de al lado de su etiqueta (placas con «TYPE» o «SERIAL NO» debajo del valor, como la de Hiab)
+  const vecino=(lin,et,ok)=>{for(let k=0;k<lin.length;k++)if(et.test(lin[k].t.trim())){const c=[lin[k-1],lin[k+1]].filter(x=>x&&ok(x.t.trim())).map(x=>x.t.trim());
+    if(c.length)return c[0].toUpperCase()}return ''}; // primero la de encima
   function proponer(cl,lin){
     const all=lin.map(l=>l.t).join('\n'),una=all.replace(/\n/g,' ');let m;
     switch(cl){
@@ -3825,12 +3938,16 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
       case 'banda':m=una.match(/104\s?R\s?-?\s?(\d{6})/i);return m?'104R-'+m[1]:'';
       case 'categoria':m=una.match(/\b([NO][1-4]G?)\b/);return m?m[1]:'';
       case 'cabina':m=una.match(/\b(CORTA|MEDIA|CON LITERA|DOBLE)\b/i);return m?m[1].toUpperCase():'';
-      case 'vin':{for(const {t} of lin){const s=t.replace(/[\s.\-]/g,'').toUpperCase();m=s.match(/[A-HJ-NPR-Z0-9]{17}/);if(m)return m[0]}return ''}
+      case 'vin':{for(const {t} of lin){const s=t.replace(/[\s.\-]/g,'').toUpperCase();m=s.match(/[A-HJ-NPR-Z0-9]{17,}/);if(!m)continue;
+        // si se pegó algo del borde (19 letras), el trozo de 17 que acaba en más cifras (el nº de serie del final son cifras)
+        let best='',bn=-1;for(let k=0;k+17<=m[0].length;k++){const w=m[0].slice(k,k+17),d=w.match(/\d*$/)[0].length;if(d>bn){bn=d;best=w}}return best}return ''}
       case 'neum':m=una.match(/(\d{3})\s*\/\s*(\d{2})\s*R\s*(\d{2}(?:[.,]\d)?)/i);return m?`${m[1]}/${m[2]}R ${m[3].replace(',','.')}`:'';
       case 'indice':{const s=una.replace(/(\d{3})\s*\/\s*(\d{2})\s*R\s*\d{2}(?:[.,]\d)?/ig,' ');
         m=s.match(/\b(\d{3})(?:\s*\/\s*\d{3})?\s?([F-N])\b/);return m?m[1]+'K':''} // Daniel: la letra de velocidad siempre K
-      case 'maquina':for(const {t} of lin){m=t.match(/\b(P[A-Z]{1,2}|EPSILON|EPS|TZ|M)\s?\d[\d.,]*.*$/);if(m)return norm(m[0]).toUpperCase()}return '';
+      case 'maquina':for(const {t} of lin){m=t.match(/\b(P[A-Z]{1,2}|EPSILON|EPS|TZ|M)\s?\d[\d.,]*.*$/);if(m)return norm(m[0]).toUpperCase()}
+        return vecino(lin,/^(type|typ|tipo|modell?|model)\b\W*$/i,t=>/\d/.test(t)&&/[A-Z]{2}/i.test(t)&&t.length>=5);
       case 'serie':{for(const {t} of lin){m=t.match(/(?:seri\w*|serial|fabr\w*|n[ºo°.]{1,2}|nr\.?|no\.)\s*[:.]?\s*([A-Z0-9][A-Z0-9\-\/]{4,})/i);if(m&&/\d{4}/.test(m[1]))return m[1].toUpperCase()}
+        const v=vecino(lin,/^(seri\w*|serial\s*no\.?|serien-?nr\.?|n[ºo°]\s*(de\s*)?serie|fabr\w*\s*n[ºo°.]*)\W*$/i,t=>/^[A-Z0-9][A-Z0-9\-\/]{5,}$/i.test(t)&&/\d{4}/.test(t));if(v)return v;
         const ns=(una.match(/\b\d{6,12}\b/g)||[]).sort((a,b)=>b.length-a.length);return ns[0]||''}
       case 'D':m=una.match(/\bD\s*[=:]?\s*(\d+(?:[.,]\d+)?)\s*kN/i);return m?m[1].replace('.',','):'';
       case 'U':m=una.match(/\bU\s*[=:]?\s*(\d+(?:[.,]\d+)?)\s*t\b/i);return m?m[1].replace('.',','):'';
@@ -3838,8 +3955,18 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
       case 'carga':m=una.match(/(\d+(?:[.,]\d+)?)\s*(kN|kg|t)\b/i);return m?m[1]+' '+m[2]:'';
       case 'tipo':{for(const {t} of lin){m=t.match(/(?:tipo|type|typ)\s*[:.]?\s*(\S.*)$/i);if(m)return norm(m[1]).toUpperCase()}}
       // sigue: la línea más grande
-      default:{const c=lin.filter(l=>/[A-Za-z]{2}/.test(l.t)&&!CONTR.test(l.t)).sort((a,b)=>b.h-a.h)[0];return c?c.t.toUpperCase():''}
+      default:{const c=lin.filter(l=>/[A-Za-z]{2}/.test(l.t)&&!CONTR.test(l.t)&&!(cl==='marca'&&/\d{3}/.test(l.t))&&!/[A-HJ-NPR-Z0-9]{17}/.test(l.t.replace(/[\s.\-]/g,'').toUpperCase())).sort((a,b)=>b.h-a.h)[0];return c?c.t.toUpperCase():''}
     }
+  }
+  // placa del fabricante leída en el móvil (sin Google): bastidor + masas «6000 kg», «1-2300 kg»… → lo mismo que «placa» de Google
+  function placaLocal(lin){
+    const bastidor=proponer('vin',lin);if(!bastidor)return null;
+    const pl={bastidor,contrasena:'',mma:'',mmtc:'',ejes:[]},tot=[];
+    for(const {t} of lin){const s=t.replace(/\s+/g,'');let m;
+      if(!pl.contrasena&&(m=t.match(CONTR))&&/\*/.test(t)&&/\d{3}/.test(m[3]))pl.contrasena=('E'+m[1]+'*'+m[3]).replace(/\s+/g,'').toUpperCase();
+      if(m=s.match(/^(\d)-(\d{3,6})kg$/i))pl.ejes[+m[1]-1]=m[2];else if(m=s.match(/^(\d{3,6})kg$/i))tot.push(m[1])}
+    [pl.mma,pl.mmtc]=tot;pl.ejes=[...pl.ejes].map(v=>v||'');
+    return tot.length||pl.ejes.length||pl.contrasena?pl:null;
   }
   function trozos(lin,props){ // lo que se puede tocar para ponerlo: lo encontrado y cada línea leída
     const out=[];const add=t=>{t=norm(t);if(t&&t.length<=40&&!out.includes(t))out.push(t)};
@@ -3891,7 +4018,7 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
           p.querySelector('.bar').remove();return}
         if(cancel||!p.isConnected)return;
         props=ins.map(x=>proponer(clase(x),lin))}
-      const extra=ia?destinos(ia.placa,ins):[];
+      const extra=destinos(ia?ia.placa:placaLocal(lin),ins);
       const ninguno=ia?!props.some(Boolean)&&!lin.length&&!extra.length:!lin.length;
       const nota=ia?`<div class="dud"><span class="ia">Leído con Google</span>${ia.dudas?' · Dudas: '+escH(ia.dudas):''}</div>`:sinRed?'<div class="dud">Sin internet: leído en el móvil.</div>':'';
       p.innerHTML=`<div class="fh"><img alt="" src="${url}"><div class="ft"><b>${ninguno?'No he leído nada en la foto':'Leído de la foto'}</b>${ninguno?'Prueba más cerca, de frente y con buena luz.':props.some(Boolean)?'Revisa el valor y corrígelo si hace falta.':'No encuentro el dato: toca abajo el texto que sea o escríbelo.'}${nota}</div></div>`+

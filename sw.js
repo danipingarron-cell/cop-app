@@ -1,10 +1,11 @@
 /* App COP sin conexión: la app (index.html) va primero por la red, para coger siempre la última versión, y sin red sale la
    guardada; las librerías (jszip, pdf.js, lector de fotos, letras), que llevan versión fija, se guardan la primera vez. */
-const V='cop-099831c723';
+const V='cop-1a61849f83';
 const COMP='cop-compartido'; // el COC que llega desde «Compartir» del móvil, hasta que la app lo recoge
+const OCR='cop-ocr'; // lector de fotos sin internet (unos 25 MB): no se borra al actualizar la app; si cambian los modelos, cambia su ruta
 const APP=['./','palfinger-datos.js','pesaje-datos.js','manifest.webmanifest','icon-192.png','icon-512.png','icon-maskable.png','apple-touch-icon.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(V).then(c=>c.addAll(APP)).then(()=>self.skipWaiting())));
-self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V&&k!==COMP).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
+self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V&&k!==COMP&&k!==OCR).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
   const r=e.request;
   // «Compartir» → COP (share_target del manifest): se guarda el archivo y se abre la app, que lo lee como «Añadir COC»
@@ -20,6 +21,9 @@ self.addEventListener('fetch',e=>{
   }
   if(r.method!=='GET')return;
   const u=new URL(r.url);
+  if(/\/ocr\/[^/]+$/.test(u.pathname)&&u.origin===location.origin||u.host==='cdn.jsdelivr.net'&&u.pathname.startsWith('/npm/onnxruntime-web@')){
+    e.respondWith(caches.open(OCR).then(c=>c.match(r,{ignoreSearch:true}).then(m=>m||fetch(r).then(res=>{if(res.ok)c.put(r,res.clone());return res}))));return;
+  }
   if(u.origin===location.origin){
     // sin la caché del navegador (GitHub guarda 10 min): pregunta siempre al servidor si hay versión nueva
     const red=r.mode==='navigate'?fetch(u.href,{cache:'no-cache',credentials:'same-origin'}).then(res=>res.redirected?fetch(r):res):fetch(r,{cache:'no-cache'});
