@@ -3607,7 +3607,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 27 oct, 18:24';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 27 oct, 18:31';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -3626,7 +3626,7 @@ async function recibirCompartido(){
 /* Lector de fotos sin internet (17 oct, lo pidió Daniel): PaddleOCR (modelos PP-OCRv3 y orientación v2.0, licencia Apache 2.0) con onnxruntime-web.
    Con sus 10 fotos reales leyó 4 bien y 4 a medias; tesseract no leyó ninguna. La primera vez se descarga
    (unos 25 MB: el motor de jsdelivr y los modelos de ./ocr/) y sw.js lo guarda aparte, así que no se borra al actualizar la app.
-   Lo usa la foto de cada casilla cuando no hay clave de Google o no hay internet. leer(canvas) → [{t,h}] como el lector de antes. */
+   Lo usa la foto de cada casilla cuando no hay clave de Google o no hay internet. leer(canvas) → [{t,h,x,y}] (x,y = centro, para casar etiqueta y valor). */
 const LectorLocal=(()=>{
   const ORT='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';
   let carga=null;
@@ -3684,16 +3684,21 @@ const LectorLocal=(()=>{
       cajas.push({cx:r.cx*sx,cy:r.cy*sy,w:r.w*(sx+sy)/2,h:r.h*(sx+sy)/2,ang:r.ang})}
     return cajas.slice(0,120);
   }
+  const gira=(c,g)=>{const r=document.createElement('canvas'),v=g%180!==0;r.width=v?c.height:c.width;r.height=v?c.width:c.height;
+    const x=r.getContext('2d');x.translate(r.width/2,r.height/2);x.rotate(g*Math.PI/180);x.drawImage(c,-c.width/2,-c.height/2);return r};
+  // ¿está del revés? (modelo de orientación de PaddleOCR: 0° o 180°)
+  async function reves(M,cr){
+    const cw=Math.min(192,Math.ceil(48*cr.width/cr.height)),q=document.createElement('canvas');q.width=192;q.height=48;q.getContext('2d').drawImage(cr,0,0,cw,48);
+    const t=tensor(q,[0.5,0.5,0.5],[0.5,0.5,0.5]);if(cw<192){const n=48*192;for(let ch=0;ch<3;ch++)for(let yy=0;yy<48;yy++)t.data.fill(0,ch*n+yy*192+cw,ch*n+yy*192+192)}
+    const o=(await M.cls.run({x:t}))[M.cls.outputNames[0]].data;return o[1]>o[0]&&o[1]>0.9;
+  }
+  const recorte=(img,c)=>{const cr=document.createElement('canvas');cr.width=Math.max(1,Math.round(c.w));cr.height=Math.max(1,Math.round(c.h));
+    const g=cr.getContext('2d');g.imageSmoothingQuality='high';g.translate(cr.width/2,cr.height/2);g.rotate(-c.ang);g.drawImage(img,-c.cx,-c.cy);return cr};
   // qué pone en una zona: recorte girado, alto 48, CTC
   async function texto(M,img,c){
-    let cr=document.createElement('canvas');cr.width=Math.max(1,Math.round(c.w));cr.height=Math.max(1,Math.round(c.h));
-    const g=cr.getContext('2d');g.imageSmoothingQuality='high';g.translate(cr.width/2,cr.height/2);g.rotate(-c.ang);g.drawImage(img,-c.cx,-c.cy);
-    if(cr.height/cr.width>=1.5){const r=document.createElement('canvas');r.width=cr.height;r.height=cr.width;const x=r.getContext('2d');x.translate(0,r.height);x.rotate(-Math.PI/2);x.drawImage(cr,0,0);cr=r} // vertical: se tumba
-    // ¿está del revés? (modelo de orientación de PaddleOCR: 0° o 180°)
-    {const cw=Math.min(192,Math.ceil(48*cr.width/cr.height)),q=document.createElement('canvas');q.width=192;q.height=48;q.getContext('2d').drawImage(cr,0,0,cw,48);
-      const t=tensor(q,[0.5,0.5,0.5],[0.5,0.5,0.5]);if(cw<192){const n=48*192;for(let ch=0;ch<3;ch++)for(let yy=0;yy<48;yy++)t.data.fill(0,ch*n+yy*192+cw,ch*n+yy*192+192)}
-      const o=(await M.cls.run({x:t}))[M.cls.outputNames[0]].data;
-      if(o[1]>o[0]&&o[1]>0.9){const r=document.createElement('canvas');r.width=cr.width;r.height=cr.height;const x=r.getContext('2d');x.translate(r.width,r.height);x.rotate(Math.PI);x.drawImage(cr,0,0);cr=r}}
+    let cr=recorte(img,c);
+    if(cr.height/cr.width>=1.5)cr=gira(cr,-90); // vertical: se tumba
+    if(await reves(M,cr))cr=gira(cr,180);
     const rw=Math.min(1600,Math.ceil(48*cr.width/cr.height)),W=Math.max(320,rw),pad=document.createElement('canvas');pad.width=W;pad.height=48;
     const x=pad.getContext('2d');x.imageSmoothingQuality='high';x.drawImage(cr,0,0,rw,48);
     const t=tensor(pad,[0.5,0.5,0.5],[0.5,0.5,0.5]);
@@ -3713,11 +3718,19 @@ const LectorLocal=(()=>{
   }
   async function leer(img,aviso){
     const M=await iniciar(aviso);if(aviso)aviso('Leyendo la foto…',0.2);
-    const cs=await zonas(M,img),lin=[];
+    let cs=await zonas(M,img);const lin=[];
+    // placa de lado (la mayoría del texto en vertical, como la de Mercedes en el marco de la puerta): se pone derecha la foto entera,
+    // para que cada fila salga junta y en orden; hacia qué lado lo dice el modelo de orientación con las zonas más grandes
+    const largo=l=>l.reduce((a,c)=>a+Math.max(c.w,c.h),0),vert=largo(cs.filter(c=>c.h>=1.5*c.w)),hor=largo(cs.filter(c=>c.w>=1.5*c.h));
+    if(cs.length>=4&&vert>hor){ // cuenta lo largo de cada texto, no cuántos hay
+      let im2=gira(img,-90),c2=await zonas(M,im2);
+      const mues=[...c2].sort((a,b)=>b.w*b.h-a.w*a.h).slice(0,8);let rv=0;for(const c of mues)if(await reves(M,recorte(im2,c)))rv++;
+      if(rv>mues.length/2){im2=gira(img,90);c2=await zonas(M,im2)}
+      img=im2;cs=c2}
     // orden de lectura: por filas (centros a menos de media altura) y de izquierda a derecha
     cs.sort((a,b)=>Math.abs(a.cy-b.cy)<Math.min(a.h,b.h)/2?a.cx-b.cx:a.cy-b.cy);
     for(let k=0;k<cs.length;k++){const r=await texto(M,img,cs[k]);if(aviso)aviso('Leyendo la foto…',0.2+0.8*(k+1)/cs.length);
-      if(r.t&&r.sc>0.5&&r.t.replace(/[^A-Za-z0-9]/g,'').length>=2)lin.push({t:r.t,h:cs[k].h})}
+      if(r.t&&r.sc>0.5&&r.t.replace(/[^A-Za-z0-9]/g,'').length>=2)lin.push({t:r.t,h:Math.min(cs[k].w,cs[k].h),x:cs[k].cx,y:cs[k].cy})}
     return lin;
   }
   return {leer,iniciar,precargar};
@@ -3828,7 +3841,7 @@ const FotoPunto=(()=>{
     if(typeof LectorLocal!=='undefined'&&!window.__SIN_PADDLE)try{
       const k2=Math.min(1,2048/Math.max(c.width,c.height));let c2=c;
       if(k2<1){c2=document.createElement('canvas');c2.width=Math.round(c.width*k2);c2.height=Math.round(c.height*k2);c2.getContext('2d').drawImage(c,0,0,c2.width,c2.height)}
-      return (await LectorLocal.leer(c2,aviso)).map(l=>({t:norm(l.t),h:l.h}));
+      return (await LectorLocal.leer(c2,aviso)).map(l=>({...l,t:norm(l.t)}));
     }catch(e){console.warn('lector moderno',e)}
     const p=FotoPrep.plano(c);
     OCR_AVISO=m=>{if(m.status==='recognizing text')aviso('Leyendo la foto…',m.progress);else if(/load|initializ/i.test(m.status||''))aviso('Preparando el lector (la primera vez se descarga, unos segundos)…',0.05)};
@@ -3986,10 +3999,14 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
       catch(e){b.disabled=false;b.textContent='Guardar clave';err(e instanceof TypeError?'Sin internet: conéctate para comprobar la clave.':textoError(e))}};
   }
   const CONTR=/\(?\b[eE]\s?\)?\s?(\d{1,2})\s?\)?([\s*]+|\s*-\s*)([0-9][0-9A-Z]*(?:[*\/\- ][0-9A-Z]+)*)/;
-  function contrasena(lin){
+  function contrasena(lin,regla){
     for(const {t} of lin){const m=t.match(CONTR);if(m&&/\d{3}/.test(m[3]))return ('E'+m[1]+(m[2].includes('*')?'*':' ')+m[3]).replace(/\s+/g,' ').trim().toUpperCase()}
     for(const {t} of lin){const m=t.match(/\b[eE](\d{6,8})\b/);if(m){const d=m[1],k=d.length-2>=5?2:1;return `E${d.slice(0,k)} ${d.slice(k)}`}} // pegada: «E2019009» = E20 19009
-    const all=lin.map(l=>l.t).join(' ');const e=all.match(/\(?\b[eE]\s?(\d{1,2})\b\)?/),n=all.match(/\b\d{4,6}\b/);
+    const all=lin.map(l=>l.t).join(' '),e=all.match(/\(?\b[eE]\s?(\d{1,2})\b\)?/);
+    // 27 oct: protecciones (58R trasera, 73R lateral…): la E del círculo suele salir aparte del «58 R-0312092» → «E11 58R-0312092»
+    if(regla){const r=all.match(/\b(\d{2,3})\s?R\s?-\s?(\d{5,8}(?:\*\d+)?)\b/);if(r)return (e?`E${e[1]} `:'')+r[1]+'R-'+r[2]}
+    // el número que va detrás de la E (en las luces: «E8 11789», no el «00 02» que va delante)
+    const n=e&&(all.slice(e.index+e[0].length).match(/\b\d{4,6}\b/)||all.match(/\b\d{4,6}\b/));
     if(e&&n)return `E${e[1]} ${n[0]}`;
     for(const {t} of lin){const m=t.match(/\b(\d{1,3}R)\s*[-·.]?\s*(\d{5,6})\b/);if(m)return m[1]+'-'+m[2]} // sin la E: «104R-000001»
     return '';
@@ -4000,18 +4017,22 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
   function proponer(cl,lin){
     const all=lin.map(l=>l.t).join('\n'),una=all.replace(/\n/g,' ');let m;
     switch(cl){
-      case 'contr':case 'luz':case 'ultfase':return contrasena(lin);
+      case 'contr':return contrasena(lin,true);
+      case 'luz':case 'ultfase':return contrasena(lin);
       case 'banda':m=una.match(/104\s?R\s?-?\s?(\d{6})/i);return m?'104R-'+m[1]:'';
       case 'categoria':m=una.match(/\b([NO][1-4]G?)\b/);return m?m[1]:'';
       case 'cabina':m=una.match(/\b(CORTA|MEDIA|CON LITERA|DOBLE)\b/i);return m?m[1].toUpperCase():'';
       case 'vin':{for(const {t} of lin){const s=t.replace(/[\s.\-]/g,'').toUpperCase();m=s.match(/[A-HJ-NPR-Z0-9]{17,}/);if(!m)continue;
         // si se pegó algo del borde (19 letras), el trozo de 17 que acaba en más cifras (el nº de serie del final son cifras)
-        let best='',bn=-1;for(let k=0;k+17<=m[0].length;k++){const w=m[0].slice(k,k+17),d=w.match(/\d*$/)[0].length;if(d>bn){bn=d;best=w}}return best}return ''}
+        let best='',bn=-1;for(let k=0;k+17<=m[0].length;k++){const w=m[0].slice(k,k+17),d=w.match(/\d*$/)[0].length;if(d>bn){bn=d;best=w}}
+        if(bn>=4)return best} // un bastidor acaba en 4 cifras como poco (si no, es texto: «GELASTDERACHSGRUP»)
+        return ''}
       case 'neum':m=una.match(/(\d{3})\s*\/\s*(\d{2})\s*R\s*(\d{2}(?:[.,]\d)?)/i);return m?`${m[1]}/${m[2]}R ${m[3].replace(',','.')}`:'';
       case 'indice':{const s=una.replace(/(\d{3})\s*\/\s*(\d{2})\s*R\s*\d{2}(?:[.,]\d)?/ig,' ');
         m=s.match(/\b(\d{3})(?:\s*\/\s*\d{3})?\s?([F-N])\b/);return m?m[1]+'K':''} // Daniel: la letra de velocidad siempre K
       case 'maquina':for(const {t} of lin){m=t.match(/\b(P[A-Z]{1,2}|EPSILON|EPS|TZ|M)\s?\d[\d.,]*.*$/);if(m)return norm(m[0]).toUpperCase()}
-        return vecino(lin,/^(type|typ|tipo|modell?|model)\b\W*$/i,t=>/\d/.test(t)&&/[A-Z]{2}/i.test(t)&&t.length>=5);
+        return vecino(lin,/^(type|typ|tipo|modell?|model)\b\W*$/i,t=>/\d/.test(t)&&/[A-Z]{2}/i.test(t)&&t.length>=5)
+          ||((lin.find(l=>/^[A-Z]{1,4}\s?\d{3,6}[A-Z0-9\- ]*$/i.test(l.t.trim()))||{}).t||'').trim().toUpperCase(); // placas Palfinger: «BS1242A-1» en la 1.ª línea
       case 'serie':{for(const {t} of lin){m=t.match(/(?:seri\w*|serial|fabr\w*|n[ºo°.]{1,2}|nr\.?|no\.)\s*[:.]?\s*([A-Z0-9][A-Z0-9\-\/]{4,})/i);if(m&&/\d{4}/.test(m[1]))return m[1].toUpperCase()}
         const v=vecino(lin,/^(seri\w*|serial\s*no\.?|serien-?nr\.?|n[ºo°]\s*(de\s*)?serie|fabr\w*\s*n[ºo°.]*)\W*$/i,t=>/^[A-Z0-9][A-Z0-9\-\/]{5,}$/i.test(t)&&/\d{4}/.test(t));if(v)return v;
         const ns=(una.match(/\b\d{6,12}\b/g)||[]).sort((a,b)=>b.length-a.length);return ns[0]||''}
@@ -4025,15 +4046,30 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
     }
   }
   // placa del fabricante leída en el móvil (sin Google): bastidor + masas «6000 kg», «1-2300 kg»… → lo mismo que «placa» de Google
+  function etiqueta(t){const s=t.replace(/\s+/g,'');let m;
+    if(/zug|combina/i.test(s))return 'mmtc';if(/achsgruppe|axlegroup|grupo/i.test(s))return 'grupo';
+    if(m=s.match(/(?:achse|axle|eje),?(\d)/i))return 'eje'+m[1];if(/gesamtgewicht|totalweight|m\.?m\.?a/i.test(s))return 'mma';return ''}
   function placaLocal(lin){
     const bastidor=proponer('vin',lin);if(!bastidor)return null;
-    const pl={bastidor,contrasena:'',mma:'',mmtc:'',ejes:[]},tot=[];
-    for(const {t} of lin){const s=t.replace(/\s+/g,'');let m;
+    const pl={bastidor,contrasena:'',mma:'',mmtc:'',ejes:[]},sueltas=[];let et='';
+    for(let k=0;k<lin.length;k++){const t=lin[k].t,s=t.replace(/\s+/g,'');let m;
       if(!pl.contrasena&&(m=t.match(CONTR))&&/\*/.test(t)&&/\d{3}/.test(m[3]))pl.contrasena=('E'+m[1]+'*'+m[3]).replace(/\s+/g,'').toUpperCase();
-      if(m=s.match(/^(\d)-(\d{3,6})kg$/i))pl.ejes[+m[1]-1]=m[2];else if(m=s.match(/^(\d{3,6})kg$/i))tot.push(m[1])}
-    [pl.mma,pl.mmtc]=tot;pl.ejes=[...pl.ejes].map(v=>v||'');
-    return tot.length||pl.ejes.length||pl.contrasena?pl:null;
+      if(m=s.match(/^(\d)-(\d{3,6})kg$/i)){pl.ejes[+m[1]-1]=m[2];continue}
+      // la masa: «6000 kg», o «37000» con el «kg» en la línea siguiente
+      const kg=s.match(/^(\d{3,6})kg\W*$/i)||(/^\d{4,6}$/.test(s)&&/^\W*kg\W*$/i.test((lin[k+1]||{t:''}).t.trim())?[0,s]:null);
+      if(kg){ // a qué va: la etiqueta de su fila (a la izquierda, a la misma altura) o, sin posiciones, la de antes; si no hay, por orden
+        const l=lin[k];if(l.y!=null){const c=lin.filter(e=>e.x<l.x&&etiqueta(e.t)&&Math.abs(e.y-l.y)<1.2*Math.max(l.h,e.h)).sort((a,b)=>Math.abs(a.y-l.y)-Math.abs(b.y-l.y))[0];et=c?etiqueta(c.t):''}
+        const ej=/^eje\d$/.test(et)&&+et.slice(3)-1; // si esa casilla ya está, va a las sueltas
+        if(ej!==false&&!pl.ejes[ej])pl.ejes[ej]=kg[1];else if((et==='mma'||et==='mmtc')&&!pl[et])pl[et]=kg[1];else if(et!=='grupo')sueltas.push(kg[1]);
+        et='';continue}
+      et=etiqueta(t)||et;
+    }
+    if(!pl.mma)pl.mma=sueltas.shift()||'';if(!pl.mmtc)pl.mmtc=sueltas.shift()||'';
+    for(let k=0;k<pl.ejes.length;k++)if(!pl.ejes[k])pl.ejes[k]=sueltas.shift()||'';
+    pl.ejes=[...pl.ejes].map(v=>v||'');
+    return pl.mma||pl.mmtc||pl.ejes.length||pl.contrasena?pl:null;
   }
+
   function trozos(lin,props){ // lo que se puede tocar para ponerlo: lo encontrado y cada línea leída
     const out=[];const add=t=>{t=norm(t);if(t&&t.length<=40&&!out.includes(t))out.push(t)};
     props.forEach(add);
@@ -4131,7 +4167,7 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
   let pend=false;
   new MutationObserver(()=>{if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;decorar()})}).observe(document.body,{childList:true,subtree:true});
   decorar();
-  return {quiere,clase,proponer,contrasena,decorar,iaPedir,iaClave,formClave,pedirFoto};
+  return {quiere,clase,proponer,contrasena,placaLocal,decorar,iaPedir,iaClave,formClave,pedirFoto};
 })();
 
 /* Fotos de la revisión (lo pidió Daniel, 14 oct): en el apartado Fotografías de los dos COP, un solo botón «Fotos revisión» para hacer
