@@ -3607,7 +3607,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 27 oct, 18:31';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 27 oct, 18:33';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4449,15 +4449,47 @@ const Pesaje=(()=>{
   function pequena(c,max){const k=Math.min(1,max/Math.max(c.width,c.height)),w=Math.max(1,Math.round(c.width*k)),h=Math.max(1,Math.round(c.height*k));
     const s=document.createElement('canvas');s.width=w;s.height=h;const x=s.getContext('2d');x.drawImage(c,0,0,w,h);return {d:x.getImageData(0,0,w,h).data,w,h,k:c.width/w}}
   // ticket (lo pidió Daniel, 25 oct): solo el papel, lo de alrededor en blanco. El papel es lo claro (umbral de Otsu)
+  // ticket (lo pidió Daniel, 25 oct): solo el papel, lo de alrededor en blanco. 27 oct, con sus tickets reales: el fondo a veces
+  // también es claro (el panel azul de la báscula, los botones), así que el papel es lo claro Y del color del papel, que se saca
+  // del centro de la foto (el ticket suele estar en medio). Se cortan los puentes finos con lo de al lado y se rellenan los huecos (el texto).
   function recorteTicket(c){
-    const {d,w,h,k}=pequena(c,320),L=new Uint8Array(w*h),hi=new Float64Array(256);
-    for(let i=0;i<w*h;i++){const v=(d[i*4]*77+d[i*4+1]*150+d[i*4+2]*29)>>8;L[i]=v;hi[v]++}
+    const {d,w,h,k}=pequena(c,320),n=w*h,L=new Uint8Array(n),hi=new Float64Array(256);
+    for(let i=0;i<n;i++){const v=(d[i*4]*77+d[i*4+1]*150+d[i*4+2]*29)>>8;L[i]=v;hi[v]++}
     let sum=0;for(let v=0;v<256;v++)sum+=v*hi[v];let sB=0,wB=0,mx=0,t=128;
-    for(let v=0;v<256;v++){wB+=hi[v];if(!wB)continue;const wF=w*h-wB;if(!wF)break;sB+=v*hi[v];const mB=sB/wB,mF=(sum-sB)/wF,b=wB*wF*(mB-mF)*(mB-mF);if(b>mx){mx=b;t=v}}
-    const m=new Uint8Array(w*h);for(let i=0;i<w*h;i++)m[i]=L[i]>t?1:0;
-    const r=mancha(m,w,h);if(!r||r.area<w*h*0.12||r.area>w*h*0.93)return c; // no se distingue el papel: se deja la foto entera
-    return pegar(c,r,w,h,k,0.004);
+    for(let v=0;v<256;v++){wB+=hi[v];if(!wB)continue;const wF=n-wB;if(!wF)break;sB+=v*hi[v];const mB=sB/wB,mF=(sum-sB)/wF,b=wB*wF*(mB-mF)*(mB-mF);if(b>mx){mx=b;t=v}}
+    // color del papel: mediana de lo claro en el centro
+    const R=[],G=[],B=[];
+    for(let y=Math.round(h*0.3);y<h*0.7;y++)for(let x=Math.round(w*0.3);x<w*0.7;x++){const i=y*w+x;if(L[i]>t){R.push(d[i*4]);G.push(d[i*4+1]);B.push(d[i*4+2])}}
+    if(R.length<50)return c;
+    const med=a=>a.sort((p,q)=>p-q)[a.length>>1],pr=med(R),pg=med(G),pb=med(B),pl=(pr*77+pg*150+pb*29)>>8;
+    const tonoDe=i=>{const dr=d[i*4]-pr,dg=d[i*4+1]-pg,db=d[i*4+2]-pb,mm=(dr+dg+db)/3;return Math.hypot(dr-mm,dg-mm,db-mm)}; // tono distinto del papel (quitando lo que es solo sombra)
+    // cuánto cambia el tono dentro del mismo papel (sombras, pliegues): con eso se decide qué ya no es papel
+    const tc=[];for(let y=Math.round(h*0.3);y<h*0.7;y++)for(let x=Math.round(w*0.3);x<w*0.7;x++){const i=y*w+x;if(L[i]>t)tc.push(tonoDe(i))}
+    tc.sort((p,q)=>p-q);const tmax=Math.max(14,Math.min(30,8+2.2*tc[Math.floor(tc.length*0.75)]));
+    const m=new Uint8Array(n);for(let i=0;i<n;i++)m[i]=L[i]>Math.min(t,pl-55)&&tonoDe(i)<tmax?1:0;
+    if(window.__dbgRecorte)window.__dbgRecorte.push(tmax);
+    const ab=abrir(m,w,h,2);
+    const r=mancha(ab,w,h);if(!r||r.area<n*0.12||r.area>n*0.93)return c; // no se distingue el papel: se deja la foto entera
+    return pegar(c,envolvente(r,w,h),w,h,k,0.004);
   }
+  function envolvente(r,w,h){ // la forma del papel sin mordiscos (texto o sombra en el borde): su envolvente convexa
+    const P=[];for(let y=0;y<h;y++){let a=-1,z=-1;for(let x=0;x<w;x++)if(r.den[y*w+x]){if(a<0)a=x;z=x}if(a>=0){P.push([a,y],[z+1,y],[a,y+1],[z+1,y+1])}}
+    P.sort((p,q)=>p[0]-q[0]||p[1]-q[1]);const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]),lo=[],up=[];
+    for(const p of P){while(lo.length>1&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p)}
+    for(let i=P.length-1;i>=0;i--){const p=P[i];while(up.length>1&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p)}
+    const hull=lo.slice(0,-1).concat(up.slice(0,-1));
+    const cv=document.createElement('canvas');cv.width=w;cv.height=h;const x=cv.getContext('2d');x.fillStyle='#000';x.beginPath();hull.forEach(([a,b],i)=>i?x.lineTo(a,b):x.moveTo(a,b));x.closePath();x.fill();
+    const al=x.getImageData(0,0,w,h).data,den=new Uint8Array(w*h);let x0=w,y0=h,x1=-1,y1=-1;
+    for(let i=0;i<w*h;i++)if(al[i*4+3]>127){den[i]=1;const X=i%w,Y=(i-X)/w;if(X<x0)x0=X;if(X>x1)x1=X;if(Y<y0)y0=Y;if(Y>y1)y1=Y}
+    return {den,area:r.area,x0,y0,x1,y1};
+  }
+  function abrir(m,w,h,R){ // quitar lo fino (erosión) y volver a engordar (dilatación): separa el papel de lo que solo lo toca
+    const er=new Uint8Array(w*h),di=new Uint8Array(w*h);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){let ok=1;for(let dy=-R;dy<=R&&ok;dy++)for(let dx=-R;dx<=R;dx++){const X=x+dx,Y=y+dy;if(X<0||Y<0||X>=w||Y>=h||!m[Y*w+X]){ok=0;break}}er[y*w+x]=ok}
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(er[y*w+x])for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<w&&Y<h)di[Y*w+X]=1}
+    return di;
+  }
+
   function pegar(c,r,w,h,k,marg){ // la mancha a tamaño real, con lo de fuera en blanco
     const mk=document.createElement('canvas');mk.width=w;mk.height=h;const mx=mk.getContext('2d'),id=mx.createImageData(w,h);
     for(let i=0;i<w*h;i++){id.data[i*4+3]=r.den[i]?255:0}mx.putImageData(id,0,0);
@@ -4480,7 +4512,10 @@ const Pesaje=(()=>{
     const im=ox.getImageData(0,0,W,H),q=im.data;for(let i=0;i<q.length;i+=4){const a=q[i],b=q[i+1],z=q[i+2];if(!(z>a+12&&z>b)){q[i]=q[i+1]=q[i+2]=255}}ox.putImageData(im,0,0);
     return o;
   }
-  async function reducirTicket(blob){const c=recorteTicket(await fotoCanvas(blob));return achicar(c)}
+  function girar(c,g){if(!g)return c;const o=document.createElement('canvas'),r=g%180!==0;o.width=r?c.height:c.width;o.height=r?c.width:c.height;const x=o.getContext('2d');
+    x.translate(o.width/2,o.height/2);x.rotate(g*Math.PI/180);x.drawImage(c,-c.width/2,-c.height/2);return o}
+  async function girarBlob(b,g){const i=await createImageBitmap(b),c=document.createElement('canvas');c.width=i.width;c.height=i.height;c.getContext('2d').drawImage(i,0,0);
+    return await new Promise(r=>girar(c,g).toBlob(r,'image/jpeg',0.9))}
   async function reducir(blob){return achicar(await fotoCanvas(blob))}
   async function achicar(c0){ // lado largo 1600 px: se lee igual y el PDF no pesa
     const k=Math.min(1,1600/Math.max(c0.width,c0.height));let c=c0;
@@ -4489,11 +4524,14 @@ const Pesaje=(()=>{
   }
 
   // ---------- lectura de las fotos ----------
-  const P_TICKET=`Eres el lector de los tickets de una báscula de pesaje de vehículos por ejes. En la foto hay uno o varios tickets impresos, uno por eje, en el orden en que se pesaron (el de arriba es el 1.er eje), y puede haber notas escritas a mano.
+  const P_TICKET=`Eres el lector de los tickets de una báscula de pesaje de vehículos por ejes. En la foto hay uno o varios tickets impresos, uno por eje, en el orden en que se pesaron (el de arriba es el 1.er eje), y puede haber notas escritas a mano. La foto puede estar girada o de lado: léela igual.
 Cada ticket lleva RUEDA 1 y RUEDA 2 (kg), BRUTO, TARA y NETO (kg) y la fecha y la hora (dd/mm/aa hh:mm:ss).
-Las notas a mano dicen si se pesó con conductor o sin él ("S/C" = sin conductor, "C/C" = con conductor) y cuánto combustible tenía el depósito (p. ej. "1/4 combustible", "1/2", "3/4", "lleno", "vacío").
+Si junto a un ticket pone a mano "ENGANCHE" (o "remolque", "lanza"), ese ticket NO es un eje: va en "enganche" y no en "ejes". Si pone "1º eje", "2º eje"…, es ese eje.
+Las notas a mano dicen si se pesó con conductor o sin él ("S/C" = sin conductor, "C/C" = con conductor) y cuánto combustible tenía el depósito: "1/4 combustible", "1/2", "3/4", "lleno", "vacío" o un porcentaje ("0%" = vacio, "25%" = 1/4, "50%" = 1/2, "75%" = 3/4, "100%" = lleno; otro porcentaje, el más cercano).
+Otras notas a mano (modelo, carrocero, un número…, p. ej. "BUCHER *028453*", "DL 320") van en "otras" tal cual.
+"giro": cuántos grados hay que girar la foto en el sentido de las agujas del reloj para que el ticket se lea derecho (0, 90, 180 o 270).
 Lee los números exactamente como están. No inventes nada: si algo no se ve, déjalo "" y explícalo en "dudas".
-Devuelve solo JSON: {"ejes":[{"rueda1":"","rueda2":"","bruto":"","tara":"","neto":"","fecha":"dd/mm/aa","hora":"hh:mm:ss"}],"conductor":"si | no | (vacío si no lo pone)","deposito":"vacio | 1/4 | 1/2 | 3/4 | lleno | (vacío si no lo pone)","notas":"lo escrito a mano, tal cual","dudas":""}`;
+Devuelve solo JSON: {"ejes":[{"rueda1":"","rueda2":"","bruto":"","tara":"","neto":"","fecha":"dd/mm/aa","hora":"hh:mm:ss"}],"enganche":"kg del enganche, o vacío","conductor":"si | no | (vacío si no lo pone)","deposito":"vacio | 1/4 | 1/2 | 3/4 | lleno | (vacío si no lo pone)","porcentaje":"lo que pone del combustible, tal cual","otras":"las otras notas a mano","giro":0,"dudas":""}`;
   const P_BAST=`En la foto está el número de bastidor (VIN) de un vehículo industrial: troquelado en el chasis o en una placa o etiqueta. Lee el VIN de 17 caracteres exactamente (sin espacios ni guiones; un VIN no lleva I, O ni Q). Si en la foto se ve la marca del vehículo (logotipo o placa del fabricante), ponla en mayúsculas.
 No inventes nada: si un carácter no es seguro, dilo en "dudas".
 Devuelve solo JSON: {"bastidor":"","marca":"","dudas":""}`;
@@ -4533,9 +4571,14 @@ Devuelve solo JSON: {"bastidor":"","marca":"","dudas":""}`;
       const f=deTicket(ej[0].fecha);if(f)P.fecha=f;
     }
     const c=norm(o.conductor).toLowerCase();if(c==='si'||c==='sí'||c==='no')P.conductor=c==='no'?'no':'si';
-    const d=norm(o.deposito).toLowerCase().replace('vacío','vacio');if(DEP.some(([k])=>k===d))P.deposito=d;
-    P.leido.ticket={ejes:ej.length,notas:norm(o.notas),cond:!!c,dep:DEP.some(([k])=>k===d)};
-    P.dudas=[P.leido.bast&&P.leido.bast.dudas,norm(o.dudas)].filter(Boolean).join(' ');P.leido.ticketDudas=norm(o.dudas);
+    let d=norm(o.deposito).toLowerCase().replace('vacío','vacio');
+    const pc=/(\d{1,3})\s*%/.exec(norm(o.porcentaje)+' '+norm(o.deposito));if(!DEP.some(([k])=>k===d)&&pc){const n=+pc[1];d=DEP[Math.max(0,Math.min(4,Math.round(n/25)))][0]} // 0 % vacío … 100 % lleno
+    if(DEP.some(([k])=>k===d))P.deposito=d;
+    const en=kgN(o.enganche);if(en!=null&&!/enganche/i.test(P.otros))P.otros=[norm(P.otros),'Enganche: '+miles(en)+' kg'].filter(Boolean).join('. '); // el enganche no es un eje
+    P.giro=[90,180,270].includes(+o.giro)?+o.giro:0;
+    P.leido.ticket={ejes:ej.length,notas:norm(o.otras||o.notas),cond:!!c,dep:DEP.some(([k])=>k===d)};
+    const otras=norm(o.otras||'');P.leido.ticketDudas=[norm(o.dudas),otras&&`Notas a mano en el ticket: «${otras}».`].filter(Boolean).join(' ');
+    P.dudas=[P.leido.bast&&P.leido.bast.dudas,P.leido.ticketDudas].filter(Boolean).join(' ');
   }
   function ponBast(o){
     const v=vinDe(o.bastidor)||norm(o.bastidor).toUpperCase().replace(/\s/g,'');
@@ -4617,6 +4660,7 @@ ${selloHtml()}
   }
   const titulo=p=>[p.marca,p.bastidor].filter(Boolean).join(' · ')||'Pesaje sin identificar';
   const total=p=>{const v=p.ejes.map(e=>e.kg).filter(n=>n!=null);return v.length?v.reduce((a,b)=>a+b,0):null};
+  const fotosT=p=>p.sinRecorte&&(p.ticketEntero||[]).length===p.fotosTicket.length?p.ticketEntero:p.fotosTicket;
   const url=b=>{try{return URL.createObjectURL(b)}catch(e){return ''}};
 
   function pintar(){
@@ -4628,9 +4672,9 @@ ${selloHtml()}
 <div class="card"><h3>Fotos</h3><div class="fotos">
  <div class="foto${P.fotoBast?' hay':''}" data-pf="bast"><b>Bastidor</b>${P.fotoBast?`<div class="mini"><img alt="Foto del bastidor" src="${url(P.fotoBast)}"></div>`:''}<span class="est">${esc(estB)}</span>
   <div class="bb"><button type="button" class="cam" data-pcam>${CAM}${P.fotoBast?'Otra':'Foto'}</button><button type="button" data-pgal aria-label="Galería">${GAL}</button></div></div>
- <div class="foto${P.fotosTicket.length?' hay':''}" data-pf="ticket"><b>Ticket</b>${P.fotosTicket.length?`<div class="mini">${P.fotosTicket.map((b,i)=>`<img alt="Foto del ticket ${i+1}" src="${url(b)}">`).join('')}</div>`:''}<span class="est">${esc(estT)}</span>
+ <div class="foto${P.fotosTicket.length?' hay':''}" data-pf="ticket"><b>Ticket</b>${P.fotosTicket.length?`<div class="mini">${fotosT(P).map((b,i)=>`<img alt="Foto del ticket ${i+1}" src="${url(b)}">`).join('')}</div>`:''}<span class="est">${esc(estT)}</span>
   <div class="bb"><button type="button" class="cam" data-pcam>${CAM}${P.fotosTicket.length?'Otra':'Foto'}</button><button type="button" data-pgal aria-label="Galería">${GAL}</button></div>
-  ${P.fotosTicket.length?'<button type="button" class="otra" data-pmas>+ Añadir otro trozo del ticket</button>':''}</div>
+  ${P.fotosTicket.length?'<button type="button" class="otra" data-pgir>↻ Girar la foto</button>'+((P.ticketEntero||[]).length===P.fotosTicket.length?`<button type="button" class="otra" data-prec>${P.sinRecorte?'✂ Recortar al ticket':'Foto entera (sin recortar)'}</button>`:'')+'<button type="button" class="otra" data-pmas>+ Añadir otro trozo del ticket</button>':''}</div>
 </div>${FotoPunto.iaClave()?'':'<p class="nota">Sin la clave de Google las fotos se leen con el lector del móvil, que con los tickets falla más. <button type="button" class="otra" data-pclave>Poner la clave</button></p><div data-pclavebox></div>'}</div>
 ${P.dudas?`<div class="duda"><b>Revisa:</b> ${esc(P.dudas)}</div>`:''}
 <div class="card"><h3>Vehículo</h3><div class="dos"><label class="f">Marca<input data-pk="marca" value="${esc(P.marca)}" autocapitalize="characters"></label><label class="f">N.º de bastidor<input data-pk="bastidor" value="${esc(P.bastidor)}" autocapitalize="characters" spellcheck="false"></label></div></div>
@@ -4649,7 +4693,9 @@ ${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>C
     for(const f of box.querySelectorAll('.foto')){const q=f.dataset.pf;
       f.querySelector('[data-pcam]').onclick=()=>FotoPunto.pedirFoto(b=>foto(q,b,false));
       f.querySelector('[data-pgal]').onclick=()=>FotoPunto.pedirFoto(b=>foto(q,b,false),true);
-      const m=f.querySelector('[data-pmas]');if(m)m.onclick=()=>FotoPunto.pedirFoto(b=>foto(q,b,true));}
+      const m=f.querySelector('[data-pmas]');if(m)m.onclick=()=>FotoPunto.pedirFoto(b=>foto(q,b,true));
+      const gi=f.querySelector('[data-pgir]');if(gi)gi.onclick=async()=>{const p=P;p.fotosTicket=await Promise.all(p.fotosTicket.map(b=>girarBlob(b,90)));if(p.ticketEntero)p.ticketEntero=await Promise.all(p.ticketEntero.map(b=>b&&girarBlob(b,90)));guardarYa();if(P===p)pintar()};
+      const rc=f.querySelector('[data-prec]');if(rc)rc.onclick=()=>{P.sinRecorte=!P.sinRecorte;guardarYa();pintar()};}
     const ck=box.querySelector('[data-pclave]');if(ck)ck.onclick=()=>FotoPunto.formClave(box.querySelector('[data-pclavebox]'),()=>pintar());
     for(const i of box.querySelectorAll('input[data-pk]'))i.oninput=()=>{let v=i.value;if(i.dataset.pk==='bastidor'||i.dataset.pk==='marca'){v=v.toUpperCase()}P[i.dataset.pk]=i.dataset.pk==='bastidor'?v.replace(/\s/g,''):v;
       if(i.dataset.pk==='bastidor'&&!P.marca&&WMI[P.bastidor.slice(0,3)]){P.marca=WMI[P.bastidor.slice(0,3)];box.querySelector('[data-pk=marca]').value=P.marca}cab('Pesaje',titulo(P));guardar()};
@@ -4664,24 +4710,32 @@ ${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>C
   function detalle(e){ // lo del ticket, para ver que cuadra: rueda 1 + rueda 2 = bruto, bruto − tara = neto
     if(e.r1==null&&e.bruto==null)return '';
     const p=[];let mal='';
-    if(e.r1!=null||e.r2!=null){p.push(`Ruedas ${miles(e.r1)} + ${miles(e.r2)}`);if(e.r1!=null&&e.r2!=null&&e.bruto!=null&&e.r1+e.r2!==e.bruto)mal=`Las ruedas suman ${miles(e.r1+e.r2)} y el bruto es ${miles(e.bruto)}.`}
+    if(e.r1!=null||e.r2!=null){p.push(`Ruedas ${miles(e.r1)} + ${miles(e.r2)}`);if(e.r1!=null&&e.r2!=null&&e.bruto!=null&&Math.abs(e.r1+e.r2-e.bruto)>10)mal=`Las ruedas suman ${miles(e.r1+e.r2)} y el bruto es ${miles(e.bruto)}.`}
     if(e.bruto!=null)p.push('bruto '+miles(e.bruto)+(e.tara?' − tara '+miles(e.tara):''));
     if(e.bruto!=null&&e.kg!=null&&e.bruto-(e.tara||0)!==e.kg)mal+=` Bruto menos tara da ${miles(e.bruto-(e.tara||0))}.`;
     return `<span class="det${mal?' mal':''}">${esc(mal||'Ticket: '+p.join(', ')+(e.hora?' · '+e.hora:''))}</span>`;
   }
   function marcar(s){const v=P[s.dataset.pseg];for(const b of s.querySelectorAll('button')){b.classList.toggle('on',b.dataset.pv===v);b.setAttribute('aria-pressed',String(b.dataset.pv===v))}}
   async function foto(q,blob,mas){
-    const p=P;let b;try{b=q==='ticket'?await reducirTicket(blob):await reducir(blob)}catch(e){showMsg('No se pudo abrir la foto. Prueba otra vez.',true);return}
-    if(q==='bast')p.fotoBast=b;else p.fotosTicket=mas?[...p.fotosTicket,b]:[b];
+    const p=P;let b,o2=null,hg=0;
+    try{if(q==='ticket'){const c0=await fotoCanvas(blob),cr=recorteTicket(c0);hg=cr.width>cr.height*1.1?90:0; // un ticket es alargado: si sale apaisado, de pie
+        b=await achicar(girar(cr,hg));o2=await achicar(girar(c0,hg))} // también sin recortar, por si el recorte se come algo
+      else b=await reducir(blob)}
+    catch(e){showMsg('No se pudo abrir la foto. Prueba otra vez.',true);return}
+    if(q==='bast')p.fotoBast=b;else{p.fotosTicket=mas?[...p.fotosTicket,b]:[b];p.ticketEntero=mas?[...(p.ticketEntero||[]),o2]:[o2]}
     guardarYa();if(P!==p)return;pintar();
     const est=box.querySelector(`.foto[data-pf="${q}"] .est`),av=t=>{if(est){est.className='est lee';est.textContent=t}};
     av(FotoPunto.iaClave()?'Leyendo con Google…':'Leyendo en el móvil…');
     try{
       if(q==='bast')ponBast(await leerBast(blob,av));
-      else{const o=await leerTicket(blob,av);if(mas&&P.leido.ticket){const ya=P.ejes;ponTicket(o);P.ejes=[...ya,...P.ejes];P.leido.ticket.ejes=P.ejes.length}else ponTicket(o)}
+      else{const o=await leerTicket(blob,av);
+        const g=[0,90,180,270].includes(+o.giro)?(+o.giro-hg+360)%360:0; // Google dice cuánto girar la foto original; ya se giró hg
+        if(g){const i=p.fotosTicket.length-1;p.fotosTicket[i]=await girarBlob(p.fotosTicket[i],g);if(p.ticketEntero[i])p.ticketEntero[i]=await girarBlob(p.ticketEntero[i],g)}
+        if(mas&&P.leido.ticket){const ya=P.ejes;ponTicket(o);P.ejes=[...ya,...P.ejes];P.leido.ticket.ejes=P.ejes.length}else ponTicket(o)}
       guardarYa();if(P===p)pintar();
     }catch(e){if(est){est.className='est mal';est.textContent=(e instanceof TypeError?'Sin internet: no se ha podido leer. ':'')+(e&&e.message||e)+' Puedes escribirlo a mano.'}}
   }
+
 
   // ---------- el PDF (como la plantilla de Daniel: A4, Arial 10, tabla de taras, foto del ticket y observaciones) ----------
   let DATA=null,DP=null;
@@ -4727,7 +4781,7 @@ ${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>C
     // foto(s) del ticket, centradas en el hueco (en el ejemplo: 156 × 207 pt)
     const fT=y+32,fH=Math.max(150,207-(n-3)*35),fW=MR-ML;
     if(p.fotosTicket.length){
-      const ims=[];for(const b of p.fotosTicket)ims.push(await pdf.embedJpg(new Uint8Array(await b.arrayBuffer())));
+      const ims=[];for(const b of fotosT(p))ims.push(await pdf.embedJpg(new Uint8Array(await b.arrayBuffer())));
       const gap=8;let k=fH/Math.max(...ims.map(i=>i.height));let tw=ims.reduce((s,i)=>s+i.width*k,0)+gap*(ims.length-1);
       if(tw>fW){k*=(fW-gap*(ims.length-1))/(tw-gap*(ims.length-1));tw=fW}
       let x=(W-tw)/2;for(const im of ims){const w=im.width*k,h=im.height*k;pg.drawImage(im,{x,y:H-fT-h,width:w,height:h});x+=w+gap}
