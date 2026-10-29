@@ -3607,7 +3607,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 29 oct, 17:48';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 29 oct, 17:54';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4892,6 +4892,345 @@ window.ayVolver=function(){const h=document.getElementById('homeNote');let b=doc
  b=document.createElement('button');b.type='button';b.id='ayVolver';b.className='ay-volver';b.textContent='Volver a mostrar las ayudas «?»';
  b.onclick=()=>{try{localStorage.removeItem('ayuda-oculta')}catch(e){}b.remove();ayPoner()};h.after(b)};
 ayPoner();ayVolver();
+})();
+
+// Ayuda «?» en el COP de Palfinger (29 oct): ficha con qué es, vídeo, con qué y cómo se mide, en cada fila.
+// Misma ficha que la del COP general (ayuda.js del hilo de la presentación); aquí cada fila se busca por su texto,
+// porque en Palfinger hay números repetidos (dos bloques 7.4.x); el resto, por su número (AYN).
+(()=>{
+const V=window.AY_PAL_DIR||'ayuda/pal/'; // al instalar, los vídeos van en ayuda/pal/ (los del general en ayuda/)
+const vid=(k,txt='Cómo se mide · 10 s')=>({src:V+'ayuda-pal-'+k+'.mp4',poster:V+'poster-pal-'+k+'.jpg',vid:txt});
+const PLOM='Metro, plomada y tiza';
+const dep=(qual,k,extra)=>({q:`Capacidad del ${qual} y distancia en horizontal desde el centro del eje 1 hasta el centro del depósito.`,con:PLOM,
+ pasos:[extra,'Mide el largo del depósito y marca la mitad con tiza.','Con la plomada, marca en el suelo esa mitad y el centro de la rueda delantera.','Mide entre las dos marcas.'],
+ ojo:'Marca «Sí» solo en los depósitos que lleve. Si el depósito queda delante del eje 1, la distancia va en negativo.',...vid(k)});
+const ejes=(a,b,k,o='Compárala con el COC. Entra en el Check1.')=>({q:`Distancia entre el centro del eje ${a} y el del eje ${b}.`,con:PLOM,
+ pasos:['Vehículo en suelo plano y con las ruedas rectas.',`Con la plomada, marca en el suelo el centro de la rueda ${a} y el de la rueda ${b} (el buje), en el mismo lado.`,'Mide entre las dos marcas.'],ojo:o,...vid(k)});
+const EJE={q:'Los datos de cada eje: masa máxima (MMTA), tara pesada, medida del neumático, índice de carga y velocidad, y si lleva rueda gemela.',con:'Placa del fabricante, báscula y la vista',
+ pasos:['MMTA: cópiala de la placa del fabricante (la masa de ese eje).','Tara: pesa el vehículo vacío eje por eje en la báscula y apunta lo de cada eje. Sin jib.','Neumático e índice: léelos en el flanco, por ejemplo 315/80 R22.5 156/150K.','Rueda gemela: «Sí» si ese eje lleva dos ruedas por lado.'],
+ ojo:'Con «Adjuntar documento de masas» las taras se ponen solas. El ticket de la báscula hay que adjuntarlo.',...vid('eje','De dónde sale cada dato · 10 s')};
+const AY={
+'Total':{q:'La MMTA total del vehículo y la tara total.',con:'Placa del fabricante',pasos:['MMTA total: la de la placa del fabricante.','Tara total: la app la suma sola con las taras de cada eje.'],ojo:'La suma de las MMTA de los ejes no puede ser menor que la MMTA total (comprobación 7.5.3).'},
+'Tipo de caja de cambios':{q:'Si la caja de cambios es manual o automática.',con:'La vista',pasos:['Mira la cabina: si hay pedal de embrague, es «Manual».','Si no hay pedal de embrague, es «Automática».']},
+'Tipo de combustible':{q:'El combustible que usa el vehículo.',con:'El COC o la tapa del depósito',pasos:['Míralo en el COC (punto 26) o en la tapa del depósito.','Marca Diésel, Eléctrico o GNC-GLP.']},
+'Nivel de combustible':{q:'Cuánto combustible tenía el depósito cuando se pesó el vehículo.',con:'El indicador del cuadro',pasos:['Con el contacto puesto, mira el indicador de combustible.','Marca el valor más cercano: 0 %, 25 %, 50 %, 75 % o 100 %.'],ojo:'Tiene que ser el nivel del momento del pesaje. «Reserva» cuenta como 0 %.'},
+'D1d: depósito de combustible a la derecha':dep('depósito de combustible','dep-comb','Capacidad: en la etiqueta del depósito o en la ficha técnica (litros).'),
+'D1d: depósito de combustible a la izquierda':dep('depósito de combustible','dep-comb-i','Capacidad: en la etiqueta del depósito o en la ficha técnica (litros).'),
+'D1d: otro depósito de combustible':dep('depósito de combustible','dep-comb','Capacidad: en la etiqueta del depósito o en la ficha técnica (litros).'),
+'D1a: depósito de aceite a la derecha':dep('depósito de aceite','dep-ac-d','Capacidad: la del depósito de aceite hidráulico de la grúa (litros).'),
+'D1a: depósito de aceite a la izquierda':dep('depósito de aceite','dep-ac','Capacidad: la del depósito de aceite hidráulico de la grúa (litros).'),
+'D1a: otro depósito de aceite':dep('depósito de aceite','dep-ac','Capacidad: la del depósito de aceite hidráulico de la grúa (litros).'),
+'F1: fila 1 de asientos':{q:'Cuántas plazas tiene la fila y a qué distancia del eje 1 queda.',con:PLOM,pasos:['Cuenta las plazas de la fila (la del conductor es la fila 1).','Busca el punto donde se juntan el respaldo y el asiento.','Con la plomada, marca en el suelo ese punto y el centro de la rueda delantera.','Mide entre las dos marcas.'],ojo:'Si el asiento queda por delante del eje 1, la distancia va en negativo (por ejemplo −60).',...vid('asiento')},
+'F2: fila 2 de asientos':{q:'Cuántas plazas tiene la segunda fila y a qué distancia del eje 1 queda.',con:PLOM,pasos:['Solo si la cabina tiene segunda fila (cabina doble).','Busca el punto donde se juntan el respaldo y el asiento.','Con la plomada, marca en el suelo ese punto y el centro de la rueda delantera.','Mide entre las dos marcas.'],ojo:'Si no hay segunda fila, déjala vacía.',...vid('asiento')},
+'Vd: Voladizo delantero':{q:'Distancia en horizontal desde el punto más delantero del vehículo hasta el centro del eje 1.',con:PLOM,pasos:['Vehículo en suelo plano y con las ruedas rectas.','Con la plomada, marca en el suelo el punto más delantero (paragolpes, o la placa portaimplementos si la lleva).','Marca también el centro de la rueda delantera (el buje).','Mide entre las dos marcas.'],ojo:'Entra en el Check1 y en el Check2. La app la copia a la cota 4 del 14.2.',...vid('vd')},
+'D12: Distancia eje 1-2':ejes(1,2,'d12'),
+'D23: Distancia eje 2-3':ejes(2,3,'d23'),
+'D34: Distancia eje 3-4':ejes(3,4,'d34','Déjala vacía si el vehículo tiene menos de 4 ejes.'),
+'D45: Distancia eje 4-5':ejes(4,5,'d45','Déjala vacía si el vehículo tiene menos de 5 ejes.'),
+'Vt: Voladizo trasero':{q:'Distancia en horizontal desde el centro del último eje hasta el punto más trasero del vehículo.',con:PLOM,pasos:['Vehículo en suelo plano y con las ruedas rectas.','Con la plomada, marca en el suelo el centro de la última rueda.','Marca también el punto más trasero: la caja, la protección trasera o lo que salga más.','Mide entre las dos marcas.'],ojo:'Entra en el Check1.',...vid('vt')},
+'Lt: Longitud total (medida, no la suma)':{q:'Longitud total del vehículo medida de punta a punta, no la suma de las cotas.',con:'Cinta métrica, plomada y tiza',pasos:['Con la plomada, marca en el suelo el punto más delantero y el más trasero.','Mide en línea recta entre las dos marcas.','Apunta lo que mides, aunque no cuadre con la suma.'],ojo:'Máximo 12.000 mm. La app la compara con el Check1 y el Check2 (3 % como mucho).',...vid('lt')},
+'Check1: Vd+D12+D23+Vt=Lt':{q:'Se calcula solo: Vd + D12 + D23 + D34 + D45 + Vt.',con:'Nada, lo hace la app',pasos:['No hay que medir nada.','Tiene que dar casi lo mismo que la Lt medida: un 3 % de diferencia como mucho.','Si no cuadra, repasa las cotas que lo forman.'],ojo:'El Check1 y el Check2 tienen que coincidir; si no, la app avisa.'},
+'A: Anchura':{q:'Anchura máxima del vehículo.',con:'Metro, plomada y tiza',pasos:['Busca el punto más ancho: normalmente la caja o las ruedas traseras.','No cuentan los retrovisores ni las luces de gálibo.','Con la plomada, marca en el suelo los dos lados y mide entre las marcas.'],ojo:'Máximo 2.550 mm (2.600 en isotermos). La app la copia al 10.3.1.5.',...vid('a')},
+'H: Altura':{q:'Altura máxima del vehículo vacío.',con:'Metro y listón con nivel',pasos:['Vehículo vacío y en suelo plano.','Busca el punto más alto: normalmente la grúa plegada.','Apoya un listón con nivel en ese punto, que sobresalga del camión.','Mide en vertical desde el suelo hasta el listón.'],ojo:'Máximo 4.000 mm. Si la mides por partes, usa «Por partes (suma)».',...vid('h')},
+'Pg: Posición grúa':{q:'Dónde va montada la grúa.',con:'La vista',pasos:['Si la grúa va justo detrás de la cabina, marca «Delante».','Si va al final del chasis, marca «Detrás».'],...vid('pg','Delante o detrás · 10 s')},
+'Im: Inicio máquina':{q:'Distancia en horizontal desde el centro del eje 1 hasta el principio de la grúa.',con:PLOM,pasos:['Vehículo en suelo plano y con las ruedas rectas.','Con la plomada, marca en el suelo el centro de la rueda delantera.','Marca también el principio de la base de la grúa.','Mide entre las dos marcas.'],...vid('im')},
+'Ic: Inicio carrocería':{q:'Distancia en horizontal desde el centro del eje 1 hasta el frente de la caja.',con:PLOM,pasos:['Vehículo en suelo plano y con las ruedas rectas.','Con la plomada, marca en el suelo el centro de la rueda delantera.','Marca también la pared delantera de la caja.','Mide entre las dos marcas.'],ojo:'Vd + Ic + Lc tiene que dar la Lt (Check2).',...vid('ic')},
+'Dg: Distancia último eje a centro estabilizador adicional':{q:'Distancia en horizontal desde el centro del último eje hasta el centro del estabilizador adicional.',con:PLOM,pasos:['Con la plomada, marca en el suelo el centro de la última rueda.','Marca también el centro de la pata del estabilizador.','Mide entre las dos marcas.'],ojo:'Déjala vacía si no lleva estabilizador adicional.',...vid('dg')},
+'Lc: Longitud caja (exterior)':{q:'Longitud de la caja por fuera, con los cierres.',con:'Cinta métrica',pasos:['Mide por fuera, desde la pared delantera de la caja…','…hasta la trasera, contando los cierres.'],ojo:'Entra en el Check2.',...vid('lc')},
+'Hc: Altura laterales caja':{q:'Altura de los laterales de la caja.',con:'Metro',pasos:['Apoya el metro en el piso de la caja.','Mide en vertical hasta el borde de arriba del lateral.'],...vid('hc')},
+'Pv: Punto de volteo respecto al centro del último eje (volquete/polibrazo)':{q:'Distancia en horizontal desde el centro del último eje hasta el eje sobre el que bascula la caja.',con:PLOM,pasos:['Busca el eje (bulón) sobre el que gira la caja al bascular.','Con la plomada, marca en el suelo ese eje y el centro de la última rueda.','Mide entre las dos marcas.'],ojo:'Solo en volquetes y polibrazos. Si no, déjala vacía.',...vid('pv')},
+'Check2: Vd+Ic+Lc=Lt':{q:'Se calcula solo: Vd + Ic + Lc.',con:'Nada, lo hace la app',pasos:['No hay que medir nada.','Tiene que dar casi lo mismo que la Lt medida: un 3 % de diferencia como mucho.','Si no cuadra, repasa Vd, Ic y Lc.'],ojo:'El Check1 y el Check2 tienen que coincidir; si no, la app avisa.'}
+};
+for(let i=1;i<=5;i++)AY['Eje '+i]=EJE;
+window.AY_PAL=AY;
+// Resto del COP (apartados 1 a 4, 7.5 y 8 a 14): aquí cada fila se busca por su número, que no se repite.
+const VISTA='La vista',METRO='Metro',PLOMT='Cinta métrica, plomada y tiza',TRANSP='Transportador de ángulos';
+const sn=(q,pasos,ojo,con=VISTA)=>({q,con,pasos,ojo});
+const foto=(q,pasos,ojo)=>({q,con:'Móvil',pasos:[...pasos,'Cuando tengas la foto, marca «Sí».'],ojo});
+const acto=(nom,cuando,ap)=>({q:`Si al vehículo le aplica ${nom} y si cumple.`,con:'El resto del COP',pasos:[`Aplica: «Sí» ${cuando}; si no, «No».`,ap?`Cumple: «Sí» si todo el apartado ${ap} está bien.`:'Cumple: «Sí» si está todo bien.'],ojo:'Si aplica y algo no cumple, explícalo en el 4.'});
+const obs=q=>({q:q||'Lo que quieras dejar escrito sobre este apartado.',con:'—',pasos:['Escribe lo que haga falta aclarar.','Si no hay nada, déjalo vacío.']});
+const fase=que=>({q:`«Sí» si ${que} venía montado de fábrica (1ª fase); «No» si lo ha puesto Palfinger.`,con:VISTA,pasos:['Míralo en la documentación del camión o pregunta en taller.']});
+const marca=(que,donde)=>({q:`La marca ${que}.`,con:donde,pasos:[`Léela en ${donde.toLowerCase()} y cópiala tal cual.`]});
+const contr=(que,donde,ojo)=>({q:`La contraseña de homologación ${que}: empieza por «E» y un número de país.`,con:donde,pasos:[`Cópiala de ${donde.toLowerCase()}, entera.`],ojo});
+const LUZTRAS={q:'Las medidas de esta luz, vista desde atrás.',con:'Cinta métrica',pasos:['A: del suelo al borde de arriba de la luz.','B: del suelo al borde de abajo.','C: separación entre las dos luces.','D: de la luz al lateral del camión.','E, F y G: los ángulos en que tiene que verse; comprueba que nada la tapa.'],...vid('tras-luz')};
+const luzT=ojo=>({...LUZTRAS,ojo});
+const lat=(que,lado,k,lim)=>({q:`Distancias de ${que} del lado ${lado}.`,con:PLOMT,pasos:['d1: de lo más delantero del camión a la 1ª.','d1-2, d2-3…: de cada una a la siguiente.','df: de la última a lo más trasero.','h3 y h1: del suelo al borde de abajo y al de arriba.'],ojo:lim,...vid(k)});
+const LIMLUZ='d: máx. 3.000 · df: máx. 1.000 · h3: mín. 350 · h1: máx. 1.500 mm (2.100 si la carrocería no deja).';
+const LIMCAT='d: máx. 3.000 · df: máx. 1.000 · h3: mín. 250 · h1: máx. 900 mm (1.500 si la carrocería no deja).';
+const DERE=' Si en el 10.2.1 has marcado que los dos lados coinciden, no hace falta.';
+const prof=ojo=>({q:'Distancia en horizontal desde la cara de atrás de la protección hasta lo más trasero del vehículo.',con:PLOMT,pasos:['No cuentan las partes a más de 2 m del suelo.','Con la plomada, marca en el suelo lo más trasero y la cara de atrás de la protección.','Mide entre las dos marcas.'],ojo:ojo+' Rellena solo la fila de tu categoría.',...vid('pt-prof')});
+const datGancho=n=>({
+ [n+'.1']:marca('del gancho','La placa del gancho'),
+ [n+'.2']:contr('del gancho','La placa del gancho','Tiene que estar en los informes IH20178543 o IH202012740. Haz la foto (3.11).'),
+ [n+'.3']:{q:'La clase del gancho.',con:'La placa del gancho',pasos:['Cópiala tal como viene en la placa.']},
+ [n+'.4']:{q:'El tipo o modelo del gancho.',con:'La placa del gancho',pasos:['Cópialo tal como viene en la placa.']},
+ [n+'.5']:{q:'Los valores del gancho: D y Dc (kN), S (kg) y V (kN).',con:'La placa del gancho',pasos:['Cópialos de la placa.','Si alguno no viene, déjalo vacío.']},
+ [n+'.6']:fase('el travesaño donde va el gancho'),
+ [n+'.7']:marca('del travesaño','Su etiqueta'),
+ [n+'.8']:contr('del travesaño','Su etiqueta'),
+ [n+'.9']:obs()});
+const ang13=(q,paso,lim)=>({q,con:TRANSP,pasos:['Con el camión parado, mueve la boca del gancho.',paso],ojo:lim});
+const AYN={
+// ---- 1 identificación ----
+'1.1':{q:'La marca del camión.',con:'El COC o la ficha técnica',pasos:['Cópiala del COC (punto 0.1).','Escríbela como viene, por ejemplo RENAULT TRUCKS.'],ojo:'Con «Adjuntar documento de masas» (7.1) se rellena sola si está vacía.'},
+'1.2':{q:'El nombre comercial del modelo.',con:'El COC o la ficha técnica',pasos:['Cópiala del COC (punto 0.2.1).'],ojo:'Con «Adjuntar documento de masas» (7.1) se rellena sola si está vacía.'},
+'1.3':{q:'El número de bastidor (VIN), de 17 caracteres.',con:'El COC y el chasis',pasos:['Léelo en el COC o en la placa del fabricante.','Compruébalo con el que va troquelado en el chasis.'],ojo:'Un VIN nunca lleva las letras I, O ni Q. Con el documento de masas se rellena solo si está vacío.'},
+'1.4':{q:'La categoría del vehículo: N1, N2, N3 (N2G o N3G si es todoterreno).',con:'El COC',pasos:['Cópiala del COC (punto 0.4).'],ojo:'La app la usa para poner los límites de H mín (8.4.1) y G máx (8.5.5).'},
+'1.5':{q:'La contraseña de homologación del camión tal como sale de fábrica (1ª fase).',con:'El COC',pasos:['Cópiala del COC: empieza por «e» y el número del país, con asteriscos (por ejemplo e2*2007/46*…).','Escríbela entera.']},
+'1.6':{q:'Qué carrocería lleva el camión ya terminado.',con:VISTA,pasos:['Escribe el tipo: caja fija, volquete, plataforma, polibrazo…'],ojo:'Si es isotermo o frigorífico, ponlo: así la app admite 2,60 m de anchura en el 7.5.1.'},
+'1.7':{q:'El tipo de cabina.',con:VISTA,pasos:['Mira la cabina por dentro.','Elige: corta, media, con litera o doble (dos filas de asientos).']},
+'1.8':{q:'La grúa (u otra máquina Palfinger) montada y su número de serie.',con:'La placa de la máquina',pasos:['Busca la placa de la grúa.','Copia el modelo y el número de serie.'],ojo:'Haz también la foto de la placa (3.6).'},
+'1.9':{q:'La segunda máquina, si lleva otra, y su número de serie.',con:'La placa de la máquina',pasos:['Copia el modelo y el número de serie de su placa.'],ojo:'Déjalo vacío si solo lleva una.'},
+'1.10':{q:'El número de pedido de venta de Palfinger.',con:'La orden de trabajo',pasos:['Cópialo de la orden de trabajo o del documento de masas.'],ojo:'Con «Adjuntar documento de masas» (7.1) se rellena solo si está vacío.'},
+'1.11':{q:'Cuántos estabilizadores lleva además de los de la grúa.',con:VISTA,pasos:['Cuenta las patas que no son de la base de la grúa.','Si no lleva, pon 0.'],ojo:'Si lleva uno detrás, mide también Dg (7.4). Si son delanteros, rellena el 14.2.'},
+'1.12':{q:'Otros equipos montados además de la máquina.',con:VISTA,pasos:['Apunta lo que se haya montado: cabrestante, cajón, depósito…','Si no hay nada, déjalo vacío.']},
+// ---- 2 actos ----
+'2.1':acto('masas y dimensiones','siempre','7'),
+'2.2':acto('la protección trasera','si lleva protección trasera (o la hace la carrocería)','8'),
+'2.3':acto('la instalación de luces','siempre','10'),
+'2.4':acto('la placa de matrícula trasera','siempre','9'),
+'2.5':acto('el antiproyección','si lleva guardabarros y faldillas antiproyección','12'),
+'2.6':acto('la protección lateral','si lleva protección lateral (o la hace la carrocería)','11'),
+'2.7':{q:'La placa del fabricante de la última fase (Palfinger) y el número de bastidor.',con:VISTA,pasos:['Aplica: siempre «Sí».','Cumple: «Sí» si la placa de Palfinger está puesta y el bastidor troquelado se lee bien.'],ojo:'Haz las fotos 3.1 a 3.3.'},
+'2.8':acto('salientes exteriores y protección delantera','si se ha montado algo delante de la cabina (placa portaimplementos o estabilizadores delanteros)','14'),
+'2.9':acto('el acoplamiento (N2 y N3)','si es N2 o N3 y lleva gancho o 5ª rueda','13'),
+'2.10':acto('el acoplamiento (N1)','si es N1 y lleva gancho','13'),
+// ---- 3 fotos ----
+'3.1':foto('Foto del número de bastidor troquelado en el chasis.',['Búscalo en el chasis y límpialo si hace falta.','Foto de cerca, que se lean los 17 caracteres.']),
+'3.2':foto('Foto de la placa del fabricante del camión (la de fábrica).',['Suele ir en el marco de la puerta o en el chasis.','Foto de frente, que se lean todas las masas.']),
+'3.3':foto('Foto de la placa de Palfinger (última fase), ya puesta.',['Foto de frente, sin reflejos.']),
+'3.4':foto('Cuatro fotos del camión entero, una desde cada esquina.',['Ponte en una esquina, a unos metros.','Que salgan enteros el frente (o la trasera) y un lateral.','Repite en las cuatro esquinas.']),
+'3.5':foto('Foto del neumático de cada eje.',['Una foto por eje, del flanco.','Que se lean la medida y el índice (por ejemplo 315/80 R22.5 156/150K).']),
+'3.6':foto('Foto de la placa de la grúa (o máquina).',['Que se lean el modelo y el número de serie.']),
+'3.7':foto('Foto de la etiqueta de la protección trasera.',['Suele ir en el travesaño.','Que se lea la contraseña (…58R…).']),
+'3.8':foto('Foto de la etiqueta de la protección lateral.',['Una de cada lado si son distintas.','Que se lea la contraseña (…73R…).']),
+'3.9':foto('Fotos de las etiquetas de guardabarros y faldillas.',['Foto de cerca de cada etiqueta, que se lea la contraseña.']),
+'3.10':foto('Fotos de las contraseñas de las luces y de la cinta reflectante.',['Una foto de cerca por cada tipo de luz.','Una de la marca impresa en la cinta.']),
+'3.11':foto('Foto del gancho y de su placa.',['Una del gancho entero y otra de la placa, que se lea la contraseña.'],'Solo si lleva gancho.'),
+'3.12':foto('Fotos de la 5ª rueda, de su placa de soporte y de sus contraseñas.',['Una de cada pieza y otra de cada placa.'],'Solo si lleva 5ª rueda.'),
+// ---- 4 no conformidades ----
+'4.1':sn('Si algo de este COP no cumple.',['Repasa los «Cumple»: si hay algún «No», marca «Sí».','Si todo cumple, marca «No».'],'Si marcas «Sí», escribe el detalle en el 4.2.','El resto del COP'),
+'4.2':{q:'Qué no cumple y por qué.',con:'El resto del COP',pasos:['Pon el punto y lo que pasa.','Ejemplo: «11.6.1: protección lateral a 600 mm del suelo (máx. 550)».']},
+'4.3':sn('Si lo que no cumplía ya está arreglado.',['«Sí» si se ha corregido y lo has vuelto a comprobar.','«No» si sigue pendiente.']),
+'4.4':obs('Cualquier cosa que quieras dejar escrita sobre el COP.'),
+'4.5':{q:'La fecha en que haces el COP.',con:'—',pasos:['Escríbela como dd/mm/aaaa.']},
+// ---- 7.5 comprobaciones ----
+'7.5.1':sn('Si el camión entra en los máximos: largo 12,00 m, ancho 2,55 m (2,60 m isotermo) y alto 4,00 m.',['La app lo marca sola con Lt, A y H del 7.4.','Si falta alguna medida, se queda sin marcar.'],'Si en el 1.6 pones isotermo o frigorífico, el ancho máximo pasa a 2,60 m.','Nada, lo hace la app'),
+'7.5.2':sn('Si las medidas del camión terminado coinciden con el preestudio de Palfinger.',['Compara Lt, voladizos, Im e Ic con los del preestudio.','Si coinciden, «Sí»; si no, explícalo en el 4.'],null,'El preestudio'),
+'7.5.3':sn('Que la suma de las MMTA de los ejes no sea menor que la MMTA total.',['La app lo marca sola con las MMTA del 7.1.'],null,'Nada, lo hace la app'),
+'7.5.4':sn('Con el camión cargado hasta su MMTA, el eje delantero tiene que llevar al menos el 20 % de la MMTA.',['Míralo en el reparto de cargas del preestudio.','Ejemplo: MMTA 26.000 kg → el eje delantero necesita al menos 5.200 kg.'],null,'El reparto de cargas'),
+'7.5.5':sn('Lo mismo que el 7.5.4, pero sumando la carga en el punto de acoplamiento.',['Míralo en el reparto de cargas del preestudio.'],'Solo cuenta si lleva gancho o 5ª rueda.','El reparto de cargas'),
+'7.5.6':sn('Solo N1: la carga en el punto de acoplamiento tiene que ser al menos el 4 % de la masa remolcable, y nunca menos de 25 kg.',['Mira la masa remolcable y la carga vertical (S) en el COC o en la placa del gancho.','Ejemplo: remolcable 3.500 kg → al menos 140 kg.'],null,'El COC y la placa del gancho'),
+// ---- 8 protección trasera ----
+'8.1.1':sn('Qué hace de protección trasera.',['Si el travesaño tiene etiqueta con «58R», es homologado.','Si no tiene etiqueta, es no homologado.','Si no hay travesaño y lo de atrás es la carrocería, marca la tercera.']),
+'8.2.1':fase('la protección trasera'),
+'8.2.2':marca('de la protección trasera','Su etiqueta'),
+'8.2.3':contr('de la protección trasera','Su etiqueta','Haz la foto (3.7).'),
+'8.2.4':{q:'Cuánto se deformó la protección en su ensayo (en mm).',con:'El certificado o la etiqueta de la protección',pasos:['Búscalo en el certificado o la ficha de la protección.'],ojo:'No se mide en el camión. Hace falta para el 8.5.6 a 8.5.8.'},
+'8.2.5':{q:'La distancia entre los dos largueros del chasis donde va la protección.',con:METRO,pasos:['Mira el chasis desde atrás.','Mide de la cara de fuera de un larguero a la cara de fuera del otro.'],ojo:'Mídela como ponga la homologación de la protección y compárala.',...vid('pt-larg')},
+'8.2.6':{q:'La masa máxima del camión para la que vale la protección.',con:'La etiqueta o el certificado',pasos:['Cópiala de la etiqueta o del certificado.'],ojo:'Tiene que ser igual o mayor que la MMTA del camión.'},
+'8.2.7':sn('Cómo va sujeta la protección: atornillada o soldada.',['Mira los soportes del travesaño.','Si ves tornillos, «Atornillada»; si van soldados, «Soldada».']),
+'8.2.8':obs(),
+'8.3.1':{q:'Solo N1, O1 y O2: la parte baja de atrás tiene que cubrir casi todo el ancho del eje trasero.',con:METRO,pasos:['Mira desde atrás lo más bajo del vehículo.','Compara su ancho con el del eje trasero, por fuera de las ruedas.','A cada lado no puede faltar más de 100 mm.']},
+'8.3.2':{q:'Solo N1, O1 y O2: altura de lo más bajo de atrás, con el vehículo vacío.',con:METRO,pasos:['Vehículo vacío y en suelo plano.','Mide en vertical desde el suelo hasta el borde de abajo.'],ojo:'Máximo 550 mm.',...vid('pt-gmax')},
+'8.3.3':{...prof('Solo N1, O1 y O2: máximo 450 mm.')},
+'8.4.1':{q:'La altura (canto) del travesaño de la protección.',con:METRO,pasos:['Mira el travesaño desde atrás.','Mide de su borde de abajo a su borde de arriba.'],ojo:'Mínimo 100 mm (N1, N2 ≤ 8 t, N2G, N3G, O1, O2) o 120 mm (N2 > 8 t, N3, O3, O4). La app pone el límite según la categoría (1.4).',...vid('pt-hmin')},
+'8.4.2':{q:'Solo con plataforma elevadora: el hueco que deja el travesaño partido.',con:METRO,pasos:['Mide el hueco entre dos trozos del travesaño.'],ojo:'Máximo 25 mm.',...vid('pt-hueco')},
+'8.4.3':{q:'La superficie de cada trozo del travesaño, visto desde atrás.',con:METRO,pasos:['Mide el ancho y el alto de cada trozo, en cm.','Multiplica: ancho × alto = cm².'],ojo:'Mínimo 350 cm² cada trozo (salvo camiones de menos de 2.000 mm de ancho).',...vid('pt-area')},
+'8.5.1':{q:'El ancho de la protección, comparado con el del eje trasero más ancho.',con:METRO,pasos:['Mide el eje trasero más ancho, por fuera de las ruedas.','Mide la protección de punta a punta.'],ojo:'La protección no puede ser más ancha que el eje (salvo si va dentro de la carrocería).',...vid('pt-ancho')},
+'8.5.2':{q:'Lo que le falta a la protección, en cada lado, para llegar al borde de fuera de las ruedas traseras.',con:METRO,pasos:['En cada lado, mide en horizontal desde la punta de la protección hasta el borde de fuera de la rueda.'],ojo:'Máximo 100 mm en cada lado.',...vid('pt-dist')},
+'8.5.3':sn('Qué suspensión lleva el eje trasero.',['Balonas de goma → «Neumática».','Láminas de acero → «Ballestas».'],'Con esto y el ángulo de salida, la app pone el límite de G máx (8.5.5).'),
+'8.5.4':{q:'El ángulo entre el suelo y una línea que va de lo más bajo de atrás hasta rozar la rueda trasera.',con:'Una cuerda y el '+TRANSP.toLowerCase(),pasos:['Tensa una cuerda desde el borde de abajo de la protección hasta el suelo, rozando la rueda trasera.','Mide el ángulo entre la cuerda y el suelo.','Marca «α > 8°» o «α ≤ 8°».'],ojo:'Con la suspensión, la app pone el límite de G máx (8.5.5).',...vid('pt-alfa','Cómo se mide · 10 s')},
+'8.5.5':{q:'La altura del borde de abajo de la protección, con el camión vacío.',con:METRO,pasos:['Camión vacío y en suelo plano.','Mide en vertical desde el suelo hasta el borde de abajo del travesaño.'],ojo:'Máximo 450, 500 o 550 mm según la suspensión y el ángulo de salida. La app pone el límite.',...vid('pt-gmax')},
+'8.5.6':prof('N2 hasta 8 t: máximo 400 mm menos la deformación (8.2.4).'),
+'8.5.7':prof('N2 de más de 8 t, N3, O3 y O4: 400 mm menos la deformación, y nunca más de 300 mm.'),
+'8.5.8':prof('O3 y O4 sin plataforma ni basculante: 300 mm menos la deformación, y nunca más de 200 mm.'),
+'8.5.9':obs(),
+// ---- 9 matrícula ----
+'9.1.1':fase('el soporte de la matrícula'),
+'9.1.2':sn('El tamaño de la placa de matrícula.',['Alargada → 520×120.','Casi cuadrada → 340×240.'],'La app lo usa para calcular el borde de abajo (9.2.4).'),
+'9.1.3':{q:'Los agujeros de la superficie donde va la placa.',con:METRO,pasos:['Mira la superficie de detrás de la placa.','Si tiene agujeros, mide el más grande.'],ojo:'Máximo 40 mm.'},
+'9.1.4':{q:'Lo que sobresale de la superficie donde va la placa (tornillos, remaches…).',con:METRO,pasos:['Mira la superficie de detrás de la placa.','Mide lo que más sobresalga.'],ojo:'Máximo 5 mm.'},
+'9.2.1':sn('Dónde va la placa: centrada o a la izquierda, recta y sin salirse por el lateral.',['Mírala desde atrás.','Elige CENTRADA o IZQUIERDA.'],'No puede ir a la derecha ni sobresalir del lateral. Tiene que estar recta (±5°).'),
+'9.2.2':{q:'Cuánto está inclinada la placa respecto a la vertical.',con:'Móvil con app de nivel',pasos:['Apoya el móvil de canto en la placa.','Lee los grados: si la placa mira hacia arriba, positivo; hacia abajo, negativo.'],ojo:'Borde de arriba hasta 1,2 m: entre −5° y 30°. Más alto: entre −15° y 5°.',...vid('mat-inc')},
+'9.2.3':{q:'La altura del borde de arriba de la placa.',con:METRO,pasos:['Mide en vertical desde el suelo hasta el borde de arriba de la placa.'],ojo:'Máximo 1.200 mm (hasta 2.000 mm si la carrocería no deja).',...vid('mat-sup')},
+'9.2.4':{q:'La altura del borde de abajo de la placa. La app la calcula sola.',con:'Nada, lo hace la app',pasos:['Se calcula con el borde de arriba (9.2.3) menos el alto de la placa (9.1.2).','Si quieres comprobarla, mide del suelo al borde de abajo.'],ojo:'Mínimo 300 mm.',...vid('mat-inf')},
+'9.2.5':{q:'Que la placa se vea de lado: 30° hacia fuera desde cada borde.',con:'La vista y el '+TRANSP.toLowerCase(),pasos:['Ponte detrás, a un lado, mirando la placa en diagonal (30°).','Nada (luces, protección, soportes) puede taparla.','Repite por el otro lado.'],ojo:'Mínimo 30°.',...vid('mat-lat')},
+'9.2.6':{q:'Que la placa se vea desde arriba: 15° por encima de su borde de arriba.',con:'La vista y el '+TRANSP.toLowerCase(),pasos:['Mira la placa desde atrás y un poco desde arriba (15°).','Nada puede taparla.'],ojo:'Mínimo 15° hacia arriba.',...vid('mat-vsup')},
+'9.2.7':{q:'Que la placa se vea desde abajo.',con:'La vista y el '+TRANSP.toLowerCase(),pasos:['Mira la placa desde atrás, a su altura o un poco desde abajo.','Nada puede taparla.'],ojo:'Borde de arriba hasta 1,2 m: 0° (en horizontal). Más alto: 15° hacia abajo.',...vid('mat-vinf')},
+// ---- 10 alumbrado ----
+'10.1.1':{q:'Marca, contraseña y cuántas luces de posición laterales (ámbar) lleva por lado.',con:'La luz',pasos:['Lee la marca y la contraseña en el cristal o en la carcasa.','Cuenta las que hay en un lado.'],ojo:'Obligatorias en camiones de más de 6 m. La contraseña tiene que estar en la homologación IH202216463 o ser equivalente.'},
+'10.1.2':{q:'Marca, contraseña y cuántos catadióptricos laterales lleva por lado.',con:'El catadióptrico',pasos:['Lee la marca y la contraseña en el catadióptrico.','Cuenta los que hay en un lado.'],ojo:'Si va en la misma pieza que la luz, pulsa «Misma marca y contraseña».'},
+'10.1.3':{q:'Marca, contraseña y cuántas luces de matrícula lleva.',con:'La luz de la matrícula',pasos:['Lee la marca y la contraseña en la luz.','Cuéntalas.'],ojo:'Obligatoria en todos los vehículos.'},
+'10.1.4':{q:'Marca, contraseña y cuántos intermitentes laterales (ámbar) lleva por lado.',con:'El intermitente',pasos:['Lee la marca y la contraseña.','Cuenta los que hay en un lado.'],ojo:'En N2 y N3 de más de 9 m van tres más por lado, repartidos por el lateral.'},
+'10.1.5':obs(),
+'10.2.1':sn('«Sí» si las luces y los catadióptricos laterales están igual en los dos lados.',['Compara los dos lados.'],'Con «Sí» basta con rellenar el lado izquierdo.'),
+'10.7':lat('las luces de posición laterales','izquierdo (conductor)','lat-luces',LIMLUZ),
+'10.8':lat('los catadióptricos laterales','izquierdo (conductor)','lat-cata',LIMCAT),
+'10.9':lat('las luces de posición laterales','derecho (pasajero)','lat-luces',LIMLUZ+DERE),
+'10.10':lat('los catadióptricos laterales','derecho (pasajero)','lat-cata',LIMCAT+DERE),
+'10.11':sn('Que nada tape los catadióptricos laterales.',['Míralos 30° hacia delante y hacia atrás.','Y 15° hacia arriba y hacia abajo (5° si están a menos de 0,75 m).']),
+'10.12':sn('Que nada tape las luces de posición laterales.',['Míralas 30° hacia delante y hacia atrás.','Y 15° hacia arriba y hacia abajo (5° si están a menos de 0,75 m).']),
+'10.3.1.1':sn('Si el camión tiene que llevar cinta reflectante atrás.',['«Sí» si es N2 de más de 7,5 t o N3 y mide más de 2.100 mm de ancho.'],'No aplica en cabinas con bastidor, vehículos incompletos ni tractoras.'),
+'10.3.1.2':marca('de la cinta reflectante','La propia cinta'),
+'10.3.1.3':contr('de la cinta (…104R…), impresa en la cinta cada cierto tramo','La propia cinta','Con «La de siempre» se pone ORAFOL · 104R-000001.'),
+'10.3.1.4':sn('El color de la cinta de atrás.',['Amarillo o rojo.']),
+'10.3.1.5':{q:'La anchura del camión. Se copia sola de la A del 7.4.',con:'Nada, lo hace la app',pasos:['No hay que medir nada.']},
+'10.3.1.6':{q:'Cuánta cinta hay en horizontal en la trasera.',con:'Cinta métrica',pasos:['Mide cada tramo de cinta de abajo, de lado a lado.','Súmalos.'],ojo:'Lo más cerca posible de los bordes, entre 0,25 y 1,50 m del suelo, y a más de 200 mm de las luces de freno.',...vid('mp-la')},
+'10.3.1.7':{q:'Se calcula solo: LA / A × 100.',con:'Nada, lo hace la app',pasos:['No hay que medir nada.'],ojo:'Mínimo 80 % (60 % si la estructura no deja).'},
+'10.3.2.1':sn('Si el camión tiene que llevar cinta reflectante en los laterales.',['«Sí» si es N2 de más de 7,5 t o N3 y mide más de 6.000 mm de largo.'],'No aplica en cabinas con bastidor, vehículos incompletos ni tractoras.'),
+'10.3.2.2':marca('de la cinta reflectante','La propia cinta'),
+'10.3.2.3':contr('de la cinta (…104R…), impresa en la cinta cada cierto tramo','La propia cinta','Con «La de siempre» se pone ORAFOL · 104R-000001.'),
+'10.3.2.4':sn('El color de la cinta del lateral.',['Amarillo o blanco.']),
+'10.3.2.5':{q:'La longitud: se copia sola del Check1/Check2 (7.4).',con:'Nada, lo hace la app',pasos:['No hay que medir nada.']},
+'10.3.2.6':{q:'Cuánta cinta hay a lo largo del lateral.',con:'Cinta métrica',pasos:['Mide cada tramo de cinta de abajo.','Súmalos todos.'],ojo:'Entre 0,25 y 1,50 m del suelo. Empieza a 0,6 m como mucho del frente y acaba a 0,6 m como mucho de atrás.',...vid('ml-la')},
+'10.3.2.7':{q:'Se calcula solo: LA / Lc × 100.',con:'Nada, lo hace la app',pasos:['No hay que medir nada.'],ojo:'Mínimo 80 % (60 % si la estructura no deja).'},
+'10.4.1':{q:'El grupo de luces traseras: si es de fábrica, su marca, su contraseña y cuántos hay.',con:'El piloto',pasos:['«Sí» si es el de fábrica; «No» si lo ha puesto Palfinger.','Lee la marca y la contraseña en el piloto.','Nº: cuántos hay.']},
+'10.4.2':{q:'Otro tipo de piloto trasero, si lo hay.',con:'El piloto',pasos:['Igual que el 10.4.1.'],ojo:'Déjalo vacío si solo hay un tipo.'},
+'10.4.3':sn('Qué luces lleva el camión detrás.',['Marca cada luz que lleve.','Luego rellena abajo la fila de cada una.']),
+'10.4.4':luzT('Obligatoria, 2. A: máx. 1.500 mm (2.100 si la carrocería no deja). B: mín. 350 mm.'),
+'10.4.5':luzT('1 o 2. A: máx. 1.200 mm. B: mín. 250 mm.'),
+'10.4.6':luzT('Obligatoria, 2. A: máx. 1.500 mm. B: mín. 350 mm.'),
+'10.4.7':luzT('Obligatoria si el camión mide más de 2.100 mm de ancho. A: lo más alto posible.'),
+'10.4.8':luzT('Obligatoria, 2. A: máx. 1.500 mm. B: mín. 350 mm.'),
+'10.4.9':luzT('A: máx. 1.000 mm. B: mín. 250 mm. Si solo hay una, en el lado izquierdo y a más de 100 mm de la luz de freno.'),
+'10.4.10':luzT('Obligatorio en camiones, 2. A: máx. 900 mm (1.200 si va con las luces). B: mín. 250 mm.'),
+'10.4.11':luzT('Solo en remolques: en camiones está prohibido.'),
+'10.4.12':luzT('Obligatoria en N1 con caja cerrada. Por encima de las otras luces de freno y centrada (máx. 150 mm del centro).'),
+// ---- 11 protección lateral ----
+'11.1.1':sn('Qué hace de protección lateral.',['Largueros con etiqueta «73R» → homologado.','Largueros sin etiqueta → no homologado.','Cajas, depósitos o la carrocería → «Mediante carrocería…».','Si hay de las dos cosas → «Mezcla de sistemas».']),
+'11.1.2':obs(),
+'11.1.3':fase('la protección del lado derecho'),
+'11.1.4':fase('la protección del lado izquierdo'),
+'11.1.5':{q:'La marca y la contraseña de la protección de cada lado (…73R…).',con:'Su etiqueta',pasos:['Cópialas de la etiqueta de cada lado.'],ojo:'Tiene que estar en el informe IH201810654. Haz la foto (3.8).'},
+'11.1.6':{q:'Cota A: lo que sobresale la protección por delante del primer soporte.',con:METRO,pasos:['Mide desde el principio de la protección hasta el primer soporte, como en el dibujo.','En los dos lados.'],ojo:'No puede pasar de lo que pone la homologación de la protección.',...vid('dpl-abc','Cotas A, B y C · 11 s')},
+'11.1.7':{q:'Cota B: la distancia entre soportes.',con:METRO,pasos:['Mide de un soporte al siguiente.','Si hay más de dos, apunta la mayor.'],ojo:'No puede pasar de lo que pone la homologación de la protección.',...vid('dpl-abc','Cotas A, B y C · 11 s')},
+'11.1.8':{q:'Cota C: lo que sobresale la protección por detrás del último soporte.',con:METRO,pasos:['Mide desde el último soporte hasta el final de la protección.','En los dos lados.'],ojo:'No puede pasar de lo que pone la homologación de la protección.',...vid('dpl-abc','Cotas A, B y C · 11 s')},
+'11.1.9':{q:'Cómo va sujeta la protección en cada lado.',con:VISTA,pasos:['Mira los soportes.','Escribe cómo va: atornillada o soldada.']},
+'11.2.1':{q:'La protección no puede sobresalir de lo más ancho del vehículo.',con:'La vista y la plomada',pasos:['Mira desde atrás o desde arriba.','La cara de fuera de la protección tiene que quedar por dentro de la caja o de las ruedas.'],...vid('dpl-borde')},
+'11.2.2':{q:'En sus últimos 250 mm, la protección tiene que quedar casi a ras del neumático trasero.',con:'Regla y metro',pasos:['Apoya una regla en el lado de fuera del neumático trasero.','Mide en horizontal hasta la cara de fuera de la protección, en sus últimos 250 mm.'],ojo:'Máximo 30 mm hacia dentro.',...vid('dpl-neu')},
+'11.2.3':{q:'Cuánto queda la protección por dentro de lo más ancho del vehículo.',con:PLOMT,pasos:['Con la plomada, marca en el suelo lo más ancho (normalmente la caja).','Marca también la cara de fuera de la protección.','Mide entre las dos marcas.'],ojo:'Máximo 150 mm.',...vid('dpl-borde')},
+'11.2.4':{q:'El alto de cada larguero de la protección.',con:METRO,pasos:['Mide cada larguero de su borde de abajo al de arriba.'],ojo:'Mínimo 100 mm en N3 y 50 mm en N2.',...vid('dpl-alto')},
+'11.2.5':{q:'Los huecos entre piezas en la cara de fuera de la protección.',con:METRO,pasos:['Mira la cara de fuera de la protección.','Si hay huecos entre piezas, mide el mayor.'],ojo:'Máximo 25 mm. Los solapes, hacia dentro o hacia abajo. Se permiten huecos para sacar las patas de los estabilizadores.'},
+'11.2.6':sn('Que no haya cantos vivos en la protección.',['Pasa la mano (con guante) por bordes y tornillos.','Nada puede sobresalir más de 10 mm ni cortar.'],'Lo que se pueda tocar, redondeado (radio de 2,5 mm como mínimo).'),
+'11.2.7':sn('Que A, B y C (11.1.6 a 11.1.8) no pasen de las de la homologación de la protección.',['Compara tus medidas con las de la homologación.'],null,'La homologación de la protección'),
+'11.2.8':{q:'El hueco entre un larguero y otro.',con:METRO,pasos:['Mide en vertical entre el borde de arriba de un larguero y el de abajo del siguiente.'],ojo:'Máximo 300 mm.',...vid('dpl-larg')},
+'11.3.1':{q:'Distancia desde detrás del neumático delantero hasta el principio de la protección.',con:PLOMT,pasos:['Plomada en la parte de atrás del neumático delantero.','Plomada en el borde de delante de la protección.','Mide entre las dos marcas.'],ojo:'Máximo 300 mm. Si la cabina tapa esos 300 mm, máximo 100 mm desde la cabina.',...vid('dpl-ant')},
+'11.3.2':{q:'Distancia desde el final de la protección hasta el neumático trasero.',con:PLOMT,pasos:['Plomada en el borde de atrás de la protección.','Plomada en la parte de delante del neumático trasero.','Mide entre las dos marcas.'],ojo:'Máximo 300 mm.',...vid('dpl-post')},
+'11.6.1':{q:'La altura del borde de abajo de la protección, con el vehículo vacío.',con:METRO,pasos:['Mide en vertical desde el suelo hasta el borde de abajo.'],ojo:'Máximo 550 mm.',...vid('dpl-inf')},
+'11.6.2':{q:'Distancia desde el borde de arriba de la protección hasta lo que tiene encima (chasis o caja).',con:METRO,pasos:['Mide en vertical el hueco entre los dos.'],ojo:'Máximo 350 mm. Si no hay nada encima, el borde de arriba a la altura del piso de carga o a 950 mm (lo más bajo).',...vid('dpl-sup')},
+// ---- 12 antiproyección ----
+'12.1.1':fase('el antiproyección'),
+'12.1.2':marca('del antiproyección','Su etiqueta'),
+'12.1.3':contr('del antiproyección','Su etiqueta','Tiene que estar en el informe IH202317010. Haz la foto (3.9).'),
+'12.2.1':sn('Qué sistema lleva.',['Guardabarros sobre cada rueda → «Guardabarros específicos» y rellena el 12.3.','Faldillas que cuelgan de la carrocería → «Suelo de carrocería» y rellena el 12.4.']),
+'12.2.2':obs(),
+'12.3.1.1':{q:'Que el guardabarros tape la rueda por encima, por delante y por detrás.',con:VISTA,pasos:['Mira la rueda de lado.','El guardabarros tiene que taparla por arriba y bajar por delante y por detrás.'],ojo:'Con ejes dobles o triples, el ángulo cuenta en el primer eje y la altura de atrás en el último.'},
+'12.3.1.2':{q:'El ángulo del borde de delante del guardabarros, desde el centro de la rueda.',con:TRANSP,pasos:['Pon el transportador en el centro de la rueda, con la horizontal.','Mide el ángulo hasta el borde de delante del guardabarros.'],ojo:'Máximo 45° sobre la horizontal.',...vid('gb-ang')},
+'12.3.1.3':{q:'Cuánto queda el borde de atrás del guardabarros por encima del centro de la rueda.',con:'Metro y nivel',pasos:['Con el nivel, marca la altura del centro de la rueda detrás de ella.','Mide en vertical desde esa línea hasta el borde de atrás del guardabarros.'],ojo:'Máximo 100 mm.',...vid('gb-tras')},
+'12.3.1.4':{q:'El ancho del guardabarros (q) comparado con el de las ruedas (b).',con:METRO,pasos:['b: el ancho de las ruedas de ese eje, de fuera a fuera.','q: el ancho del guardabarros.'],ojo:'q tiene que ser igual o mayor que b.',...vid('gb-q')},
+'12.3.1.5':{q:'El forro antiproyección de dentro del guardabarros, en la parte de atrás.',con:TRANSP,pasos:['Mira el guardabarros por dentro, por detrás de la rueda.','Mide desde la horizontal hasta donde llega el forro.'],ojo:'Mínimo 30°.',...vid('gb-30')},
+'12.3.1.6':sn('Que no haya huecos entre las piezas del guardabarros por donde salga el agua.',['Mira las uniones entre piezas.']),
+'12.3.2.1':{q:'Distancia desde el lado de fuera del neumático hasta la faldilla del costado.',con:'Regla y metro',pasos:['Apoya una regla en el lado de fuera del neumático.','Mide en horizontal hasta la cara de dentro de la faldilla.'],ojo:'Máximo 100 mm.',...vid('fe-dist')},
+'12.3.2.2':{q:'Hasta dónde baja la faldilla del costado: Rv comparado con el radio de la rueda (R).',con:METRO,pasos:['R: del centro de la rueda al suelo.','Rv: del centro de la rueda al borde de abajo de la faldilla, por detrás del centro.','Divide Rv entre R.'],ojo:'Máximo: neumática con ruedas directrices 1,5 R; neumática sin directrices 1,25 R; ballestas 1,8 R (1,5 R sin directrices y más de 7,5 t).',...vid('fe-rv')},
+'12.3.2.3':{q:'El alto de la faldilla del costado.',con:METRO,pasos:['Mírala por detrás del centro de la rueda.','Mide de su borde de abajo al de arriba.'],ojo:'Mínimo 45 mm.',...vid('fe-alto')},
+'12.3.2.4':sn('Que no haya huecos en la faldilla del costado por donde salga el agua.',['Mira las uniones entre piezas.']),
+'12.3.3.1':{q:'El ancho de la faldilla de detrás de la rueda (q) comparado con el de las ruedas (b).',con:METRO,pasos:['b: el ancho de las ruedas, de fuera a fuera.','q: el ancho de la faldilla.'],ojo:'q igual o mayor que b (dentro del guardabarros basta con el ancho de la banda de rodadura, b´).',...vid('fp-q')},
+'12.3.3.2':{q:'Distancia desde la parte de atrás del neumático hasta la faldilla.',con:METRO,pasos:['Mide en horizontal, a la altura del centro de la rueda.'],ojo:'Máximo 300 mm. Si entre dos ejes hay menos de 250 mm, solo hace falta faldilla en el último.',...vid('fp-dist')},
+'12.3.3.3':{q:'La altura del borde de abajo de la faldilla.',con:METRO,pasos:['Mide en vertical desde el suelo hasta el borde de abajo de la faldilla.'],ojo:'Máximo 200 mm (300 mm si Rv no pasa de R).',...vid('fp-alt')},
+'12.3.3.4':sn('Que no haya hueco entre el guardabarros y la faldilla.',['Mira por donde se juntan.']),
+'12.3.3.5':{q:'Cuánto se dobla la faldilla hacia atrás si la empujas un poco.',con:METRO,pasos:['Empuja la faldilla hacia atrás con poca fuerza, a 5 cm de su borde de abajo.','Mide cuánto se mueve el borde.'],ojo:'Máximo 100 mm.'},
+'12.4.2.1':{q:'Distancia desde el lado de fuera del neumático hasta la faldilla del costado.',con:'Regla y metro',pasos:['Apoya una regla en el lado de fuera del neumático.','Mide en horizontal hasta la cara de dentro de la faldilla.'],ojo:'Máximo 100 mm.',...vid('fe-dist')},
+'12.4.2.2':{q:'El alto de la faldilla del costado que cuelga de la carrocería.',con:METRO,pasos:['Mide de su borde de abajo al de arriba.'],ojo:'Mínimo 100 mm. Tiene que bajar hasta la altura de lo más alto de las ruedas.',...vid('fe-alto2')},
+'12.4.3.1':{q:'El ancho de la faldilla de detrás de la rueda (q) comparado con el de las ruedas (b).',con:METRO,pasos:['b: el ancho de las ruedas, de fuera a fuera.','q: el ancho de la faldilla.'],ojo:'q igual o mayor que b.',...vid('fp-q')},
+'12.4.3.2':{q:'Distancia desde la parte de atrás del neumático hasta la faldilla.',con:METRO,pasos:['Mide en horizontal, a la altura del centro de la rueda.'],ojo:'Máximo 300 mm.',...vid('fp-dist')},
+'12.4.3.3':{q:'La altura del borde de abajo de la faldilla.',con:METRO,pasos:['Mide en vertical desde el suelo hasta el borde de abajo de la faldilla.'],ojo:'Máximo 200 mm (300 mm si Rv no pasa de R).',...vid('fp-alt')},
+// ---- 13 acoplamiento ----
+'13.1.1':sn('Gancho para remolques de hasta 3.500 kg: «Sí» si venía de fábrica, «No» si lo ha puesto Palfinger.',['Míralo en la documentación del camión.'],'Si lleva este gancho, rellena el 13.2 y el 13.3.'),
+'13.1.2':sn('Gancho para remolques de más de 3.500 kg: «Sí» si venía de fábrica, «No» si lo ha puesto Palfinger.',['Míralo en la documentación del camión.'],'Si lleva este gancho, rellena del 13.4 al 13.7.'),
+'13.1.3':sn('5ª rueda: «Sí» si venía de fábrica, «No» si la ha puesto Palfinger.',['Míralo en la documentación del camión.'],'Si lleva 5ª rueda, rellena el 13.8.'),
+...datGancho('13.2'),...datGancho('13.4'),
+'13.3.1':{q:'Que alrededor de la bola haya el hueco del dibujo y que esté a su altura.',con:METRO,pasos:['Compara con el dibujo (vista de lado y desde arriba).','Mide del suelo al centro de la bola.'],ojo:'El centro de la bola, entre 350 y 420 mm del suelo con el vehículo cargado.'},
+'13.3.2':sn('Que el gancho no toque nada: al menos 10 mm de cualquier otra pieza.',['Mira alrededor del gancho y de su soporte.']),
+'13.3.3':sn('Que no haya aberturas entre las piezas del gancho y su soporte.',['Mira las uniones.']),
+'13.3.4':sn('Que el gancho y su soporte no tapen la matrícula ni su luz.',['Mira la matrícula desde atrás y desde los lados.']),
+'13.3.5':sn('«Sí» si la bola se puede quitar.',['Comprueba si la bola tiene cierre para desmontarla.']),
+'13.5.1':sn('Que el gancho no toque nada: al menos 10 mm de cualquier otra pieza.',['Mira alrededor del gancho y de su palanca.']),
+'13.5.2':sn('Que no haya aberturas entre las piezas del gancho y su soporte.',['Mira las uniones.']),
+'13.5.3':sn('«Sí» si el gancho se abre y se cierra desde lejos (mando a distancia).',['Mira si lleva mando o cable para accionarlo sin meterse debajo.'],'Hace falta si no se llega bien a la palanca o si L (13.7.1) pasa de 420 mm.'),
+'13.5.4':ang13('Ángulo A: la boca del gancho tiene que poder subir y bajar (visto de lado).','Comprueba que sube y baja al menos 6°.','Mínimo ±6°.'),
+'13.5.5':ang13('Ángulo B: la boca del gancho tiene que poder girar hacia los lados (visto desde atrás).','Comprueba que gira al menos 6° a cada lado.','Mínimo ±6°.'),
+'13.5.6':ang13('Ángulo C: la boca del gancho tiene que poder girar a izquierda y derecha (visto desde arriba).','Comprueba que gira al menos 50° a cada lado.','Mínimo ±50°.'),
+'13.7.1':{q:'Distancia en horizontal desde el centro del bulón del gancho hasta lo más trasero de la carrocería.',con:PLOMT,pasos:['Plomada en el centro del bulón (el pasador que entra en la argolla).','Plomada en el borde de atrás de la carrocería.','Mide entre las dos marcas.'],ojo:'Máximo 550 mm (650 con caja basculante o equipos detrás). Si pasa de 420 mm, necesita mando a distancia (13.5.3).',...vid('gancho-l')},
+'13.8.1':{q:'5ª rueda: si venía de fábrica y su contraseña de homologación.',con:'La placa de la 5ª rueda',pasos:['«Sí» si es de fábrica; «No» si la ha puesto Palfinger.','Copia la contraseña de su placa.']},
+'13.8.2':{q:'Placa de soporte: si venía de fábrica y su contraseña de homologación.',con:'La placa de la placa de soporte',pasos:['«Sí» si es de fábrica; «No» si la ha puesto Palfinger.','Copia la contraseña de su placa.']},
+'13.8.3':{q:'Los datos de la placa de la 5ª rueda.',con:'La placa de la 5ª rueda',pasos:['Copia marca, contraseña, tipo, clase, D (kN), U (carga vertical, t) y nº de serie.']},
+'13.8.4':{q:'Los datos de la placa de soporte.',con:'Su placa',pasos:['Copia marca, contraseña, tipo, clase, D (kN) y U (carga vertical, t).']},
+'13.8.5':{q:'Cota X: del centro de la 5ª rueda (donde entra el pivote) al centro del último eje, como en el dibujo.',con:PLOMT,pasos:['Plomada en el centro de la 5ª rueda.','Plomada en el centro del último eje.','Mide entre las dos marcas.'],...vid('x5')},
+'13.8.6':obs(),
+// ---- 14 placa portaimplementos ----
+'14.1.1':{q:'Las 6 cotas del dibujo de la placa portaimplementos (la placa delantera).',con:PLOMT,pasos:['1: el ancho de la placa (de frente).','2: del suelo al borde de arriba de la placa.','3: del suelo al borde de abajo.','4: del centro de la rueda delantera al paragolpes.','5: lo que sobresale la placa por delante (6 − 4).','6: del centro de la rueda delantera al frente de la placa.'],ojo:'La 5 no puede pasar de 300 mm (14.1.3).',...vid('placa','Las 6 cotas · 13 s')},
+'14.1.2':sn('Que la placa no tape los faros ni las luces de delante.',['Enciende las luces y mira que la placa no tape ninguna.']),
+'14.1.3':sn('Lo que la placa alarga el camión por delante.',['Es la cota 5 del 14.1.1.'],'Máximo 300 mm.'),
+'14.1.4':sn('Que todo lo montado delante tenga los cantos redondeados.',['Mira los bordes de la placa y de sus soportes.','No puede haber cantos vivos ni esquinas en punta.'],'Radio de más de 5 mm.'),
+'14.1.5':sn('Que la placa no tape el radar de delante.',['Busca el radar (suele ir en el centro del paragolpes o de la calandra).','La placa no puede quedar delante.']),
+'14.1.6':obs(),
+'14.2.1':{q:'Las 4 cotas del dibujo de la placa con estabilizadores delanteros.',con:PLOMT,pasos:['1: el hueco entre el estabilizador y la cabina.','2: entre los dos estabilizadores (de frente).','3: lo que sobresale el estabilizador por delante del paragolpes.','4: del centro de la rueda delantera a lo más delantero.'],ojo:'La 4 se copia sola del Vd (7.4); si la cambias a mano, se respeta.',...vid('estab','Las 4 cotas · 11 s')}
+};
+for(const [a,b] of [['14.8','14.11'],['14.9','14.12'],['14.10','14.13']]){
+ const d=a=='14.8'?sn('Que los estabilizadores no tapen los faros ni las luces de delante.',['Enciende las luces y mira que nada las tape.']):a=='14.9'?sn('Lo que los estabilizadores alargan el camión por delante.',['Es la cota 3 del 14.2.1: escríbela en «Valor».'],'Máximo 350 mm.'):sn('Que todo lo montado delante tenga los cantos redondeados.',['Mira los bordes de los estabilizadores y de sus soportes.'],'Radio de más de 5 mm.');
+ AYN[a]={...d,ojo:(d.ojo?d.ojo+' ':'')+'Con 1 estabilizador.'};AYN[b]={...d,ojo:(d.ojo?d.ojo+' ':'')+'Con 2 estabilizadores.'}}
+AY['Observaciones:']=obs(); // 7.4.9 (número repetido) y 14.14
+window.AY_PAL_N=AYN;
+const css=`
+.ay-q{margin-left:auto;flex:none;width:26px;height:26px;border-radius:50%;border:1.5px solid #b8bcc6;background:transparent;color:#8a8f9c;font:600 14px/1 system-ui,-apple-system,sans-serif;display:inline-flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+.ay-hd{display:flex!important;align-items:center;gap:8px}
+.ay-bg{animation:ayfun .28s;position:fixed;inset:0;background:rgba(10,12,20,.45);z-index:9998}
+.ay-sh{animation:aysube .28s ease-out;position:fixed;left:0;right:0;bottom:0;max-height:88vh;overflow:auto;background:#fff;color:#1c1d22;border-radius:22px 22px 0 0;z-index:9999;padding:10px 20px 26px;box-shadow:0 -8px 30px rgba(0,0,0,.18);font-family:system-ui,-apple-system,sans-serif}
+.ay-sh .gr{width:40px;height:5px;border-radius:3px;background:#d4d6dc;margin:0 auto 12px}
+.ay-sh h3{margin:0 0 4px;font-size:19px;display:flex;align-items:center;gap:8px}
+.ay-sh h3 b{background:#1c1d22;color:#fff;border-radius:7px;padding:2px 7px;font:700 14px ui-monospace,monospace}
+.ay-sh .qe{margin:6px 0 12px;font-size:15.5px;line-height:1.4;color:#33353d}
+.ay-sh .con{margin:14px 0 6px;font-size:13px;color:#6b6f7b;text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.ay-sh .con span{text-transform:none;letter-spacing:0;color:#33353d;font-weight:500;font-size:15px}
+.ay-sh ol{margin:4px 0 12px;padding-left:22px;font-size:15.5px;line-height:1.45}
+.ay-sh ol li{margin:4px 0}
+.ay-sh .ojo{background:#fff4e5;border-left:4px solid #f08c00;border-radius:8px;padding:9px 12px;font-size:15px;margin:0 0 14px}
+.ay-sh .vid{position:relative;border-radius:14px;overflow:hidden;aspect-ratio:16/9;background:#fff;border:1px solid #e3e5ea;display:flex;align-items:center;justify-content:center;color:#fff}
+.ay-sh .vid img.po,.ay-sh .vid video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#fff}
+.ay-sh .vid.on .pl,.ay-sh .vid.on .tx,.ay-sh .vid.on img.po{display:none}
+.ay-sh .vid .pl{position:relative;z-index:1;width:58px;height:58px;border-radius:50%;background:rgba(28,29,34,.85);display:flex;align-items:center;justify-content:center}
+.ay-sh .vid .pl:after{content:'';margin-left:5px;border-left:18px solid #fff;border-top:11px solid transparent;border-bottom:11px solid transparent}
+.ay-sh .vid .tx{position:absolute;z-index:1;left:12px;bottom:10px;font-size:13.5px;background:rgba(28,29,34,.8);padding:3px 8px;border-radius:8px}
+.ay-sh .ok{display:block;width:100%;margin-top:16px;border:0;border-radius:14px;background:#4f46e5;color:#fff;font:600 16px system-ui;padding:13px}
+.ay-sh .of{display:block;margin:12px auto 0;background:none;border:0;color:#6b6f7b;font:14px system-ui;text-decoration:underline}
+@keyframes aysube{from{transform:translateY(100%)}}@keyframes ayfun{from{opacity:0}}
+@media (prefers-color-scheme:dark){
+.ay-q{border-color:#5a5f6c;color:#9aa0ad}
+.ay-sh{background:#1c1d22;color:#eceef2}.ay-sh .qe,.ay-sh .con span{color:#d4d7de}
+.ay-sh h3 b{background:#eceef2;color:#1c1d22}.ay-sh .gr{background:#444852}
+.ay-sh .vid{border-color:#33363f}.ay-sh .ojo{background:#3a2c14;color:#f5e3c4}
+}`;
+if(!window.ayFicha){const st=document.createElement('style');st.textContent=css;document.head.appendChild(st)} // sin la ayuda del general, su propio estilo
+const txt=lbl=>{const c=lbl.cloneNode(true);c.querySelectorAll('.pnum,.ay-q').forEach(n=>n.remove());return c.textContent.trim()};
+const fic=lbl=>{const pn=lbl.querySelector('.pnum');return AYN[pn?pn.textContent.trim().replace(/\.$/,''):'']||AY[txt(lbl)]};
+window.ayPalAbrir=function(row){const lbl=row.querySelector('.lbl.first'),t=txt(lbl),d=fic(lbl);if(!d)return;const pn=lbl.querySelector('.pnum');
+ if(window.ayFicha)return ayFicha(d,`${pn?`<b>${pn.textContent}</b>`:''}${t}`,null); // la ficha común del general (ayuda-todo.js)
+ const bg=document.createElement('div');bg.className='ay-bg';const sh=document.createElement('div');sh.className='ay-sh';
+ sh.innerHTML=`<div class="gr"></div><h3>${pn?`<b>${pn.textContent}</b>`:''}${t}</h3><p class="qe">${d.q}</p>
+ ${d.src?`<div class="vid"><img class="po" src="${d.poster}" alt=""><div class="pl"></div><span class="tx">${d.vid}</span></div>`:''}
+ <div class="con">Con qué: <span>${d.con}</span></div><div class="con">Cómo se mide</div><ol>${d.pasos.map(p=>'<li>'+p+'</li>').join('')}</ol>
+ ${d.ojo?`<div class="ojo">${d.ojo}</div>`:''}<button class="ok">Entendido</button><button class="of">Ocultar las ayudas «?»</button>`;
+ const vb=sh.querySelector('.vid');if(vb)vb.onclick=()=>{if(vb.classList.contains('on'))return;vb.classList.add('on');const v=document.createElement('video');v.muted=true;v.playsInline=true;v.controls=true;v.src=d.src;v.poster=d.poster;vb.appendChild(v);v.play().catch(()=>{});v.onended=()=>{v.remove();vb.classList.remove('on')}};
+ const cerrar=()=>{bg.remove();sh.remove()};bg.onclick=cerrar;sh.querySelector('.ok').onclick=cerrar;
+ sh.querySelector('.of').onclick=()=>{try{localStorage.setItem('ayuda-oculta','1')}catch(e){}document.querySelectorAll('.ay-q').forEach(b=>b.remove());cerrar()};
+ document.body.append(bg,sh)};
+window.ayPalPoner=function(){if(typeof TPL_ACT==='undefined'||TPL_ACT!=='pal')return;try{if(localStorage.getItem('ayuda-oculta')=='1')return}catch(e){}for(const row of document.querySelectorAll('#form details.sec .row')){const lbl=row.querySelector('.lbl.first');if(!lbl||lbl.querySelector('.ay-q'))continue;
+ const t=txt(lbl);if(!fic(lbl))continue;lbl.classList.add('ay-hd');const b=document.createElement('button');b.type='button';b.className='ay-q';b.textContent='?';b.setAttribute('aria-label','Cómo se mide');b.dataset.ay=t;
+ b.onclick=e=>{e.stopPropagation();e.preventDefault();ayPalAbrir(row)};lbl.appendChild(b)}};
+let ayT=0;const ayLuego=()=>{if(!ayT)ayT=requestAnimationFrame(()=>{ayT=0;ayPalPoner()})};
+ayLuego();
+new MutationObserver(ayLuego).observe(document.getElementById('form'),{childList:true,subtree:true});
 })();
 </script>
 </body></html>

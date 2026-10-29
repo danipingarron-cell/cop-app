@@ -1,6 +1,6 @@
 /* App COP sin conexión: la app (index.html) va primero por la red, para coger siempre la última versión, y sin red sale la
    guardada; las librerías (jszip, pdf.js, lector de fotos, letras), que llevan versión fija, se guardan la primera vez. */
-const V='cop-348a83058a';
+const V='cop-75a63c4b69';
 const COMP='cop-compartido'; // el COC que llega desde «Compartir» del móvil, hasta que la app lo recoge
 const OCR='cop-ocr'; // lector de fotos sin internet (unos 25 MB): no se borra al actualizar la app; si cambian los modelos, cambia su ruta
 const AYU='cop-ayuda'; // vídeos y pósters de la ayuda «?»: se guardan la primera vez que se ven (sirven sin cobertura) y no se borran al actualizar; si se rehace un vídeo, cambiar este nombre
@@ -25,7 +25,7 @@ self.addEventListener('fetch',e=>{
   if(/\/ocr\/[^/]+$/.test(u.pathname)&&u.origin===location.origin||u.host==='cdn.jsdelivr.net'&&u.pathname.startsWith('/npm/onnxruntime-web@')){
     e.respondWith(caches.open(OCR).then(c=>c.match(r,{ignoreSearch:true}).then(m=>m||fetch(r).then(res=>{if(res.ok)c.put(r,res.clone());return res}))));return;
   }
-  if(u.origin===location.origin&&/\/ayuda\/[^/]+\.(mp4|jpg)$/.test(u.pathname)){
+  if(u.origin===location.origin&&/\/ayuda\/(pal\/)?[^/]+\.(mp4|jpg)$/.test(u.pathname)){
     // el vídeo se pide por trozos (Range): se baja entero (son ~200 KB) y se sirve completo
     e.respondWith(caches.open(AYU).then(c=>c.match(u.href).then(m=>m||fetch(u.href).then(res=>{if(res.status===200)c.put(u.href,res.clone());return res}))));return;
   }
