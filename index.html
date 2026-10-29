@@ -3607,7 +3607,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 29 oct, 17:54';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 29 oct, 18:33';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -5103,9 +5103,9 @@ const AYN={
 '11.1.3':fase('la protección del lado derecho'),
 '11.1.4':fase('la protección del lado izquierdo'),
 '11.1.5':{q:'La marca y la contraseña de la protección de cada lado (…73R…).',con:'Su etiqueta',pasos:['Cópialas de la etiqueta de cada lado.'],ojo:'Tiene que estar en el informe IH201810654. Haz la foto (3.8).'},
-'11.1.6':{q:'Cota A: lo que sobresale la protección por delante del primer soporte.',con:METRO,pasos:['Mide desde el principio de la protección hasta el primer soporte, como en el dibujo.','En los dos lados.'],ojo:'No puede pasar de lo que pone la homologación de la protección.',...vid('dpl-abc','Cotas A, B y C · 11 s')},
-'11.1.7':{q:'Cota B: la distancia entre soportes.',con:METRO,pasos:['Mide de un soporte al siguiente.','Si hay más de dos, apunta la mayor.'],ojo:'No puede pasar de lo que pone la homologación de la protección.',...vid('dpl-abc','Cotas A, B y C · 11 s')},
-'11.1.8':{q:'Cota C: lo que sobresale la protección por detrás del último soporte.',con:METRO,pasos:['Mide desde el último soporte hasta el final de la protección.','En los dos lados.'],ojo:'No puede pasar de lo que pone la homologación de la protección.',...vid('dpl-abc','Cotas A, B y C · 11 s')},
+'11.1.6':{q:'Cota A (voladizo delantero): del borde de delante de la protección al centro del primer soporte.',con:METRO,pasos:['Mide desde el borde de delante de la protección hasta el centro del primer soporte (pilar).','En los dos lados.'],ojo:'No puede pasar de lo que pone la homologación de la protección.',...vid('dpl-abc2','Cotas A, B y C · 11 s')},
+'11.1.7':{q:'Cota B: la distancia entre los centros de los soportes.',con:METRO,pasos:['Mide del centro de un soporte (pilar) al centro del siguiente.','Si hay más de dos, apunta la mayor.'],ojo:'No puede pasar de lo que pone la homologación de la protección.',...vid('dpl-abc2','Cotas A, B y C · 11 s')},
+'11.1.8':{q:'Cota C (voladizo trasero): del centro del último soporte al borde de atrás de la protección.',con:METRO,pasos:['Mide desde el centro del último soporte (pilar) hasta el borde de atrás de la protección.','En los dos lados.'],ojo:'No puede pasar de lo que pone la homologación de la protección.',...vid('dpl-abc2','Cotas A, B y C · 11 s')},
 '11.1.9':{q:'Cómo va sujeta la protección en cada lado.',con:VISTA,pasos:['Mira los soportes.','Escribe cómo va: atornillada o soldada.']},
 '11.2.1':{q:'La protección no puede sobresalir de lo más ancho del vehículo.',con:'La vista y la plomada',pasos:['Mira desde atrás o desde arriba.','La cara de fuera de la protección tiene que quedar por dentro de la caja o de las ruedas.'],...vid('dpl-borde')},
 '11.2.2':{q:'En sus últimos 250 mm, la protección tiene que quedar casi a ras del neumático trasero.',con:'Regla y metro',pasos:['Apoya una regla en el lado de fuera del neumático trasero.','Mide en horizontal hasta la cara de fuera de la protección, en sus últimos 250 mm.'],ojo:'Máximo 30 mm hacia dentro.',...vid('dpl-neu')},
@@ -5166,16 +5166,16 @@ const AYN={
 '13.8.2':{q:'Placa de soporte: si venía de fábrica y su contraseña de homologación.',con:'La placa de la placa de soporte',pasos:['«Sí» si es de fábrica; «No» si la ha puesto Palfinger.','Copia la contraseña de su placa.']},
 '13.8.3':{q:'Los datos de la placa de la 5ª rueda.',con:'La placa de la 5ª rueda',pasos:['Copia marca, contraseña, tipo, clase, D (kN), U (carga vertical, t) y nº de serie.']},
 '13.8.4':{q:'Los datos de la placa de soporte.',con:'Su placa',pasos:['Copia marca, contraseña, tipo, clase, D (kN) y U (carga vertical, t).']},
-'13.8.5':{q:'Cota X: del centro de la 5ª rueda (donde entra el pivote) al centro del último eje, como en el dibujo.',con:PLOMT,pasos:['Plomada en el centro de la 5ª rueda.','Plomada en el centro del último eje.','Mide entre las dos marcas.'],...vid('x5')},
+'13.8.5':{q:'Cota X: del centro de la 5ª rueda (donde entra el pivote) al centro del último eje, como en el dibujo.',con:PLOMT,pasos:['Plomada en el centro de la 5ª rueda.','Plomada en el centro del último eje.','Mide entre las dos marcas.'],...vid('x5b')},
 '13.8.6':obs(),
 // ---- 14 placa portaimplementos ----
-'14.1.1':{q:'Las 6 cotas del dibujo de la placa portaimplementos (la placa delantera).',con:PLOMT,pasos:['1: el ancho de la placa (de frente).','2: del suelo al borde de arriba de la placa.','3: del suelo al borde de abajo.','4: del centro de la rueda delantera al paragolpes.','5: lo que sobresale la placa por delante (6 − 4).','6: del centro de la rueda delantera al frente de la placa.'],ojo:'La 5 no puede pasar de 300 mm (14.1.3).',...vid('placa','Las 6 cotas · 13 s')},
+'14.1.1':{q:'Las 6 cotas del dibujo de la placa portaimplementos (la placa delantera).',con:PLOMT,pasos:['1: el ancho de la placa (de frente).','2: del suelo al borde de arriba de la placa.','3: del suelo al borde de abajo.','4: del centro de la rueda delantera al paragolpes.','5: lo que sobresale la placa por delante (6 − 4).','6: del centro de la rueda delantera al frente de la placa.'],ojo:'La 5 no puede pasar de 300 mm (14.1.3).'},
 '14.1.2':sn('Que la placa no tape los faros ni las luces de delante.',['Enciende las luces y mira que la placa no tape ninguna.']),
 '14.1.3':sn('Lo que la placa alarga el camión por delante.',['Es la cota 5 del 14.1.1.'],'Máximo 300 mm.'),
 '14.1.4':sn('Que todo lo montado delante tenga los cantos redondeados.',['Mira los bordes de la placa y de sus soportes.','No puede haber cantos vivos ni esquinas en punta.'],'Radio de más de 5 mm.'),
 '14.1.5':sn('Que la placa no tape el radar de delante.',['Busca el radar (suele ir en el centro del paragolpes o de la calandra).','La placa no puede quedar delante.']),
 '14.1.6':obs(),
-'14.2.1':{q:'Las 4 cotas del dibujo de la placa con estabilizadores delanteros.',con:PLOMT,pasos:['1: el hueco entre el estabilizador y la cabina.','2: entre los dos estabilizadores (de frente).','3: lo que sobresale el estabilizador por delante del paragolpes.','4: del centro de la rueda delantera a lo más delantero.'],ojo:'La 4 se copia sola del Vd (7.4); si la cambias a mano, se respeta.',...vid('estab','Las 4 cotas · 11 s')}
+'14.2.1':{q:'Las 4 cotas del dibujo de la placa con estabilizadores delanteros.',con:PLOMT,pasos:['1: el hueco entre el estabilizador y la cabina.','2: entre los dos estabilizadores (de frente).','3: lo que sobresale el estabilizador por delante del paragolpes.','4: del centro de la rueda delantera a lo más delantero.'],ojo:'La 4 se copia sola del Vd (7.4); si la cambias a mano, se respeta.'}
 };
 for(const [a,b] of [['14.8','14.11'],['14.9','14.12'],['14.10','14.13']]){
  const d=a=='14.8'?sn('Que los estabilizadores no tapen los faros ni las luces de delante.',['Enciende las luces y mira que nada las tape.']):a=='14.9'?sn('Lo que los estabilizadores alargan el camión por delante.',['Es la cota 3 del 14.2.1: escríbela en «Valor».'],'Máximo 350 mm.'):sn('Que todo lo montado delante tenga los cantos redondeados.',['Mira los bordes de los estabilizadores y de sus soportes.'],'Radio de más de 5 mm.');
