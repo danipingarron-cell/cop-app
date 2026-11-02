@@ -3607,7 +3607,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 30 oct, 13:24';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 2 nov, 19:48';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4818,6 +4818,261 @@ ${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>C
   return {abrirLista,recorteTicket,recorteSello,selloDePdf,pdfDe,ponTicket,ponBast,ticketDeLineas,get P(){return P},set P(v){P=v},pintar};
 })();
 
+/* PDF de homologación en el COP de máquinas (lo pidió Daniel, 30 oct): el PDF de homologación nacional de tipo que hacen ellos
+   (resolución del Ministerio + acta del INTA + ficha reducida + ficha de características del RD 750/2010) trae casi toda la columna
+   HOMOLOGACIÓN del COP. Se lee en el móvil con pdf.js (tiene texto) y por la posición de cada trozo en la hoja: los puntos de la ficha
+   (0.1 Marca, 3.2 Modelo…), las tablas por variante de los anexos 1b (dimensiones) y 2 (masas), las marcas de homologación del
+   anexo 9.1 (luces) y la parte V (avisador, retrovisores, vidrios, enganches). Lo que depende de la variante («Variante [?]A: 100L»)
+   se resuelve con la variante y la versión que elige Daniel. Regla de Daniel: en MEDICIÓN solo se copia lo que él no mide. */
+const MaqPDF=(()=>{
+  const norm=t=>String(t==null?'':t).replace(/\s+/g,' ').trim();
+
+  // ---------- el texto de cada hoja en líneas, sin perder dónde está cada trozo ----------
+  function lineas(items){
+    const it=items.filter(i=>i.str&&i.str.trim()&&Math.abs(i.transform[1])<0.01&&Math.abs(i.transform[2])<0.01) // fuera la marca de agua y el CSV girados
+      .map(i=>({s:i.str,x:i.transform[4],y:i.transform[5],w:i.width,h:Math.abs(i.transform[3])||i.height||8})).filter(i=>i.h>0.5);
+    const hs=it.map(i=>i.h).sort((a,b)=>a-b),hm=hs[hs.length>>1]||9,L=[];
+    // primero las letras normales; los exponentes («cm3», «min-1») se pegan a la línea que tienen al lado
+    for(const i of it.filter(i=>i.h<hm*2.5).sort((a,b)=>b.h-a.h||b.y-a.y)){
+      const peq=i.h<hm*0.8;let l=null,d=1e9;
+      for(const c of L){const dd=Math.abs(c.y-i.y);if(dd<(peq?c.h*0.6:Math.max(2,Math.min(c.h,i.h)*0.4))&&dd<d){l=c;d=dd}}
+      if(!l){l={y:i.y,h:i.h,a:[]};L.push(l)}l.a.push(i);
+    }
+    L.sort((a,b)=>b.y-a.y);
+    for(const l of L){l.a.sort((a,b)=>a.x-b.x);l.t=une(l.a,l.h,true)}
+    return L;
+  }
+  function une(a,h,col){let s='',fin=null;for(const i of a){if(fin!=null){const g=i.x-fin;s+=col&&g>h*2.2?' | ':g>h*0.18?' ':''}s+=i.s;fin=fin==null?i.x+i.w:Math.max(fin,i.x+i.w)}return norm(s)}
+  // trozos de una línea: lo que va pegado (una celda de una tabla)
+  function trozos(l){const out=[];let c=null;for(const i of l.a){if(c&&i.x-c.x1<l.h*0.5){c.a.push(i);c.x1=Math.max(c.x1,i.x+i.w)}else{c={a:[i],x0:i.x,x1:i.x+i.w,y:l.y};out.push(c)}}
+    for(const c of out){c.s=une(c.a,l.h);c.c=(c.x0+c.x1)/2}return out}
+  async function paginas(file){
+    const lib=await pdfLib(),pdf=await lib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise,out=[];
+    for(let n=1;n<=pdf.numPages;n++){const pg=await pdf.getPage(n),tc=await pg.getTextContent();out.push({n,L:lineas(tc.items)})}
+    return out;
+  }
+
+  // ---------- utilidades ----------
+  const fIso=t=>{const m=/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/.exec(t||'');return m?m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'):''};
+  const sinVer=t=>norm(String(t||'').replace(/\bVer\s+(anexos?|parte)\s+[\w.]+(\s+y\s+[\w.]+)?/gi,''));
+  // contraseña de un dispositivo: «148R00 2a E9 1696» → E9 1696; «1a E9 01 23425» → E9 23425 (el 01 es la serie de enmiendas)
+  function codigos(t){const out=[];for(const m of String(t||'').matchAll(/\bE\s?(\d{1,2})\s+((?:\d{2}\s+)?\d{3,7})\b/g)){const g=m[2].trim().split(/\s+/),n=g.length>1?g[g.length-1]:g[0];
+    const c='E'+m[1]+' '+n;if(!out.includes(c))out.push(c)}return out}
+  const empresa=ls=>{const o=[];for(const l of ls){if(o.length&&/^(N[º°o]\.?\s*\d|NO\.?\s*\d|C\/|Calle|Avda|Avenida|Pol[ií]gono|Ctra|Carretera|R[uú]a|Plaza|Camino|\d)/i.test(l))break;o.push(l);
+    if(/\b(LTD|LIMITED|S\.?\s?L\.?U?|S\.?\s?A\.?U?|GMBH|INC|S\.?P\.?A|S\.?R\.?L|B\.?V|AG|CORP|CO)\.?$/i.test(l))break}return norm(o.join(' '))};
+
+  // ---------- lo que depende de la variante: «Variante [?]A: 460/70 R24», «Variante/versión [?]B/?NX y [?]C/?NX: A6» ----------
+  const patron=p=>new RegExp('^'+String(p).trim().split('[?]').map(s=>s.replace(/[.*+^${}()|[\]\\]/g,'\\$&').replace(/\?/g,'.')).join('.*')+'$','i');
+  function casa(cond,sel){let r=false;
+    for(const c of cond.split(/\s*(?:,|;|\s+y\s+|\s+e\s+|\s+o\s+)\s*/)){const [v,ver]=c.split('/');if(!v)continue;
+      if(!sel.variante||!patron(v).test(sel.variante))continue;
+      if(ver==null)return true;if(!sel.version)r=r||'quiza';else if(patron(ver).test(sel.version))return true}
+    return r}
+  function valor(v,sel){
+    if(!v||!v.length)return '';
+    const re=/^Variantes?(?:\s*\/\s*versi[oó]n(?:es)?)?\s+(.+?):\s*(.*)$/i,cl=[],gen=[];let ult=null;
+    for(const l of v){const m=re.exec(l);if(m){ult={cond:m[1],val:m[2]};cl.push(ult)}else if(ult&&(!ult.val||/[,\/]$/.test(ult.val)))ult.val=norm(ult.val+' '+l);else gen.push(l)}
+    if(!cl.length)return sinVer(v.join(' '));
+    const si=cl.filter(c=>casa(c.cond,sel)===true);if(si.length)return sinVer(si[0].val);
+    const q=[...new Set(cl.filter(c=>casa(c.cond,sel)==='quiza').map(c=>sinVer(c.val)))];return q.length===1?q[0]:'';
+  }
+
+  // ---------- tablas: cabecera por columnas (las palabras apiladas son una columna) y cada celda a la columna más cercana ----------
+  function columnas(ls){
+    const t=ls.flatMap(l=>trozos(l)).filter(c=>c.s.length<=30).map(c=>({x0:c.x0,x1:c.x1,s:c.s,y:c.y}));const cols=[];
+    for(const c of t.sort((a,b)=>b.y-a.y)){const k=cols.find(o=>Math.min(o.x1,c.x1)-Math.max(o.x0,c.x0)>0.3*Math.min(o.x1-o.x0,c.x1-c.x0));
+      if(k){k.s+=' '+c.s;k.x0=Math.min(k.x0,c.x0);k.x1=Math.max(k.x1,c.x1)}else cols.push(Object.assign({},c))}
+    for(const k of cols)k.c=(k.x0+k.x1)/2;return cols.sort((a,b)=>a.c-b.c);
+  }
+  const cerca=(cols,c)=>cols.reduce((b,k)=>Math.abs(k.c-c.c)<Math.abs(b.c-c.c)?k:b,cols[0]);
+  const rango=s=>norm(s).replace(/(\d)\s*[–—-]\s*(\d)/g,'$1-$2');
+
+  // ---------- leer todo el PDF ----------
+  function analizar(pags){
+    const L=pags.flatMap(p=>p.L.map(l=>Object.assign(l,{p:p.n})));
+    const texto=L.map(l=>l.t).join('\n');
+    const M={v:1,contrasena:'',informe:'',fechaInf:'',puntos:{},vars:[],versiones:[],porVar:{},dims:{},masas:{},luces:{},otros:{},avisos:[]};
+    let m;
+    if((m=/\b([A-Z]{2,4}-\d{3,6}\*\d{2})\b/.exec(texto)))M.contrasena=m[1];
+    if((m=/N[uú]mero\s+(?:de\s+)?Informe\s+(?:del?\s+)?Servicio\s+T[eé]cnico:?\s*\|?\s*([\w\-\/]{8,})/i.exec(texto))||(m=/INFORME\s+N[ºo°]:?\s*\|?\s*([\w\-\/]{8,})/i.exec(texto)))M.informe=m[1];
+    if((m=/Fecha de la comunicaci[oó]n[^:\n]*:\s*\|?\s*(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4})/i.exec(texto))||(m=/fecha de emisi[oó]n del informe:[^\n]*?(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4})/i.exec(texto)))M.fechaInf=fIso(m[1]);
+
+    // ficha de características: puntos numerados (número a la izquierda, valor en su columna)
+    const i0=L.findIndex(l=>/^0\.1\s*(\|\s*)?Marca\b/i.test(l.t));
+    if(i0>=0){
+      let i1=L.findIndex((l,i)=>i>i0&&/^(LISTADO DE ANEXOS|Anexo\s+0(\.|\b))/i.test(l.t));if(i1<0)i1=L.length;
+      const izq=Math.min(...L.slice(i0,i1).map(l=>l.a[0].x));
+      const esPunto=l=>l.a[0].x<izq+12&&/^\d+(\.\d+)*\.?$/.test(norm(l.a[0].s))?norm(l.a[0].s).replace(/\.$/,''):null;
+      // dónde empieza el valor: en la línea del punto, tras el mayor hueco; si no, la columna más repetida de la hoja
+      const vxL=l=>{let b=null,bg=8;for(let k=1;k<l.a.length;k++){const a=l.a[k],g=a.x-(l.a[k-1].x+l.a[k-1].w);if(g>bg&&a.x>150){b=a.x;bg=g}}return b};
+      const colV={};for(let i=i0;i<i1;i++){const l=L[i];if(!esPunto(l))continue;const x=vxL(l);if(x!=null){const k=Math.round(x/4)*4;(colV[l.p]=colV[l.p]||{})[k]=(colV[l.p][k]||0)+1}}
+      const xv={};for(const p in colV)xv[p]=+Object.entries(colV[p]).sort((a,b)=>b[1]-a[1])[0][0];
+      let cur=null,cx=null;
+      for(let i=i0;i<i1;i++){const l=L[i],n=esPunto(l);if(i>i0&&l.p!==L[i-1].p)cur=null; // un punto no sigue en la hoja siguiente (ahí empieza la cabecera)
+        if(n){cur=M.puntos[n]=[];cx=vxL(l);if(cx==null)cx=xv[l.p]}if(!cur||cx==null)continue;
+        const v=une(l.a.filter(a=>a.x>=cx-6),l.h);if(v)cur.push(v)}
+    }
+    const P=n=>M.puntos[n]||[];
+    M.marca=sinVer(P('0.1').join(' '));M.tipo=sinVer(P('0.2.1').join(' '));M.fabricante=empresa(P('0.4'));
+    // el fabricante de la resolución, por si no coincide con la ficha (MACHINERY / MAQUINERY)
+    const r3=L.findIndex(l=>/^3\.\s*Fabricante:/i.test(l.t));
+    if(r3>=0&&M.fabricante){const f=empresa([norm(L[r3].t.replace(/^3\.\s*Fabricante:\s*\|?/i,'')),...L.slice(r3+1,r3+4).map(l=>l.t)]);
+      if(f&&f.replace(/[\s.,]/g,'').toUpperCase()!==M.fabricante.replace(/[\s.,]/g,'').toUpperCase())M.avisos.push(`La resolución pone de fabricante «${f}» y la ficha «${M.fabricante}». He puesto el de la ficha.`)}
+
+    // parte IV: tipo / variante / versión / denominación comercial
+    const cIV=L.map((l,i)=>i).filter(i=>/VARIANTE/i.test(L[i].t)&&/VERSI[OÓ]N/i.test(L[i].t)&&/DENOMINACI/i.test(L[i].t)),hIV=cIV.length?(cIV.find(i=>i>i0)??cIV[0]):-1;
+    if(hIV>=0){
+      const p=L[hIV].p,cols=columnas([L[hIV]]),col=re=>cols.find(k=>re.test(k.s));
+      const cV=col(/^VARIANTE/i),cR=col(/^VERSI/i),cD=col(/DENOMINACI/i),todas=/todas las combinaciones de versiones/i.test(L.filter(l=>l.p===p).map(l=>l.t).join(' '));
+      const vs=[],rs=[],ds=[];
+      for(const l of L.filter(l=>l.p===p&&l.y<L[hIV].y-2))for(const c of trozos(l)){const k=cerca(cols,c),s=c.s.replace(/\s/g,'');if(!s||c.s.length>30||/_/.test(s)||/p[aá]gina|documento|firmado|CSV|validarlo|Homologaci[oó]n de Tipo/i.test(c.s))continue;
+        if((k===cV||k===cR)&&/\s/.test(norm(c.s)))continue;
+        if(k===cV)vs.push({s,y:c.y});else if(k===cR)rs.push({s,y:c.y});else if(k===cD)ds.push({s:norm(c.s),y:c.y})}
+      for(const v of vs){M.vars.push(v.s);M.porVar[v.s]={dens:[],versiones:[]}}
+      const cerY=(arr,y)=>arr.reduce((b,o)=>!b||Math.abs(o.y-y)<Math.abs(b.y-y)?o:b,null);
+      for(const d of ds){const v=cerY(vs,d.y);if(v)M.porVar[v.s].dens.push(d.s)}
+      for(const r of rs){if(!M.versiones.includes(r.s))M.versiones.push(r.s);
+        if(todas)for(const v of vs)M.porVar[v.s].versiones.push(r.s);else{const v=cerY(vs,r.y);if(v)M.porVar[v.s].versiones.push(r.s)}}
+    }
+    if(!M.vars.length&&(m=/Variantes?:\s*\|?\s*([A-Z0-9][A-Z0-9 ,.y]+)/i.exec(texto)))for(const v of m[1].split(/\s*(?:,|\by\b)\s*/).map(s=>s.replace(/[.\s]/g,'')).filter(s=>s.length>3)){M.vars.push(v);M.porVar[v]={dens:[],versiones:[]}}
+
+    // anexos 1b y 2: una fila por variante
+    const tiene=(l,v)=>trozos(l).some(c=>c.s.replace(/\s/g,'')===v);
+    const paginasVar=[...new Set(L.filter(l=>l.p!==(hIV>=0?L[hIV].p:-1)&&M.vars.some(v=>tiene(l,v))).map(l=>l.p))];
+    for(const p of paginasVar){
+      const Lp=L.filter(l=>l.p===p),filas=Lp.filter(l=>M.vars.some(v=>tiene(l,v)));if(!filas.length)continue;
+      // puede haber dos tablas en la hoja (anexo 1b y anexo 2): se separan por el hueco entre filas
+      const grupos=[];for(const f of filas){const g=grupos[grupos.length-1];if(g&&g[g.length-1].y-f.y<f.h*6)g.push(f);else grupos.push([f])}
+      for(const g of grupos){
+        const ejes=Lp.filter(l=>/^Eje\s*\d/i.test(l.t)&&l.y<g[0].y+g[0].h*2.5&&l.y>g[g.length-1].y-g[0].h*2.5);
+        const top=Math.max(g[0].y,...ejes.map(l=>l.y)),cab=Lp.filter(l=>l.y>top+1&&l.y<top+g[0].h*4.5);
+        if(!cab.length)continue;const cols=columnas(cab),nom=k=>k.s;
+        const tipoT=cols.some(k=>/longitud|altura|anchura/i.test(nom(k)))?'dims':cols.some(k=>/tara|mmta|mma\b/i.test(nom(k)))?'masas':null;if(!tipoT)continue;
+        for(const f of g){const v=M.vars.find(v=>tiene(f,v)),o={};
+          for(const c of trozos(f)){const s=c.s.replace(/\s/g,'');if(M.vars.includes(s))continue;const k=cerca(cols,c);if(!/\d/.test(c.s))continue;o[nom(k)]=rango(c.s)}
+          if(tipoT==='dims'){const q=re=>{const k=Object.keys(o).find(n=>re.test(n));return k?o[k]:''};
+            M.dims[v]={dist:q(/dist|batalla/i),vias:q(/v[ií]as/i),volTras:q(/tras/i),volDel:q(/delant/i),long:q(/longitud/i),alto:q(/altura/i),ancho:q(/anchura/i)}}
+          else{const q=re=>{const k=Object.keys(o).find(n=>re.test(n));return k?o[k]:''},ej={};
+            for(const e of ejes.filter(e=>{const fy=g.reduce((b,x)=>Math.abs(x.y-e.y)<Math.abs(b.y-e.y)?x:b,g[0]);return fy===f}))
+              for(const c of trozos(e)){const mm=/Eje\s*(\d)\D*?:\s*([\d.,]+)/i.exec(c.s);if(!mm)continue;const k=nom(cerca(cols,c));(ej[k]=ej[k]||[])[+mm[1]-1]=mm[2]}
+            const qe=re=>{const k=Object.keys(ej).find(n=>re.test(n));return k?ej[k]:[]};
+            M.masas[v]={tara:q(/tara/i),mom:q(/^m\.?\s?o\.?\s?m\.?$/i),mmta:q(/^mmta(?!.*eje)/i),mma:q(/^mma(?!.*eje)/i),mmtaEjes:qe(/mmta.*eje/i),mmaEjes:qe(/^mma.*eje/i)}}
+          // denominación comercial al lado de la variante (si no hay parte IV)
+          if(!M.porVar[v].dens.length){const d=trozos(f).map(c=>norm(c.s)).find(s=>/[A-Z]/i.test(s)&&!M.vars.includes(s.replace(/\s/g,''))&&!/^\d/.test(s));if(d)M.porVar[v].dens.push(d)}
+        }
+      }
+    }
+
+    // anexo 9.1: marcas de homologación de cada luz
+    const c91=L.map((l,i)=>i).filter(i=>/^Anexo\s*9\.1\b/i.test(L[i].t)).sort((a,b)=>(a>i0)===(b>i0)?a-b:a>i0?-1:1);
+    for(const i91 of c91){if(Object.keys(M.luces).length)break;
+      const pp=[L[i91].p];for(let p=L[i91].p+1;;p++){const Lp=L.filter(l=>l.p===p);if(!Lp.length||Lp.some(l=>/^(Anexo\s|PARTE\s)/i.test(l.t)))break;if(!Lp.some(l=>codigos(l.t).length))break;pp.push(p)}
+      for(const p of pp){
+        const Lp=L.filter(l=>l.p===p),hd=Lp.find(l=>/^Dispositivo/i.test(trozos(l)[0].s));
+        let xmax=150;if(hd){const t=trozos(hd),k=t.findIndex(c=>/^Dispositivo/i.test(c.s));if(t[k+1])xmax=t[k+1].x0-3}
+        // nombres de los dispositivos (columna de la izquierda), juntando los que siguen en la línea de abajo
+        const nb=[];for(const l of Lp){if(hd&&l.y>=hd.y)continue;const t=trozos(l).filter(c=>c.x1<=xmax+2&&!/^\(\*\)/.test(c.s));if(!t.length)continue;const s=t.map(c=>c.s).join(' ');
+          const u=nb[nb.length-1];if(u&&u.y1-l.y<l.h*1.7&&!/^(Luz|Luces|Catadi|Alumbrado|Dispositivo|Se[ñn]al|Indicador)/i.test(s)){u.s+=' '+s;u.y1=l.y}else nb.push({s,y0:l.y,y1:l.y})}
+        for(const b of nb)b.c=(b.y0+b.y1)/2;
+        for(const l of Lp)for(const c of trozos(l)){if(c.x0<xmax)continue;const cs=codigos(c.s);if(!cs.length)continue;
+          const cats=c.s.replace(/E\s?\d{1,2}\s+[\d\s]+.*$/,'').split(/\s+/).filter(x=>x&&!/^\d{2,3}R?\d{0,2}$|^R\d{2}$|^\d{2,3}$/i.test(x));
+          const b=nb.reduce((o,x)=>!o||Math.abs(x.c-l.y)<Math.abs(o.c-l.y)?x:o,null);
+          for(const r of filasLuz(cats,b?b.s:''))for(const k of cs){(M.luces[r]=M.luces[r]||[]);if(!M.luces[r].includes(k))M.luces[r].push(k)}}
+      }
+    }
+    // acta del INTA: las contraseñas que vio en la máquina, para avisar si no están en la ficha
+    const ini=texto.search(/Dispositivos de alumbrado de que disponga/i),fin=ini<0?-1:texto.slice(ini).search(/AVISADOR AC[UÚ]STICO/i);
+    if(fin>0){const inta=codigos(texto.slice(ini,ini+fin)),ficha=[].concat(...Object.values(M.luces));
+      const extra=inta.filter(c=>!ficha.includes(c));
+      if(ficha.length&&extra.length)M.avisos.push(`El acta del INTA trae ${extra.join(', ')} en las luces, que no está en el anexo 9.1 de la ficha. He puesto las de la ficha.`);
+      if(!ficha.length&&inta.length)M.avisos.push('No encuentro el anexo 9.1 de la ficha: las contraseñas de las luces no se rellenan.')}
+
+    // parte V: actos reglamentarios (avisador, retrovisores, vidrios, enganches)
+    const h5=L.findIndex(l=>/Asunto/i.test(l.t)&&/Contrase/i.test(l.t));
+    if(h5>=0){
+      const p=L[h5].p,Lp=L.filter(l=>l.p===p),cab=Lp.filter(l=>Math.abs(l.y-L[h5].y)<L[h5].h*1.8),t=cab.flatMap(trozos).sort((a,b)=>a.x0-b.x0);
+      const tA=t.find(c=>/^Asunto/i.test(c.s)),tC=t.find(c=>/Contrase/i.test(c.s));
+      if(tA&&tC){const ax0=tA.x0-25,ax1=(t.find(c=>c.x0>tA.x1+2)||{x0:tA.x1+60}).x0-3,cx0=tC.x0-25,cx1=(t.find(c=>c.x0>tC.x1+2)||{x0:1e9}).x0-2;
+        const cuerpo=Lp.filter(l=>l.y<Math.min(...cab.map(c=>c.y))-1),filas=[];
+        for(const l of cuerpo)for(const c of trozos(l))if(c.x1<ax0+5&&/^\d{1,2}$/.test(c.s.replace(/\s/g,'')))filas.push({n:+c.s.replace(/\s/g,''),y:l.y});
+        filas.sort((a,b)=>b.y-a.y);
+        filas.forEach((f,i)=>{const sup=i?(filas[i-1].y+f.y)/2:f.y+30,inf=filas[i+1]?(filas[i+1].y+f.y)/2:f.y-40;
+          const en=(x0,x1)=>cuerpo.filter(l=>l.y<=sup&&l.y>inf).map(l=>trozos(l).filter(c=>c.x0>=x0&&c.x1<=x1+20&&c.x0<x1).map(c=>c.s).join(' ')).filter(Boolean).join(' ');
+          f.asunto=norm(en(ax0,ax1));f.c=norm(en(cx0,cx1).replace(/Componente\s*\(UTI\):?/gi,'').replace(/Ver informe n[ºo°]?:?/gi,''))});
+        for(const f of filas){const a=f.asunto,c=f.c;
+          if(/avisador/i.test(a))M.otros['11.1.1']=c;
+          else if(/retrovisor/i.test(a)){const k=codigos(c);if(k.length)M.otros['12.3.1']=k.join(' / ');const cl=/Clase\s+([IVX]+)/i.exec(c);if(cl)M.otros.clase=cl[1]}
+          else if(/parabrisas|vidrio/i.test(a)){const pb=/Parabrisas:?\s*(.*?)\s*(?:Otros vidrios|$)/i.exec(c),ov=/Otros vidrios:?\s*(.*)$/i.exec(c);
+            if(pb&&pb[1])M.otros['14.1.1']=pb[1];else if(c&&!ov)M.otros['14.1.1']=c;if(ov&&ov[1])M.otros['14.2.1']=ov[1]}
+          else if(/enganche|acoplamiento/i.test(a))M.otros['13.1.1']=/no procede/i.test(c+' '+a)||!c?'No procede':c;
+          else if(/contaminaci|emisiones/i.test(a)&&c)M.otros.motor=c.replace(/\s*\(Fase[^)]*\)/i,m=>m)}
+      }
+    }
+    return M;
+  }
+  // a qué fila de la tabla 8 del COP va cada marca: por su categoría (2a = intermitente trasero…) o por el nombre del dispositivo
+  function filasLuz(cats,nombre){
+    const n=String(nombre||'').toLowerCase(),porNom=[];
+    if(/marcha atr/.test(n))porNom.push('3');
+    else if(/indicador|intermitent/.test(n)){if(/tras/.test(n))porNom.push('4');if(/delant/.test(n))porNom.push('13');if(/lateral/.test(n))porNom.push('15')}
+    else if(/frenad|freno/.test(n))porNom.push('5');
+    else if(/posici/.test(n)){if(/tras/.test(n))porNom.push('6');else if(/delant/.test(n))porNom.push('12')}
+    else if(/catadi/.test(n)){if(/lateral/.test(n))porNom.push('16');else if(/tras/.test(n))porNom.push('7')}
+    else if(/placa|matr[ií]cula/.test(n))porNom.push('8');
+    else if(/cruce/.test(n))porNom.push('10');
+    else if(/carretera/.test(n))porNom.push('11');
+    else if(/giratori|rotativ|v-?2/.test(n))porNom.push('18');
+    const porCat=[];let duda=false;
+    for(const c of cats){const u=c.toUpperCase();
+      if(u==='AR')porCat.push('3');else if(/^2[AB]?$/.test(u))porCat.push('4');else if(/^S[12]$/.test(u))porCat.push('5');else if(/^R[12]$/.test(u))porCat.push('6');
+      else if(u==='L')porCat.push('8');else if(/^1[ABC]?$/.test(u))porCat.push('13');else if(/^[56]$/.test(u))porCat.push('15');else if(u==='A')porCat.push('12');
+      else if(/^[HD]C?R?(PL)?$/.test(u)&&u.length>1){if(u.includes('C'))porCat.push('10');if(/R/.test(u.slice(1)))porCat.push('11')}
+      else duda=true}
+    const r=porCat.length&&!duda?porCat:porNom.length?porNom:porCat;
+    return [...new Set(r)].map(x=>'8.'+x);
+  }
+
+  // ---------- lo que va al COP con la variante y la versión elegidas ----------
+  // copia: lo que Daniel no mide y va igual en MEDICIÓN (su regla del 30 oct)
+  const COPIA=['0.1','0.2','0.3','0.5','0.9','0.10','0.11','0.12','4.1','4.2','4.3','4.4','5.7','5.8','5.9','5.10','6.1','6.2','7.1','7.2','7.4','7.5','7.6','13.1'];
+  function resolver(M,sel){
+    const h={},x={},c={},V=n=>valor(M.puntos[n],sel),num1=t=>{const m=/\d+/.exec(t||'');return m?m[0]:''};
+    const pon=(k,v)=>{v=norm(v);if(v&&!/^(ver\b|--+$|-$)/i.test(v))h[k]=v};
+    pon('0.1.1',M.fabricante);pon('0.2.1',M.contrasena);pon('0.3.1',M.marca);pon('0.5.1',M.tipo);
+    pon('0.9.1',V('0.3'));pon('0.10.1',V('0.3.1'));pon('0.11.1',V('0.6.1'));pon('0.12.1',V('0.6.2'));
+    pon('4.1.1',num1(V('1.1')));pon('4.2.1',num1(V('1.2')));pon('4.3.1',V('1.3'));pon('4.4.1',num1(V('5.1.1')));
+    pon('4.5.1',V('5.2'));pon('4.6.1',[V('5.4'),V('5.3')].filter(Boolean).join(' - '));
+    const d=M.dims[sel.variante]||{},ms=M.masas[sel.variante]||{};
+    pon('5.1.1',d.dist);const vi=String(d.vias||'').split(/\s*\/\s*/);if(vi[0]){pon('5.2.1#1',vi[0]);pon('5.2.1#2',vi[1]||vi[0])}
+    pon('5.3.1',d.volTras);pon('5.4.1',d.long);pon('5.5.1',d.alto);pon('5.6.1',d.ancho);
+    pon('5.7.1',ms.mmta);pon('5.9.1',ms.mma||ms.mmta);
+    const me=ms.mmtaEjes||[],ma=(ms.mmaEjes&&ms.mmaEjes.length?ms.mmaEjes:me);
+    if(me[0]){pon('5.8.1#1',me[0]);pon('5.8.1#2',me[1])}if(ma[0]){pon('5.10.1#1',ma[0]);pon('5.10.1#2',ma[1])}
+    pon('5.11.1',ms.tara);pon('5.12.1',ms.mom);
+    pon('6.1.1',V('7.1.1')||V('7.1'));pon('6.2.1',V('7.3'));
+    pon('7.1.1',V('3.1').split(/\s+\/\s+/)[0]);pon('7.2.1',V('3.2'));pon('7.3.1',V('3.6.1')||M.otros.motor);pon('7.4.1',V('3.4'));
+    const ci=/([\d.,]+)\s*cm\s?3?\b/i.exec(V('3.5'));pon('7.5.1',ci?ci[1]+' cm3':V('3.5'));
+    pon('7.6.1',V('3.6').replace(/,?\s*(con\s+)?ajuste de serie.*$/i,''));
+    for(const r in M.luces)pon(r+'.2',M.luces[r].join(' / '));
+    for(const k of ['11.1.1','12.3.1','13.1.1','14.1.1','14.2.1'])pon(k,M.otros[k]);
+    const rv=V('8.6');if(rv){const m=/^(\d+)\s*,?\s*(?:en\s+el\s+)?(lado\s+(?:izquierdo|derecho)|uno\s+a\s+cada\s+lado|a\s+cada\s+lado)?/i.exec(rv);if(m)pon('12.1.1',m[1]+(m[2]?' ('+m[2].toLowerCase()+')':''));
+      const cl=/clase\s+([IVX]+)/i.exec(rv);pon('12.2.1',cl?cl[1]:M.otros.clase)}else pon('12.2.1',M.otros.clase);
+    // lo que dice Daniel en la ventana: bastidor, variante, versión y denominación (en las dos columnas)
+    for(const [r,v] of [['4',sel.bastidor],['6',sel.variante],['7',sel.version],['8',sel.den]])if(norm(v)){h['0.'+r+'.1']=norm(v);x['0.'+r+'.2']=norm(v)}
+    const m={};for(const k in h){const b=k.replace(/\.1(#\d)?$/,'');if(COPIA.includes(b))m[k.replace(/\.1(#\d)?$/,'.2$1')]=h[k]}
+    Object.assign(m,x);
+    if(/no procede/i.test(h['13.1.1']||'')){c['13.1.3']=2;c['1.9.2']=2}
+    const ext={};const cap=/(\d+(?:[.,]\d+)?)\s*(?:l|litros)\b/i.exec(V('3.8'));if(cap)ext['mom.cap']=cap[1];
+    if(M.informe)ext['fre.inf']=M.informe;if(M.fechaInf)ext['fre.fecha']=M.fechaInf;
+    return {h,m,c,ext};
+  }
+  // denominaciones, variantes y versiones para la ventana
+  function opciones(M){const dens=[];for(const v of M.vars)for(const d of M.porVar[v].dens)if(!dens.includes(d))dens.push(d);
+    return {dens,varsDe:d=>M.vars.filter(v=>!d||M.porVar[v].dens.includes(d)),versDe:v=>v&&M.porVar[v]&&M.porVar[v].versiones.length?M.porVar[v].versiones:M.versiones}}
+  return {lineas,paginas,analizar,resolver,opciones,valor,codigos,COPIA};
+})();
+if(typeof module!=='undefined')module.exports=MaqPDF;
+
 /* COP de máquinas (lo pidió Daniel, 30 oct): la plantilla «CONTROL DE CONFORMIDAD DE LA PRODUCCIÓN MAA» (PRC-08.02 ED4), aparte de los COP de vehículos,
    con su casilla en el inicio como Pesaje. Daniel rellena el formulario y sale el Word con su plantilla («cop maquina.docx»), sin tocar nada más.
    El Word no tiene casillas de texto: cada dato va a su celda por posición (tabla, fila, celda), y los Sí/No/N.A. son las casillas de verificación de la plantilla.
@@ -4916,6 +5171,9 @@ const Maquinas=(()=>{
     return null;
   }
   const dentro=(L,v)=>(L.min==null||(L.ex?v>L.min:v>=L.min))&&(L.max==null||(L.ex?v<L.max:v<=L.max));
+  // la homologación del PDF trae «????» donde cada motor lleva lo suyo: vale cualquier cosa en su sitio (sin la «(Fase V)»)
+  const llano=t=>norm(t).replace(/\s*\((fase|stage)[^)]*\)\s*$/i,'').toUpperCase().replace(/\s/g,'');
+  const comodin=(h,m)=>new RegExp('^'+llano(h).split(/\?+/).map(x=>x.replace(/[.*+^${}()|[\]\\\/]/g,'\\$&')).join('.+?')+'$').test(llano(m));
   const igual=(a,b)=>norm(a).toUpperCase().replace(/\s/g,'')===norm(b).toUpperCase().replace(/\s/g,'');
   // devuelve {auto:0|null, mal:'texto'}
   function estado(P,it){
@@ -4924,8 +5182,8 @@ const Maquinas=(()=>{
       const H=it.ejes?[v[it.h+'#1'],v[it.h+'#2']]:[v[it.h]],M=it.ejes?[v[it.m+'#1'],v[it.m+'#2']]:[v[it.m]];
       const pares=H.map((h,i)=>[h,M[i]]).filter(([h,m])=>norm(h)||norm(m));
       if(!pares.length||pares.some(([h,m])=>!norm(h)||!norm(m)))return {};
-      if(pares.some(([h,m])=>/\?/.test(h+m)))return {mal:'Dato pendiente (¿?)'};
-      const ok=pares.every(([h,m])=>{if(igual(h,m))return true;const r=/^\s*(\d+)\s*[-–]\s*(\d+)\s*$/.exec(h),n=num(m);return !!r&&n.length===1&&n[0]>=+r[1]&&n[0]<=+r[2]});
+      if(pares.some(([h,m])=>/\?/.test(m)||/^¿\?$/.test(norm(h))))return {mal:'Dato pendiente (¿?)'};
+      const ok=pares.every(([h,m])=>{if(igual(h,m))return true;if(/\?/.test(h))return comodin(h,m);const r=/^\s*(\d+)\s*[-–]\s*(\d+)\s*$/.exec(h),n=num(m);return !!r&&n.length===1&&n[0]>=+r[1]&&n[0]<=+r[2]});
       return ok?{auto:0}:{mal:'No coincide con la homologación'};
     }
     if(it.t==='cota'||it.t==='ang'){
@@ -4939,14 +5197,19 @@ const Maquinas=(()=>{
       return {mal:'Fuera del límite.'+ns.map(n=>` Nota (${n}): ${it.nt[n-1]}`).join('')};
     }
     if(it.t==='snm'){const s=P.c[it.s];return s==null?{}:s===0?{auto:0}:{mal:'La plantilla pide «Sí»'}}
-    if(it.t==='disp'){if(norm(v[it.h])&&norm(v[it.m]))return igual(v[it.h],v[it.m])?{auto:0}:{mal:'Las contraseñas no coinciden'};return {}}
+    if(it.t==='disp'){if(/^[-–—]$/.test(norm(v[it.m])))return {auto:2}; // «-»: la máquina no lo lleva (facultativo) → N.A.
+      if(!norm(v[it.h])||!norm(v[it.m]))return {};if(igual(v[it.h],v[it.m]))return {auto:0};
+      // la homologación puede dar varias contraseñas («E9 1696 / E9 23324»): vale si todas las leídas están entre ellas
+      const cods=t=>(String(t).toUpperCase().match(/E\s*\d+\s*\d[\d\s]*\d|E\s*\d+\s*\d/g)||[]).map(x=>x.replace(/\s/g,''));
+      const H=cods(v[it.h]),M=cods(v[it.m]);if(/\?/.test(v[it.m]))return {mal:'Dato pendiente (¿?)'};
+      return M.length&&M.every(x=>H.includes(x))&&!/[a-z]{3}/i.test(String(v[it.m]).replace(/E\s*\d[\d\s\/,]*/gi,''))?{auto:0}:{mal:'Las contraseñas no coinciden con la homologación'}}
     return {};
   }
   const cumple=(P,it)=>it.c?(P.c[it.c]!=null?P.c[it.c]:estado(P,it).auto):null;
 
   // ---------- guardado (IndexedDB, como los pesajes) ----------
   let DBP=null;
-  function db(){if(!DBP)DBP=new Promise((ok,ko)=>{const r=indexedDB.open(K_DB,1);r.onupgradeneeded=()=>r.result.createObjectStore('m',{keyPath:'id'});r.onsuccess=()=>ok(r.result);r.onerror=()=>{DBP=null;ko(r.error)}});return DBP}
+  function db(){if(!DBP)DBP=new Promise((ok,ko)=>{const r=indexedDB.open(K_DB,2);r.onupgradeneeded=()=>{const d=r.result;for(const n of ['m','h'])if(!d.objectStoreNames.contains(n))d.createObjectStore(n,{keyPath:'id'})};r.onsuccess=()=>ok(r.result);r.onerror=()=>{DBP=null;ko(r.error)}});return DBP}
   const req=r=>new Promise((ok,ko)=>{r.onsuccess=()=>ok(r.result);r.onerror=()=>ko(r.error)});
   async function todos(){try{const d=await db();return (await req(d.transaction('m').objectStore('m').getAll())).sort((a,b)=>b.cambiado-a.cambiado)}catch(e){return []}}
   async function poner(p){const d=await db();await req(d.transaction('m','readwrite').objectStore('m').put(p))}
@@ -5102,7 +5365,17 @@ button.tile.maq{grid-column:1/-1;flex-direction:row;align-items:center;min-heigh
 #maquinas .ins label{display:grid;gap:3px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;min-width:0;position:relative}
 #maquinas input,#maquinas textarea,#maquinas select{width:100%;box-sizing:border-box;font-size:16px;padding:9px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font-weight:400;text-transform:none;letter-spacing:0;font-family:inherit}
 #maquinas textarea{min-height:84px;resize:vertical}
-#maquinas label:has(.cp) input{padding-right:34px}
+#maquinas label:has(.cp) input,#maquinas label:has(.cp) textarea{padding-right:34px}
+#maquinas textarea.lg{min-height:0;resize:none;field-sizing:content;line-height:1.35}
+#maquinas .mpdf{display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--panel);border:1.5px dashed var(--accent);border-radius:14px;padding:12px 14px}
+#maquinas .mpdf .l{font-weight:700;font-size:15px;min-width:0}#maquinas .mpdf .l small{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:3px;line-height:1.35}
+#maquinas .mpdf button{flex:none;padding:10px 12px;border-radius:10px;font-size:13px;font-weight:700}
+#dlg .mdlg{display:grid;gap:10px;margin:12px 0}#dlg .mdlg label{display:grid;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+#dlg .mdlg select,#dlg .mdlg input{width:100%;box-sizing:border-box;font-size:16px;padding:9px 10px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit}
+#dlg .mhoms{display:grid;gap:8px;margin:10px 0}#dlg .mhom{display:flex;gap:6px}
+#dlg .mhom [data-mh]{flex:1;display:grid;gap:3px;text-align:left;justify-items:start;padding:10px 12px;border-radius:12px}#dlg .mhom [data-mh] span{font-size:12px;color:var(--muted);font-weight:400}
+#dlg .mhom .del{flex:none;color:var(--bad);border-color:var(--bad);padding:0 14px;border-radius:12px}
+#dlg .mav{color:var(--bad);font-size:13px;font-weight:600;margin:6px 0}#dlg ul.mfal{margin:6px 0 0;padding-left:20px;line-height:1.45;font-size:14px}
 #maquinas .cp{position:absolute;right:4px;bottom:5px;padding:4px 7px;border-radius:8px;font-size:12px;font-weight:700;line-height:1;box-shadow:none}
 #maquinas .seg{display:flex;gap:5px;flex:none}#maquinas .seg button{min-width:44px;justify-content:center;padding:7px 8px;border-radius:9px;font-size:13px;font-weight:600}
 #maquinas .seg button.on{background:var(--ok,#1a7f37);border-color:var(--ok,#1a7f37);color:#fff}#maquinas .seg button.on.no{background:var(--bad);border-color:var(--bad)}
@@ -5147,16 +5420,20 @@ button.tile.maq{grid-column:1/-1;flex-direction:row;align-items:center;min-heigh
   function datos(p){const n=ITEMS.filter(it=>lleno(p,it)).length;return n===1?'1 dato':n+' datos'}
   const segH=(k,n,v,auto,anch)=>`<div class="seg${anch?' anch':''}" data-mc="${k}">${(n===3?SNA:SN).map((o,i)=>`<button type="button" data-i="${i}" class="${v===i?'on':auto===i&&v==null?'auto':''}${i===1?' no':''}" aria-pressed="${v===i}">${o}</button>`).join('')}</div>`;
   const inp=(k,ph,x)=>`<input data-mk="${k}" value="${esc(P.v[k]||'')}"${ph?` placeholder="${esc(ph)}"`:''}${x||''}>`;
+  // cajas que crecen con el texto (que no se corte nada: frenado, contraseñas de luces…)
+  const area=k=>`<textarea class="lg" rows="1" data-mk="${k}">${esc(P.v[k]||'')}</textarea>`;
+  const LARGO=new Set(['0.2.1','0.3.1','0.4.1','0.10.1','0.11.1','0.12.1','4.3.1','4.6.1','6.1.1','6.2.1','7.3.1']);
+  const largo=it=>!it.ejes&&(LARGO.has(it.h)||[it.h,it.m].some(k=>String(P.v[k]||'').length>24));
   function itemH(it){
     const e=it.c?estado(P,it):{},cs=it.c?segH(it.c,it.n,P.c[it.c],e.auto):'',mal=e.mal?`<span class="mal">${esc(e.mal)}</span>`:'';
     if(it.t==='gr')return `<h4 class="gr">${esc(it.l)}</h4>`;
     if(it.t==='dev')return `<h4 class="dev">${esc(it.l)}</h4>`;
-    if(it.t==='hm'){const par=(k,lab,cp)=>it.ejes?`<label>${lab} eje 1${inp(k+'#1','',' inputmode="numeric"')}</label><label>${lab} eje 2${inp(k+'#2','',' inputmode="numeric"')}</label>`
-        :`<label>${lab}${inp(k)}${cp?`<button type="button" class="cp" data-mcp="${it.h}>${it.m}" aria-label="Copiar la homologación">=</button>`:''}</label>`;
-      return `<div class="it" data-it><div class="cab"><span class="l">${esc(it.l)}</span>${cs}</div><div class="ins${it.ejes?' cuatro':''}">${par(it.h,'Homologación')}${par(it.m,'Medición',!it.ejes)}</div>${mal}</div>`}
+    if(it.t==='hm'){const lg=largo(it),par=(k,lab,cp)=>it.ejes?`<label>${lab} eje 1${inp(k+'#1','',' inputmode="numeric"')}</label><label>${lab} eje 2${inp(k+'#2','',' inputmode="numeric"')}</label>`
+        :`<label>${lab}${area(k)}${cp?`<button type="button" class="cp" data-mcp="${it.h}>${it.m}" aria-label="Copiar la homologación">=</button>`:''}</label>`;
+      return `<div class="it" data-it><div class="cab"><span class="l">${esc(it.l)}</span>${cs}</div><div class="ins${it.ejes?' cuatro':lg?' uno':''}">${par(it.h,'Homologación')}${par(it.m,'Medición',!it.ejes)}</div>${mal}</div>`}
     if(it.t==='ck')return `<div class="it"><div class="cab"><span class="l">${esc(it.l)}<small>${esc(it.s)}</small></span>${cs}</div></div>`;
     if(it.t==='disp')return `<div class="it" data-it><div class="cab"><span class="l">${esc(it.l)}<small>${it.col?'Color: '+esc(it.col):''}</small></span>${cs}</div>
-<div class="ins tres"><label>Nº${inp(it.num,'',' inputmode="numeric"')}</label><label>Homologación${inp(it.h)}</label><label>Medición${inp(it.m)}<button type="button" class="cp" data-mcp="${it.h}>${it.m}" aria-label="Copiar la homologación">=</button></label></div>
+<div class="ins tres"><label>Nº${inp(it.num,'',' inputmode="numeric"')}</label><label>Homologación${area(it.h)}</label><label>Medición${area(it.m)}<button type="button" class="cp" data-mcp="${it.h}>${it.m}" aria-label="Copiar la homologación">=</button></label></div>
 ${it.col?'':`<div class="ins uno"><label>Color${inp(it.cl,'Amarillo auto')}</label></div>`}${mal}</div>`;
     if(it.t==='cota'||it.t==='ang')return `<div class="it" data-it><span class="l">${esc(it.t==='ang'?'Ángulo':it.l)} <span class="lim">${esc(it.lim)}</span></span>
 <div class="fila">${inp(it.m,it.lim==='--'?'Medición (sin límite)':'Medición',(it.texto?'':' inputmode="decimal"')+` aria-label="${esc((it.dev?it.dev+', ':'')+(it.t==='ang'?'ángulo '+it.lim:it.l))}"`)}${cs}</div>${mal}</div>`;
@@ -5167,7 +5444,7 @@ ${it.col?'':`<div class="ins uno"><label>Color${inp(it.cl,'Amarillo auto')}</lab
     if(it.t==='mom')return `<div class="it"><span class="l">Condiciones para el cálculo del MOM<small>(Tara total + 75 kg conductor) con depósito lleno como mínimo al 90 % de la capacidad</small></span>
 <div class="cab"><span class="lab">Pesada</span><div class="seg" data-mc="5.13.0">${['Con conductor','Sin conductor'].map((o,i)=>`<button type="button" data-i="${i}" class="${P.c['5.13.0']===i?'on':''}">${o}</button>`).join('')}</div></div>
 <div class="ins"><label>Capacidad depósito (l)${inp('mom.cap','',' inputmode="decimal"')}</label><label>Llenado depósito (%)${inp('mom.llen','',' inputmode="decimal"')}</label></div></div>`;
-    if(it.t==='ensayo')return `<div class="it"><span class="l">Último informe de ensayo de frenado</span><div class="ins"><label>Informe${inp('fre.inf')}</label><label>Con fecha<input type="date" data-mk="fre.fecha" value="${esc(P.v['fre.fecha']||'')}"></label></div></div>`;
+    if(it.t==='ensayo')return `<div class="it"><span class="l">Último informe de ensayo de frenado</span><div class="ins uno"><label>Informe${inp('fre.inf')}</label></div><div class="ins"><label>Con fecha<input type="date" data-mk="fre.fecha" value="${esc(P.v['fre.fecha']||'')}"></label></div></div>`;
     if(it.t==='fin')return `<div class="it"><div class="cab"><span class="l">El vehículo se encuentra conforme a lo dispuesto en este documento y a la legislación vigente</span>${segH('2.0.1',2,P.c['2.0.1'])}</div></div>
 <div class="it"><div class="cab"><span class="l">No conforme: ¿se abre nueva NO CONFORMIDAD?</span><div class="seg" data-mnc>${['no','si'].map(k=>`<button type="button" data-k="${k}" class="${P.v.nc===k?'on':''}">${k==='no'?'No':'Sí'}</button>`).join('')}</div></div>
 ${P.v.nc==='si'?`<div class="ins uno"><label>Nº de no conformidad${inp('nc.num')}</label></div>`:''}</div>
@@ -5185,7 +5462,9 @@ ${P.v.nc==='si'?`<div class="ins uno"><label>Nº de no conformidad${inp('nc.num'
     +s.f.map(itemH).join('')+(s.notas?`<details class="nts"><summary>Notas de la plantilla (${s.notas.length})</summary><ol>${s.notas.map(n=>`<li>${esc(n)}</li>`).join('')}</ol></details>`:'');
   function pintar(){
     vista('maq');cab('COP máquina',bastidor(P)||marca(P)||'Sin identificar');
+    const hp=P.hom;
     box.innerHTML=`<button type="button" class="atras" data-matras>‹ Tus COP de máquinas</button>
+<div class="mpdf"><span class="l">PDF de homologación<small>${hp?esc([hp.contrasena||hp.nombre,hp.den,hp.variante,hp.version].filter(Boolean).join(' · ')):'Rellena la columna Homologación y, en Medición, lo que no mides.'}</small></span><button type="button" class="${hp?'':'primary'}" data-mpdf>${hp?'Cambiar':'Añadir PDF'}</button></div>
 ${SEC.map(s=>`<details class="msec" data-sec="${s.id}"${(P.abiertas||[]).includes(s.id)?' open':''}><summary><span class="sn">${s.n}</span><span class="st">${esc(s.tit)}</span>${s.id==='fin'?'':cuenta(s)}</summary><div class="sb">${cuerpo(s)}</div></details>`).join('')}
 <button type="button" class="primary gen" data-mcrear>Crear Word</button>`;
     enlazar();
@@ -5214,6 +5493,7 @@ ${SEC.map(s=>`<details class="msec" data-sec="${s.id}"${(P.abiertas||[]).include
     for(const b of root.querySelectorAll('[data-mtodos]'))b.onclick=()=>{for(const it of SEC.find(s=>s.id===b.dataset.mtodos).f)if(it.c)P.c[it.c]=0;guardarYa();repintarSec(b)};
     for(const b of root.querySelectorAll('[data-mang]'))b.onclick=()=>{for(const it of ITEMS)if(it.t==='ang')P.c[it.c]=0;guardarYa();repintarSec(b)};
     const g=root.querySelector('[data-mcrear]');if(g)g.onclick=()=>revisar();
+    const pf=root.querySelector('[data-mpdf]');if(pf)pf.onclick=()=>abrirPDF();
   }
   // al escribir: el «auto» de su Cumple y el aviso, sin redibujar (para no perder el teclado)
   function aviso(el){
@@ -5233,13 +5513,77 @@ ${SEC.map(s=>`<details class="msec" data-sec="${s.id}"${(P.abiertas||[]).include
     if(mal.length)h+=`<p><b>Por revisar (el Cumple va en blanco):</b></p><ul>${mal.map(it=>`<li>${esc(nom(it))}: ${esc(estado(P,it).mal)}</li>`).join('')}</ul>`;
     ask('Revisa antes de crear el Word',h,[['Volver'],['Crear igualmente','primary',crear]]);
   }
+  // ---------- PDF de homologación (maquinas-pdf.js): se lee una vez y queda guardado en el móvil ----------
+  async function homs(){try{const d=await db();return (await req(d.transaction('h').objectStore('h').getAll())).sort((a,b)=>b.usado-a.usado)}catch(e){return []}}
+  async function ponHom(h){const d=await db();await req(d.transaction('h','readwrite').objectStore('h').put(h))}
+  async function quitarHom(id){const d=await db();await req(d.transaction('h','readwrite').objectStore('h').delete(id))}
+  async function abrirPDF(){
+    const L=await homs();if(!L.length)return pedirPDF();
+    ask('PDF de homologación',`<p class="hint">Elige una homologación que ya leíste en este móvil o añade otro PDF.</p><div class="mhoms">${L.map(h=>`<div class="mhom"><button type="button" data-mh="${esc(h.id)}"><b>${esc(h.M.contrasena||h.nombre)}</b><span>${esc([h.M.marca,h.M.tipo,h.nombre].filter(Boolean).join(' · '))}</span></button><button type="button" class="del" data-mhq="${esc(h.id)}" aria-label="Quitar del móvil">✕</button></div>`).join('')}</div>`,
+      [['Cancelar'],['Añadir otro PDF','primary',pedirPDF]]);
+    const B=$('#dlgB');
+    for(const b of B.querySelectorAll('[data-mh]'))b.onclick=()=>{$('#dlg').hidden=true;elegir(L.find(h=>h.id===b.dataset.mh))};
+    for(const b of B.querySelectorAll('[data-mhq]'))b.onclick=async()=>{await quitarHom(b.dataset.mhq).catch(()=>{});b.closest('.mhom').remove()};
+  }
+  function pedirPDF(){const i=document.createElement('input');i.type='file';i.accept='application/pdf,.pdf';i.style.cssText='position:fixed;left:-9999px;opacity:0';
+    document.body.appendChild(i);i.onchange=()=>{const f=i.files&&i.files[0];i.remove();if(f)leerPDF(f)};i.click()}
+  async function leerPDF(file){
+    showMsg('Leyendo «'+file.name+'»…');
+    try{const M=MaqPDF.analizar(await MaqPDF.paginas(file));
+      if(!M.vars.length&&!Object.keys(M.puntos).length)throw new Error('no encuentro la ficha de características ni las variantes. ¿Es el PDF de homologación de tipo?');
+      const h={id:M.contrasena||file.name,nombre:file.name,M,usado:Date.now()};
+      await ponHom(h).catch(()=>{});$('#msg').hidden=true;elegir(h)}
+    catch(e){showMsg('No se ha podido leer el PDF: '+(e&&e.message||e),true)}
+  }
+  // Daniel dice denominación, variante, versión y bastidor; la variante sale sola si la denominación solo tiene una
+  function elegir(h){
+    const M=h.M,O=MaqPDF.opciones(M),pr0=P.hom&&P.hom.id===h.id?P.hom:{};
+    const den0=pr0.den||val(P,'0.8.2')||val(P,'0.8.1'),var0=pr0.variante||val(P,'0.6.2')||val(P,'0.6.1'),ver0=pr0.version||val(P,'0.7.2')||val(P,'0.7.1');
+    const opt=(arr,v,vacio)=>(vacio?`<option value="">${esc(vacio)}</option>`:'')+arr.map(a=>`<option${a===v?' selected':''}>${esc(a)}</option>`).join('');
+    ask('Rellenar desde el PDF',`<p><b>${esc(M.contrasena||h.nombre)}</b> · ${esc([M.marca,M.tipo].filter(Boolean).join(' · '))}</p>
+<div class="mdlg">${O.dens.length?`<label>Denominación comercial<select data-hd>${opt(O.dens,O.dens.includes(den0)?den0:'','— Elige —')}</select></label>`:`<label>Denominación comercial<input data-hd value="${esc(den0)}"></label>`}
+<label>Variante<select data-hv></select></label><label>Versión<select data-hr></select></label>
+<label>Nº de bastidor<input data-hb value="${esc(val(P,'0.4.2')||val(P,'0.4.1'))}" autocapitalize="characters" autocomplete="off"></label></div>
+<p class="hint">Se pone la columna Homologación con lo que dice el PDF y, en Medición, solo lo que no mides: identificación, ejes y ruedas, MMTA y MMA, frenado, motor (menos su homologación) y enganches. Lo que ya hayas escrito tú no se toca.</p>`,
+      [['Cancelar'],['Rellenar','primary',()=>aplicar(h,{den:norm(sd.value),variante:sv.value,version:sr.value,bastidor:norm(B.querySelector('[data-hb]').value).toUpperCase().replace(/\s/g,'')})]]);
+    const B=$('#dlgB'),sd=B.querySelector('[data-hd]'),sv=B.querySelector('[data-hv]'),sr=B.querySelector('[data-hr]');
+    const pvr=()=>{const rs=O.versDe(sv.value),cur=rs.includes(sr.value)?sr.value:rs.includes(ver0)?ver0:rs.length===1?rs[0]:'';sr.innerHTML=opt(rs,cur,'¿? (no la sé)')};
+    const pv=()=>{const vs=O.varsDe(O.dens.includes(sd.value)?sd.value:''),cur=vs.includes(sv.value)?sv.value:vs.includes(var0)?var0:vs.length===1?vs[0]:'';
+      sv.innerHTML=opt(vs,cur,vs.length===1?'':'— Elige —');pvr()};
+    sd.onchange=pv;sv.onchange=()=>{const d=M.porVar[sv.value];if(d&&d.dens.length===1&&O.dens.length&&sd.value!==d.dens[0])sd.value=d.dens[0];pvr()};
+    pv();
+  }
+  function aplicar(h,sel){
+    const R=MaqPDF.resolver(h.M,sel),puso=P.pdfPuso||{},nuevo={};let nh=0,nm=0,tuyo=0;
+    // libre: vacía, o con lo que puso el PDF antes (si cambias de variante se cambia); lo escrito por Daniel no se toca
+    const libre=k=>!val(P,k)||(puso[k]!=null&&norm(puso[k])===val(P,k));
+    const FZ=new Set(['0.4.1','0.4.2','0.6.1','0.6.2','0.7.1','0.7.2','0.8.1','0.8.2']);
+    const poner=(k,v)=>{if(!FZ.has(k)&&!libre(k)){if(val(P,k)!==norm(v))tuyo++;return false}P.v[k]=v;nuevo[k]=v;return true};
+    for(const k in R.h)if(poner(k,R.h[k]))nh++;
+    for(const k in R.m)if(poner(k,R.m[k]))nm++;
+    for(const k in R.ext)poner(k,R.ext[k]);
+    for(const k in puso)if(!(k in nuevo)&&puso[k]!=null&&norm(puso[k])===val(P,k)&&!(k in R.h||k in R.m||k in R.ext))delete P.v[k]; // de la variante de antes
+    for(const k in R.c)if(P.c[k]==null)P.c[k]=R.c[k];
+    P.pdfPuso=nuevo;
+    P.hom={id:h.id,contrasena:h.M.contrasena,nombre:h.nombre,den:sel.den,variante:sel.variante,version:sel.version};
+    h.usado=Date.now();ponHom(h).catch(()=>{});
+    P.abiertas=['ide'];guardarYa();pintar();
+    const falta=['Neumáticos: dimensiones e índice de carga','Masas y dimensiones que mides (distancias, vías, voladizo, longitud, altura, anchura, tara y MOM)',
+      'Nº de homologación del motor (en el PDF va con ????) y fecha del motor','Luces: número, contraseñas, alturas y ángulos','Contraseñas del avisador, retrovisores, parabrisas y vidrios',
+      'Placa de matrícula, placa del fabricante, control COP y firma'];
+    if(!sel.version)falta.unshift('Versión');if(!sel.bastidor)falta.unshift('Nº de bastidor');
+    if(!sel.variante)falta.unshift('Variante: sin ella no salen neumáticos, dimensiones ni masas del PDF');
+    ask('Rellenado desde el PDF',`<p>Puestas <b>${nh}</b> casillas de homologación y <b>${nm}</b> de medición.${tuyo?` ${tuyo===1?'Una casilla que ya tenías escrita no se ha tocado':tuyo+' casillas que ya tenías escritas no se han tocado'}.`:''}</p>
+${(h.M.avisos||[]).map(a=>`<p class="mav">⚠ ${esc(a)}</p>`).join('')}<p><b>Te toca a ti:</b></p><ul class="mfal">${falta.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>`,[['Vale','primary']]);
+  }
   async function crear(){
     const p=P;guardarYa();showMsg('Preparando el Word…');
     let blob;try{blob=await wordDe(p)}catch(e){showMsg('No se pudo preparar el Word: '+(e&&e.message||e),true);return}
     $('#msg').hidden=true;p.word=true;guardarYa();
     const cl=x=>(x||'').replace(/[\\/:*?"<>|]+/g,'.').replace(/\s+/g,' ').trim();
-    const name=`COP ${cl(marca(p))||'MAQUINA'} ${cl(bastidor(p))} definitivo`.replace(/\s+/g,' ')+'.docx';
-    const subject=`COP ${marca(p)||'MÁQUINA'} ${bastidor(p)}`.trim();
+    const mc=marca(p).split(/\s+\/\s+/)[0];
+    const name=`COP ${cl(mc)||'MAQUINA'} ${cl(bastidor(p))} definitivo`.replace(/\s+/g,' ')+'.docx';
+    const subject=`COP ${mc||'MÁQUINA'} ${bastidor(p)}`.trim();
     const body=['COP de máquina (PRC-08.02 MAA)','Marca: '+marca(p),'Nº de bastidor: '+bastidor(p),'Tipo / Variante / Versión: '+[val(p,'0.5.1'),val(p,'0.6.1'),val(p,'0.7.1')].filter(Boolean).join(' / '),
       'Fecha de la revisión: '+fCorta(val(p,'fecha')),'','Word adjunto: '+name].join('\n');
     const L={blob,name,subject,body,mime:DOCX_MIME};
