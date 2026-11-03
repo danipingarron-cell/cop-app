@@ -3607,7 +3607,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 3 nov, 23:23';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 3 nov, 23:29';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4224,11 +4224,13 @@ html.dic-on #dicB{display:inline-flex}
       if(/calcula sol/i.test(i.placeholder||''))return; // la longitud total y las que salen solas no se dictan
       const al=norm(i.getAttribute('aria-label')),pt=norm(r&&r.querySelector('.ptxt')&&r.querySelector('.ptxt').textContent);
       const nom=pt||norm(al.split('·')[0])||norm(i.placeholder);
-      const sub=[...new Set([al.includes('·')?al.split('·').pop():'',i.placeholder].map(norm))].filter(x=>x&&x!==nom&&!nom.startsWith(x)).join(' · ');
+      // la etiqueta propia de la casilla (Derecha, eje 1, «(N2)»…) y el límite de la fila (6.18 y 6.19 solo se distinguen por «(N2) ≥ 50» / «(N3) ≥ 100»)
+      const lim=norm(r&&r.querySelector('.lim')&&r.querySelector('.lim').textContent);
+      const sub=[...new Set([al.includes('·')?al.split('·').pop():al,i.placeholder].map(norm))].filter(x=>x&&x!==nom&&!nom.startsWith(x)&&!x.startsWith(nom)).join(' · ');
       // 3 nov (Daniel: «¿cómo diferencia el larguero derecho del izquierdo?»): el bloque del apartado (Perfil derecho / Perfil izquierdo,
       // Lado izquierdo (conductor), Parte trasera…) va con la casilla, que hay nombres repetidos en cada lado
       const blk=i.closest('.blk[data-title]'),bt=norm(blk&&blk.dataset.title);
-      L.push({i,sec:norm(sec&&sec.querySelector('h2')&&sec.querySelector('h2').textContent).split(':')[0]+(bt?' › '+bt:''),pn:norm(r&&r.querySelector('.pnum')&&r.querySelector('.pnum').textContent),nom,sub})});
+      L.push({i,sec:norm(sec&&sec.querySelector('h2')&&sec.querySelector('h2').textContent).split(':')[0]+(bt?' › '+bt:''),pn:norm(r&&r.querySelector('.pnum')&&r.querySelector('.pnum').textContent),nom,sub,lim})});
     return L}
   const nombre=c=>(c.pn?c.pn+' ':'')+c.nom+(c.sub?' · '+c.sub:'');
   // ---------- Google: el texto dictado → {casilla: valor} ----------
@@ -4236,8 +4238,8 @@ html.dic-on #dicB{display:inline-flex}
     return `Eres el ayudante de un inspector que rellena un COP (control de conformidad de producción) ${enMaq()?'de una máquina':pal()?'de una grúa Palfinger':'de un vehículo'} midiendo en el taller.
 Ha dictado esto (reconocimiento de voz en español, puede tener fallos: «mil doscientos» = 1200, «coma» = decimal, «por» = x, letras deletreadas de matrícula o bastidor):
 """${txt}"""
-Casillas del COP (id | apartado | nombre):
-${L.map((c,k)=>k+' | '+c.sec+' | '+nombre(c)).join('\n')}
+${(()=>{const c=L.find(c=>/categor/i.test(c.nom)&&norm(c.i.value));return c?'Categoría del vehículo: '+norm(c.i.value)+' (si una casilla es solo para N2 o N3, elige la de esta categoría).\n':''})()}Casillas del COP (id | apartado | nombre):
+${L.map((c,k)=>k+' | '+c.sec+' | '+nombre(c)+(c.lim?' (límite '+c.lim+')':'')).join('\n')}
 Reparte cada dato dictado en la casilla que corresponde. Reglas:
 - Las medidas en milímetros y las masas en kg, solo el número (sin unidades), como las escribe el inspector: 1200, 3850, 2,5.
 - Si una casilla tiene «Medición» y «Homologación», lo dictado va a «Medición» salvo que diga «homologación» o «según COC».
