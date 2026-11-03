@@ -3607,7 +3607,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 2 nov, 19:48';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 3 nov, 23:00';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4168,6 +4168,145 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
   new MutationObserver(()=>{if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;decorar()})}).observe(document.body,{childList:true,subtree:true});
   decorar();
   return {quiere,clase,proponer,contrasena,placaLocal,decorar,iaPedir,iaClave,formClave,pedirFoto};
+})();
+
+/* Dictar (3 nov): botón «Dictar» abajo a la derecha en los COP abiertos
+   (general, Palfinger, Putzmeister y máquinas). Daniel habla seguido («voladizo trasero 1200, altura total 3850…»); el móvil lo
+   pasa a texto (reconocimiento de voz del navegador) y el lector de Google (la misma clave de la cámara, ia-clave, solo en el móvil)
+   reparte cada dato en su casilla. Sin clave se reparte en el móvil buscando el nombre de la casilla. No se escribe nada hasta
+   que Daniel pulsa «Poner». Va después de foto-punto.js. Instalado el 3 nov (Daniel: «instálalo y mañana lo pruebo»). */
+const Dictar=(()=>{
+  const MIC='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>';
+  const st=document.createElement('style');
+  st.textContent=`#dicB{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:60;display:none;align-items:center;gap:8px;padding:13px 18px 13px 15px;border-radius:999px;border:0;background:var(--accent);color:#fff;font-size:16px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+html.dic-on #dicB{display:inline-flex}
+#dicS{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--panel);color:var(--ink);border-radius:20px 20px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.25);padding:16px 16px calc(16px + env(safe-area-inset-bottom));max-height:78vh;overflow:auto;display:grid;gap:12px}
+#dicS h3{margin:0;font-size:17px}#dicS .sub{font-size:13px;color:var(--muted);line-height:1.4;margin:0}
+#dicS .oye{display:flex;gap:12px;align-items:center}
+#dicS .pulso{flex:none;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#fff;animation:dicP 1.4s ease-in-out infinite}
+@keyframes dicP{0%,100%{box-shadow:0 0 0 0 rgba(79,70,229,.45)}50%{box-shadow:0 0 0 12px rgba(79,70,229,0)}}
+#dicS .txt{min-height:64px;padding:10px 12px;border-radius:12px;background:var(--bg);border:1px solid var(--line);font-size:16px;line-height:1.45}
+#dicS .txt i{color:var(--muted)}
+#dicS .fb{display:flex;gap:8px;position:sticky;bottom:calc(-16px - env(safe-area-inset-bottom));background:var(--panel);margin:0 -16px calc(-16px - env(safe-area-inset-bottom));padding:10px 16px calc(16px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}#dicS .fb button{flex:1;padding:12px 6px;border-radius:12px;font-size:15px;font-weight:700;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+#dicS .fb .ok{background:var(--ok);border-color:var(--ok);color:#fff;flex:1.5}#dicS .fb .pr{background:var(--accent);border-color:var(--accent);color:#fff;flex:1.5}#dicS .fb .xx{flex:none;width:48px}
+#dicS .bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}#dicS .bar i{display:block;height:100%;width:5%;background:var(--accent);transition:width .3s}
+#dicS .dl{display:grid;gap:8px}
+#dicS .dr{display:grid;grid-template-columns:24px 1fr 44%;gap:3px 8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+#dicS .dr input[type=checkbox]{width:22px;height:22px;margin:0;accent-color:var(--ok)}
+#dicS .dr .n{font-size:13px;font-weight:700;line-height:1.3}#dicS .dr .n small{display:block;font-weight:500;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+#dicS .dr input.v{grid-column:3;width:100%;box-sizing:border-box;font-size:16px;font-weight:600;padding:7px 9px;border-radius:9px;border:2px solid var(--ok);background:var(--panel);color:var(--ink)}
+#dicS .dr .ya{grid-column:2/4;font-size:12px;color:var(--bad,#c81e1e);font-weight:600}
+#dicS .dr .oi{grid-column:2/4;font-size:12px;color:var(--muted);font-style:italic}
+#dicS .sin{font-size:13px;padding:10px 12px;border-radius:12px;background:var(--bg);border:1px dashed var(--line);color:var(--muted)}#dicS .sin b{color:var(--ink)}
+#dicS .ia{color:var(--accent);font-weight:700}
+.dic-hecho{outline:3px solid var(--ok)!important;outline-offset:1px;transition:outline-color 2s}
+#dicT{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:71;background:var(--ok);color:#fff;font-weight:700;font-size:14px;padding:10px 16px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.2)}`;
+  document.head.appendChild(st);
+  const norm=t=>String(t||'').replace(/\s+/g,' ').trim();
+  const escH=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const lsG=k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}};
+  const pal=()=>typeof TPL_ACT!=='undefined'&&TPL_ACT==='pal';
+  const vista=()=>document.documentElement.dataset.vista||'';
+  const enMaq=()=>vista()==='maq'&&!!document.querySelector('#maquinas details.msec');
+  // ---------- las casillas del COP abierto, con el nombre que se le dice a Google ----------
+  function casillas(){
+    const L=[];
+    if(enMaq()){
+      document.querySelectorAll('#maquinas [data-mk]').forEach(i=>{if(i.readOnly||i.disabled)return;
+        const it=i.closest('.it'),sec=i.closest('details.msec'),lab=i.closest('label');
+        const sub=norm(lab&&[...lab.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' '));
+        L.push({i,sec:norm(sec&&sec.querySelector('.st')&&sec.querySelector('.st').textContent),pn:'',nom:norm(it&&it.querySelector('.l')&&it.querySelector('.l').textContent).replace(/(\S)Color:/,'$1 · Color:'),sub})});
+      return L}
+    if(vista()!=='cop')return L;
+    document.querySelectorAll('details.sec input[data-slot], details.sec textarea[data-slot]').forEach(i=>{
+      if(i.readOnly||i.disabled||i.type==='checkbox'||i.type==='radio'||i.closest('.fotop,#dlg,.luzin'))return;
+      const r=i.closest('.row'),sec=i.closest('details.sec');
+      if(/calcula sol/i.test(i.placeholder||''))return; // la longitud total y las que salen solas no se dictan
+      const al=norm(i.getAttribute('aria-label')),pt=norm(r&&r.querySelector('.ptxt')&&r.querySelector('.ptxt').textContent);
+      const nom=pt||norm(al.split('·')[0])||norm(i.placeholder);
+      const sub=[...new Set([al.includes('·')?al.split('·').pop():'',i.placeholder].map(norm))].filter(x=>x&&x!==nom&&!nom.startsWith(x)).join(' · ');
+      L.push({i,sec:norm(sec&&sec.querySelector('h2')&&sec.querySelector('h2').textContent).split(':')[0],pn:norm(r&&r.querySelector('.pnum')&&r.querySelector('.pnum').textContent),nom,sub})});
+    return L}
+  const nombre=c=>(c.pn?c.pn+' ':'')+c.nom+(c.sub?' · '+c.sub:'');
+  // ---------- Google: el texto dictado → {casilla: valor} ----------
+  function prompt(txt,L){
+    return `Eres el ayudante de un inspector que rellena un COP (control de conformidad de producción) ${enMaq()?'de una máquina':pal()?'de una grúa Palfinger':'de un vehículo'} midiendo en el taller.
+Ha dictado esto (reconocimiento de voz en español, puede tener fallos: «mil doscientos» = 1200, «coma» = decimal, «por» = x, letras deletreadas de matrícula o bastidor):
+"""${txt}"""
+Casillas del COP (id | apartado | nombre):
+${L.map((c,k)=>k+' | '+c.sec+' | '+nombre(c)).join('\n')}
+Reparte cada dato dictado en la casilla que corresponde. Reglas:
+- Las medidas en milímetros y las masas en kg, solo el número (sin unidades), como las escribe el inspector: 1200, 3850, 2,5.
+- Si una casilla tiene «Medición» y «Homologación», lo dictado va a «Medición» salvo que diga «homologación» o «según COC».
+- Si dice «lado derecho / izquierdo», «eje 1 / eje 2», «delantero / trasero», elige la casilla de ese lado o eje.
+- Matrículas, bastidores y contraseñas en mayúsculas y sin espacios de más.
+- Si un dato no encaja con ninguna casilla, no lo inventes: ponlo en "sin_sitio".
+Contesta solo JSON: {"datos":[{"id":número de casilla,"valor":"…","oido":"el trozo dictado"}],"sin_sitio":["…"]}`}
+  async function google(txt,L){
+    const clave=lsG('ia-clave');let modelo=lsG('ia-modelo')||'gemini-flash-latest';
+    const body={contents:[{role:'user',parts:[{text:prompt(txt,L)}]}],generationConfig:{temperature:0,responseMimeType:'application/json',...(/gemini-3/.test(modelo)?{thinkingConfig:{thinkingLevel:'low'}}:{})}};
+    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(modelo)+':generateContent',{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':clave},body:JSON.stringify(body)});
+    const j=await r.json();if(!r.ok)throw new Error((j.error&&j.error.message)||('Google contesta '+r.status));
+    const t=(((j.candidates||[])[0]||{}).content||{parts:[]}).parts.map(x=>x.text||'').join('');
+    const o=JSON.parse(t.replace(/^```(json)?|```$/g,'').trim());
+    return {datos:(o.datos||[]).map(d=>({c:L[+d.id],v:norm(d.valor),oido:norm(d.oido)})).filter(d=>d.c&&d.v),sin:(o.sin_sitio||[]).map(norm).filter(Boolean)}}
+  // ---------- sin clave: en el móvil, «nombre de la casilla + número» ----------
+  const llano=t=>norm(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ');
+  function local(txt,L){
+    const trozos=llano(txt).replace(/(\d) (?=\d{3}\b)/g,'$1').split(/(\d+(?:[.,]\d+)?)/);const datos=[],sin=[];
+    for(let k=1;k<trozos.length;k+=2){const pal=trozos[k-1].split(' ').filter(w=>w.length>2);if(!pal.length){continue}
+      let mej=null,pts=0;for(const c of L){const n=llano(nombre(c)+' '+c.sec);const p=pal.filter(w=>n.includes(w)).length/pal.length;if(p>pts){pts=p;mej=c}}
+      if(mej&&pts>=0.5&&!datos.some(d=>d.c===mej))datos.push({c:mej,v:trozos[k].replace('.',','),oido:norm(trozos[k-1]+' '+trozos[k])});else sin.push(norm(trozos[k-1]+' '+trozos[k]))}
+    return {datos,sin}}
+  // ---------- pantalla de abajo ----------
+  let S=null,rec=null;
+  function hoja(html){if(!S){S=document.createElement('div');S.id='dicS';S.setAttribute('role','dialog');document.body.appendChild(S)}S.innerHTML=html;return S}
+  function cerrar(){try{rec&&rec.abort()}catch(e){}rec=null;if(S){S.remove();S=null}}
+  function escuchar(previo){
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){hoja(`<h3>Este navegador no deja dictar</h3><p class="sub">Abre la app desde Chrome para usar el micrófono.</p><div class="fb"><button class="xx" data-x>✕</button></div>`).querySelector('[data-x]').onclick=cerrar;return}
+    let base=previo||'',fijo=base,ses='';
+    const s=hoja(`<div class="oye"><div class="pulso">${MIC}</div><div><h3>Te escucho…</h3><p class="sub">Di el nombre de la casilla y el dato, seguido: «voladizo trasero 1200, altura total 3850».</p></div></div>
+<div class="txt" data-t>${fijo?escH(fijo):'<i>Habla cuando quieras…</i>'}</div>
+<div class="fb"><button class="pr" data-ok>Terminar y repartir</button><button class="xx" data-x aria-label="Cancelar">✕</button></div>`);
+    rec=new SR();rec.lang='es-ES';rec.continuous=true;rec.interimResults=true;
+    rec.onresult=e=>{let prov='';ses='';for(let k=0;k<e.results.length;k++){const t=e.results[k][0].transcript;if(e.results[k].isFinal)ses+=' '+t;else prov+=t}fijo=norm(base+' '+ses);
+      const d=s.querySelector('[data-t]');if(d)d.innerHTML=escH(fijo)+(prov?' <i>'+escH(prov)+'</i>':'')};
+    rec.onerror=e=>{if(e.error==='not-allowed'){const d=s.querySelector('[data-t]');if(d)d.innerHTML='<b>Sin permiso para el micrófono.</b> Dáselo a la app en Ajustes.'}};
+    rec.onend=()=>{base=fijo;ses='';if(rec&&S)try{rec.start()}catch(e){}}; // Chrome corta a ratos: se sigue escuchando hasta «Terminar»
+    try{rec.start()}catch(e){}
+    s.querySelector('[data-x]').onclick=cerrar;
+    s.querySelector('[data-ok]').onclick=()=>{const r=rec;rec=null;try{r.stop()}catch(e){}setTimeout(()=>repartir(fijo),350)};
+  }
+  async function repartir(txt){
+    txt=norm(txt);if(!txt){cerrar();return}
+    const L=casillas(),conG=!!lsG('ia-clave');
+    const s=hoja(`<h3>${conG?'Repartiendo con Google…':'Repartiendo…'}</h3><div class="txt">${escH(txt)}</div><div class="bar"><i></i></div>`);
+    let pr=.05;const tm=setInterval(()=>{pr+=(.95-pr)*.08;const b=s.querySelector('.bar i');if(b)b.style.width=Math.round(pr*100)+'%'},300);
+    let R,err='';
+    try{R=conG?await google(txt,L):local(txt,L)}catch(e){err=e.message;R=local(txt,L)}finally{clearInterval(tm)}
+    if(!S)return;
+    hoja(`<h3>${R.datos.length?'Esto he entendido':'No he encontrado dónde ponerlo'}</h3>
+<p class="sub">${conG&&!err?'<span class="ia">Repartido con Google.</span> ':''}${err?'Google no ha contestado ('+escH(err)+'): repartido en el móvil. ':''}Revisa cada valor; se pone lo que dejes marcado.</p>
+<div class="dl">${R.datos.map((d,k)=>{const ya=norm(d.c.i.value);return `<div class="dr"><input type="checkbox" data-c="${k}"${ya?'':' checked'}><div class="n"><small>${escH(d.c.sec)}</small>${escH(nombre(d.c))}</div><input class="v" data-v="${k}" value="${escH(d.v)}" autocomplete="off" spellcheck="false">${ya?`<div class="ya">Ahora pone: ${escH(ya)}</div>`:''}${d.oido?`<div class="oi">«${escH(d.oido)}»</div>`:''}</div>`}).join('')}</div>
+${R.sin.length?`<div class="sin"><b>Sin casilla:</b> ${R.sin.map(escH).join(' · ')}</div>`:''}
+<div class="fb">${R.datos.length?`<button class="ok" data-ok>✓ Poner marcados</button>`:''}<button data-mas>${MIC.replace(/22/g,'18')} Seguir</button><button class="xx" data-x aria-label="Cerrar">✕</button></div>`);
+    S.querySelector('[data-x]').onclick=cerrar;S.querySelector('[data-mas]').onclick=()=>escuchar('');
+    const ok=S.querySelector('[data-ok]');if(ok)ok.onclick=()=>{let n=0,pri=null;
+      S.querySelectorAll('input[data-v]').forEach(f=>{const d=R.datos[+f.dataset.v],c=S.querySelector(`[data-c="${f.dataset.v}"]`),v=norm(f.value);
+        if(!c.checked||!v||!d.c.i.isConnected)return;const i=d.c.i;i.value=v;i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}));
+        const sec=i.closest('details');if(sec&&!sec.open)sec.open=true;i.classList.add('dic-hecho');setTimeout(()=>i.classList.remove('dic-hecho'),5000);pri=pri||i;n++});
+      cerrar();if(!n)return;
+      const t=document.createElement('div');t.id='dicT';t.textContent=`✓ Puesto desde el dictado (${n} casilla${n>1?'s':''})`;document.body.appendChild(t);setTimeout(()=>t.remove(),4000);
+      try{pri.scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}}}
+  // ---------- el botón ----------
+  const B=document.createElement('button');B.id='dicB';B.type='button';B.innerHTML=MIC+'Dictar';B.setAttribute('aria-label','Dictar datos con la voz');B.onclick=()=>escuchar('');
+  document.body.appendChild(B);
+  const ver=()=>document.documentElement.classList.toggle('dic-on',!S&&(vista()==='cop'||enMaq()));
+  new MutationObserver(ver).observe(document.documentElement,{attributes:true,attributeFilter:['data-vista']});
+  new MutationObserver(()=>requestAnimationFrame(ver)).observe(document.body,{childList:true});
+  setInterval(ver,800);ver();
+  return {casillas,local,repartir,escuchar};
 })();
 
 /* Fotos de la revisión (lo pidió Daniel, 14 oct): en el apartado Fotografías de los dos COP, un solo botón «Fotos revisión» para hacer
