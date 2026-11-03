@@ -3607,7 +3607,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 3 nov, 23:29';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 3 nov, 23:30';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4244,6 +4244,7 @@ Reparte cada dato dictado en la casilla que corresponde. Reglas:
 - Las medidas en milímetros y las masas en kg, solo el número (sin unidades), como las escribe el inspector: 1200, 3850, 2,5.
 - Si una casilla tiene «Medición» y «Homologación», lo dictado va a «Medición» salvo que diga «homologación» o «según COC».
 - Si dice «lado derecho / izquierdo», «eje 1 / eje 2», «delantero / trasero», elige la casilla de ese lado o eje (mira también el bloque del apartado, p. ej. «Perfil derecho»).
+- Si dice el apartado o el lado al principio («protección lateral derecha: …»), vale para todos los datos que siguen hasta que diga otro.
 - Si el mismo nombre está en dos lados o bloques y no ha dicho cuál, no elijas: ponlo en "sin_sitio" añadiendo «(¿qué lado?)».
 - Matrículas, bastidores y contraseñas en mayúsculas y sin espacios de más.
 - Si un dato no encaja con ninguna casilla, no lo inventes: ponlo en "sin_sitio".
