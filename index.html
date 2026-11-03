@@ -3607,7 +3607,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 3 nov, 23:00';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 3 nov, 23:23';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4225,7 +4225,10 @@ html.dic-on #dicB{display:inline-flex}
       const al=norm(i.getAttribute('aria-label')),pt=norm(r&&r.querySelector('.ptxt')&&r.querySelector('.ptxt').textContent);
       const nom=pt||norm(al.split('·')[0])||norm(i.placeholder);
       const sub=[...new Set([al.includes('·')?al.split('·').pop():'',i.placeholder].map(norm))].filter(x=>x&&x!==nom&&!nom.startsWith(x)).join(' · ');
-      L.push({i,sec:norm(sec&&sec.querySelector('h2')&&sec.querySelector('h2').textContent).split(':')[0],pn:norm(r&&r.querySelector('.pnum')&&r.querySelector('.pnum').textContent),nom,sub})});
+      // 3 nov (Daniel: «¿cómo diferencia el larguero derecho del izquierdo?»): el bloque del apartado (Perfil derecho / Perfil izquierdo,
+      // Lado izquierdo (conductor), Parte trasera…) va con la casilla, que hay nombres repetidos en cada lado
+      const blk=i.closest('.blk[data-title]'),bt=norm(blk&&blk.dataset.title);
+      L.push({i,sec:norm(sec&&sec.querySelector('h2')&&sec.querySelector('h2').textContent).split(':')[0]+(bt?' › '+bt:''),pn:norm(r&&r.querySelector('.pnum')&&r.querySelector('.pnum').textContent),nom,sub})});
     return L}
   const nombre=c=>(c.pn?c.pn+' ':'')+c.nom+(c.sub?' · '+c.sub:'');
   // ---------- Google: el texto dictado → {casilla: valor} ----------
@@ -4238,7 +4241,8 @@ ${L.map((c,k)=>k+' | '+c.sec+' | '+nombre(c)).join('\n')}
 Reparte cada dato dictado en la casilla que corresponde. Reglas:
 - Las medidas en milímetros y las masas en kg, solo el número (sin unidades), como las escribe el inspector: 1200, 3850, 2,5.
 - Si una casilla tiene «Medición» y «Homologación», lo dictado va a «Medición» salvo que diga «homologación» o «según COC».
-- Si dice «lado derecho / izquierdo», «eje 1 / eje 2», «delantero / trasero», elige la casilla de ese lado o eje.
+- Si dice «lado derecho / izquierdo», «eje 1 / eje 2», «delantero / trasero», elige la casilla de ese lado o eje (mira también el bloque del apartado, p. ej. «Perfil derecho»).
+- Si el mismo nombre está en dos lados o bloques y no ha dicho cuál, no elijas: ponlo en "sin_sitio" añadiendo «(¿qué lado?)».
 - Matrículas, bastidores y contraseñas en mayúsculas y sin espacios de más.
 - Si un dato no encaja con ninguna casilla, no lo inventes: ponlo en "sin_sitio".
 Contesta solo JSON: {"datos":[{"id":número de casilla,"valor":"…","oido":"el trozo dictado"}],"sin_sitio":["…"]}`}
