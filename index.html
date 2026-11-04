@@ -3659,7 +3659,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:58';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 16:26';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4310,7 +4310,8 @@ Reparte cada dato dictado en la casilla que corresponde. Reglas:
 - Si dice «lado derecho / izquierdo», «eje 1 / eje 2», «delantero / trasero», elige la casilla de ese lado o eje (mira también el bloque del apartado, p. ej. «Perfil derecho»).
 - Si dice el apartado o el lado al principio («protección lateral derecha: …»), vale para todos los datos que siguen hasta que diga otro.
 - Si el mismo nombre está en dos lados o bloques y no ha dicho cuál, no elijas: ponlo en "sin_sitio" añadiendo «(¿qué lado?)».
-- Matrículas, bastidores y contraseñas en mayúsculas y sin espacios de más.
+- Matrículas, bastidores y contraseñas en mayúsculas y sin espacios de más. El bastidor (VIN) son 17 letras y números seguidos, sin guiones ni espacios; si lo deletrea, las letras dichas («uve doble» = W, «eme» = M, «be» = B, «ese» = S…) van como letra. Si lo oído se repite, cuenta una sola vez.
+- Si sale repetido el mismo trozo varias veces (fallo del reconocedor), tómalo una vez.
 - Si un dato no encaja con ninguna casilla, no lo inventes: ponlo en "sin_sitio".
 Contesta solo JSON: {"datos":[{"id":número de casilla,"valor":"…","oido":"el trozo dictado"}],"sin_sitio":["…"]}`}
   async function google(txt,L){
@@ -4329,6 +4330,13 @@ Contesta solo JSON: {"datos":[{"id":número de casilla,"valor":"…","oido":"el 
       let mej=null,pts=0;for(const c of L){const n=llano(nombre(c)+' '+c.sec);const p=pal.filter(w=>n.includes(w)).length/pal.length;if(p>pts){pts=p;mej=c}}
       if(mej&&pts>=0.5&&!datos.some(d=>d.c===mej))datos.push({c:mej,v:trozos[k].replace('.',','),oido:norm(trozos[k-1]+' '+trozos[k])});else sin.push(norm(trozos[k-1]+' '+trozos[k]))}
     return {datos,sin}}
+  // trozos de texto oído → uno solo: si un trozo repite el anterior y sigue (Android), se queda el largo; si ya estaba, no se pone
+  function juntar(l){const out=[];for(const t0 of l){const t=norm(t0);if(!t)continue;const u=out[out.length-1],U=u&&u.toLowerCase(),T=t.toLowerCase();
+      if(u&&T.startsWith(U))out[out.length-1]=t;else if(u&&U.endsWith(T))continue;else{
+        // también si el trozo empieza por el final del anterior («…es W17» + «W17 963…»)
+        let k=0;if(u)for(let n=Math.min(U.length,T.length);n>=6;n--)if(U.endsWith(T.slice(0,n))){k=n;break}
+        out.push(k?t.slice(k):t)}}
+    return norm(out.join(' '))}
   // ---------- pantalla de abajo ----------
   let S=null,rec=null;
   function hoja(html){if(!S){S=document.createElement('div');S.id='dicS';S.setAttribute('role','dialog');document.body.appendChild(S)}S.innerHTML=html;return S}
@@ -4336,15 +4344,18 @@ Contesta solo JSON: {"datos":[{"id":número de casilla,"valor":"…","oido":"el 
   function escuchar(previo){
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR){hoja(`<h3>Este navegador no deja dictar</h3><p class="sub">Abre la app desde Chrome para usar el micrófono.</p><div class="fb"><button class="xx" data-x>✕</button></div>`).querySelector('[data-x]').onclick=cerrar;return}
-    let base=previo||'',fijo=base,ses='';
+    let base=previo||'',fijo=base;
     const s=hoja(`<div class="oye"><div class="pulso">${MIC}</div><div><h3>Te escucho…</h3><p class="sub">Di el nombre de la casilla y el dato, seguido: «voladizo trasero 1200, altura total 3850».</p></div></div>
 <div class="txt" data-t>${fijo?escH(fijo):'<i>Habla cuando quieras…</i>'}</div>
 <div class="fb"><button class="pr" data-ok>Terminar y repartir</button><button class="xx" data-x aria-label="Cancelar">✕</button></div>`);
     rec=new SR();rec.lang='es-ES';rec.continuous=true;rec.interimResults=true;
-    rec.onresult=e=>{let prov='';ses='';for(let k=0;k<e.results.length;k++){const t=e.results[k][0].transcript;if(e.results[k].isFinal)ses+=' '+t;else prov+=t}fijo=norm(base+' '+ses);
-      const d=s.querySelector('[data-t]');if(d)d.innerHTML=escH(fijo)+(prov?' <i>'+escH(prov)+'</i>':'')};
+    // 4 nov (Daniel: «lo que decía salía muchas veces repetido»): en Android cada resultado trae la frase entera desde el principio,
+    // no solo lo nuevo; se juntan quitando lo repetido (juntar)
+    rec.onresult=e=>{const fin=[];let prov='';for(let k=0;k<e.results.length;k++){const t=e.results[k][0].transcript;if(e.results[k].isFinal)fin.push(t);else prov=t}
+      fijo=juntar([base,...fin]);const todo=juntar([fijo,prov]);prov=todo.toLowerCase().startsWith(fijo.toLowerCase())?todo.slice(fijo.length):(prov&&' '+prov);
+      const d=s.querySelector('[data-t]');if(d)d.innerHTML=escH(fijo)+(prov?'<i>'+escH(prov)+'</i>':'')};
     rec.onerror=e=>{if(e.error==='not-allowed'){const d=s.querySelector('[data-t]');if(d)d.innerHTML='<b>Sin permiso para el micrófono.</b> Dáselo a la app en Ajustes.'}};
-    rec.onend=()=>{base=fijo;ses='';if(rec&&S)try{rec.start()}catch(e){}}; // Chrome corta a ratos: se sigue escuchando hasta «Terminar»
+    rec.onend=()=>{base=fijo;if(rec&&S)try{rec.start()}catch(e){}}; // Chrome corta a ratos: se sigue escuchando hasta «Terminar»
     try{rec.start()}catch(e){}
     s.querySelector('[data-x]').onclick=cerrar;
     s.querySelector('[data-ok]').onclick=()=>{const r=rec;rec=null;try{r.stop()}catch(e){}setTimeout(()=>repartir(fijo),350)};
