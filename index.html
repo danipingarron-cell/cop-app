@@ -3624,7 +3624,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:24';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:26';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4069,13 +4069,18 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
   function placaLocal(lin){
     const bastidor=proponer('vin',lin);if(!bastidor)return null;
     const pl={bastidor,contrasena:'',mma:'',mmtc:'',ejes:[]},sueltas=[];let et='';
+    // lo que está a la misma altura que l: su etiqueta a la izquierda, su «kg» a la derecha (lo más cercano primero)
+    const fila=(l,ok)=>l.y==null?[]:lin.filter(e=>e!==l&&ok(e)&&Math.abs(e.y-l.y)<1.2*Math.max(l.h,e.h)).sort((a,b)=>Math.abs(a.y-l.y)-Math.abs(b.y-l.y));
+    const suEtiqueta=l=>fila(l,e=>e.x<l.x&&etiqueta(e.t))[0];
     for(let k=0;k<lin.length;k++){const t=lin[k].t,s=t.replace(/\s+/g,'');let m;
       if(!pl.contrasena&&(m=t.match(CONTR))&&/\*/.test(t)&&/\d{3}/.test(m[3]))pl.contrasena=('E'+m[1]+'*'+m[3]).replace(/\s+/g,'').toUpperCase();
       if(m=s.match(/^(\d)-(\d{3,6})kg$/i)){pl.ejes[+m[1]-1]=m[2];continue}
-      // la masa: «6000 kg», o «37000» con el «kg» en la línea siguiente
-      const kg=s.match(/^(\d{3,6})kg\W*$/i)||(/^\d{4,6}$/.test(s)&&/^\W*kg\W*$/i.test((lin[k+1]||{t:''}).t.trim())?[0,s]:null);
+      // la masa: «6000 kg»; «37000» con el «kg» en la línea siguiente o en su fila; o el número solo en la fila de una etiqueta
+      // de masa (4 nov, placa Mercedes: el «kg» del 28000 sale tras la etiqueta y el del 7500 no se lee)
+      const l=lin[k],kg=s.match(/^(\d{3,6})kg\W*$/i)||(/^\d{4,6}$/.test(s)&&(/^\W*kg\W*$/i.test((lin[k+1]||{t:''}).t.trim())
+        ||fila(l,e=>e.x>l.x&&/^\W*kg\W*$/i.test(e.t.trim())).length||suEtiqueta(l))?[0,s]:null);
       if(kg){ // a qué va: la etiqueta de su fila (a la izquierda, a la misma altura) o, sin posiciones, la de antes; si no hay, por orden
-        const l=lin[k];if(l.y!=null){const c=lin.filter(e=>e.x<l.x&&etiqueta(e.t)&&Math.abs(e.y-l.y)<1.2*Math.max(l.h,e.h)).sort((a,b)=>Math.abs(a.y-l.y)-Math.abs(b.y-l.y))[0];et=c?etiqueta(c.t):''}
+        if(l.y!=null){const c=suEtiqueta(l);et=c?etiqueta(c.t):''}
         const ej=/^eje\d$/.test(et)&&+et.slice(3)-1; // si esa casilla ya está, va a las sueltas
         if(ej!==false&&!pl.ejes[ej])pl.ejes[ej]=kg[1];else if((et==='mma'||et==='mmtc')&&!pl[et])pl[et]=kg[1];else if(et!=='grupo')sueltas.push(kg[1]);
         et='';continue}
@@ -4118,39 +4123,42 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
       const p=r.querySelector('.fotop');let cancel=false;p.querySelector('[data-fx]').onclick=()=>{cancel=true;cerrar(r)};
       try{p.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(e){}
       const aviso=(t,pr)=>{if(!p.isConnected)return;p.querySelector('.fst').textContent=t;p.querySelector('.bar i').style.width=Math.max(5,Math.round((pr||0)*100))+'%'};
-      let lin,props,ia=null,sinRed=false;
+      let lin,props,ia=null,sinRed=false,fallo=null;
       if(iaClave()){let tm=null;
         try{let pr=0.05,msg='Leyendo con Google…';tm=setInterval(()=>{pr=pr+(0.95-pr)*0.06;aviso(msg,pr)},400);ia=await leerIA(blob,ins,t=>{msg=t})}
         catch(e){if(cancel||!p.isConnected)return;
-          if(!(e instanceof TypeError)){ // Google contesta con un error: se dice y se puede cambiar la clave
-            p.querySelector('.ft').innerHTML='<b>Google no ha podido leer la foto</b>'+escH(e.message);p.querySelector('.bar').remove();
-            p.querySelector('.fb').insertAdjacentHTML('afterbegin',(e.clave?'<button type="button" data-fck>Cambiar clave</button>':'')+'<button type="button" data-fre>Otra vez</button>');
-            p.querySelector('[data-fre]').onclick=()=>hacer(i,galeria);if(e.clave)p.querySelector('[data-fck]').onclick=()=>formClave(p,()=>cerrar(r));return}
-          sinRed=true} // sin internet: se lee en el móvil como antes
+          // Google contesta con un error (límite gratis, saturado, clave…): 4 nov, Daniel se quedaba sin nada; ahora la foto
+          // se lee en el móvil igual y se dice qué ha dicho Google (y se puede cambiar la clave si es eso)
+          if(!(e instanceof TypeError))fallo=e;else sinRed=true} // sin internet: se lee en el móvil como antes
         finally{clearInterval(tm)}
-        if(cancel||!p.isConnected)return}
+        if(cancel||!p.isConnected)return;
+        if(fallo)aviso('Google no ha podido; leyendo en el móvil…',0.05)}
       if(ia){lin=ia.lin;props=ia.val}
       else{
         try{lin=await leerFoto(blob,aviso)}
         catch(e){if(cancel||!p.isConnected)return;
-          p.querySelector('.ft').innerHTML='<b>No se pudo leer la foto</b>'+escH(/fetch|network|load/i.test(String(e&&e.message||e))?'La primera vez hace falta internet (se descarga el lector). Vuelve a intentarlo con conexión.':String(e&&e.message||e));
-          p.querySelector('.bar').remove();return}
+          p.querySelector('.ft').innerHTML='<b>No se pudo leer la foto</b>'+escH(/fetch|network|load/i.test(String(e&&e.message||e))?'La primera vez hace falta internet (se descarga el lector). Vuelve a intentarlo con conexión.':String(e&&e.message||e))+(fallo?'<div class="dud">'+escH(fallo.message)+'</div>':'');
+          p.querySelector('.bar').remove();
+          if(fallo&&fallo.clave){p.querySelector('.fb').insertAdjacentHTML('afterbegin','<button type="button" data-fck>Cambiar clave</button>');p.querySelector('[data-fck]').onclick=()=>formClave(p,()=>cerrar(r))}
+          return}
         if(cancel||!p.isConnected)return;
         props=ins.map(x=>proponer(clase(x),lin))}
       const extra=destinos(ia?ia.placa:placaLocal(lin),ins);
       const ninguno=ia?!props.some(Boolean)&&!lin.length&&!extra.length:!lin.length;
-      const nota=ia?`<div class="dud"><span class="ia">Leído con Google</span>${ia.dudas?' · Dudas: '+escH(ia.dudas):''}</div>`:sinRed?'<div class="dud">Sin internet: leído en el móvil.</div>':'';
+      const nota=ia?`<div class="dud"><span class="ia">Leído con Google</span>${ia.dudas?' · Dudas: '+escH(ia.dudas):''}</div>`:sinRed?'<div class="dud">Sin internet: leído en el móvil.</div>':
+        fallo?`<div class="dud">Leído en el móvil. ${escH(fallo.message)}</div>`:'';
       p.innerHTML=`<div class="fh"><img alt="" src="${url}"><div class="ft"><b>${ninguno?'No he leído nada en la foto':'Leído de la foto'}</b>${ninguno?'Prueba más cerca, de frente y con buena luz.':props.some(Boolean)?'Revisa el valor y corrígelo si hace falta.':'No encuentro el dato: toca abajo el texto que sea o escríbelo.'}${nota}</div></div>`+
         ins.map((x,k)=>`<div><label>${escH(nombreDe(x))}</label><input class="t fv${props[k]?' lleno':''}" data-fk="${k}" value="${escH(props[k]||x.value)}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false"></div>`).join('')+
         (extra.length?`<div class="fextra"><label>También en la foto: marca lo que quieras poner</label>${extra.map((d,k)=>{const ahora=norm(d.i.value);
           return `<div class="fxr"><label><input type="checkbox" data-fc="${k}"${ahora?'':' checked'}>${escH(d.n)}</label><input class="t fv lleno" data-fe="${k}" value="${escH(d.v)}" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">${ahora?`<small>Ahora pone: ${escH(ahora)}</small>`:''}</div>`}).join('')}</div>`:'')+
         (lin.length&&!extra.length?`<div><label>Textos de la foto (toca uno para ponerlo${ins.length>1?' en la casilla marcada':''})</label><div class="chips">${trozos(lin,props).map(t=>`<button type="button">${escH(t)}</button>`).join('')}</div></div>`:'')+
-        `<div class="fb"><button type="button" class="ok" data-fok>✓ Poner${extra.length?' marcados':ins.length>1?' los '+ins.length:''}</button><button type="button" data-fre>📷 Otra</button><button type="button" data-fx aria-label="Cerrar">✕</button></div><button type="button" class="gal" data-fgal>Elegir una foto de la galería</button>`;
+        `<div class="fb"><button type="button" class="ok" data-fok>✓ Poner${extra.length?' marcados':ins.length>1?' los '+ins.length:''}</button><button type="button" data-fre>📷 Otra</button>${fallo&&fallo.clave?'<button type="button" data-fck>Cambiar clave</button>':''}<button type="button" data-fx aria-label="Cerrar">✕</button></div><button type="button" class="gal" data-fgal>Elegir una foto de la galería</button>`;
       let act=p.querySelector('input.fv');
       p.querySelectorAll('input.fv').forEach(f=>{f.onfocus=()=>{act=f};f.oninput=()=>f.classList.toggle('lleno',!!f.value.trim())});
       p.querySelectorAll('.chips button').forEach(b=>b.onclick=()=>{act.value=b.textContent;act.classList.add('lleno');
         const sig=[...p.querySelectorAll('input.fv')].find(f=>f!==act&&!f.value.trim());if(sig)act=sig}); // la siguiente vacía queda marcada
       p.querySelector('[data-fx]').onclick=()=>cerrar(r);
+      const fck=p.querySelector('[data-fck]');if(fck)fck.onclick=()=>formClave(p,()=>cerrar(r));
       p.querySelector('[data-fre]').onclick=()=>hacer(i);
       p.querySelector('[data-fgal]').onclick=()=>hacer(i,true);
       p.querySelector('[data-fok]').onclick=()=>{let n=0;
