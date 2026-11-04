@@ -112,6 +112,15 @@ details.sec>summary .snum{grid-row:1/3;display:inline-flex;align-items:center;ju
 details.sec>summary h2,details.sec>summary .count{grid-column:2}
 details.sec>summary .count{color:inherit;opacity:.75}
 .row.pt{background:var(--bg);border:0;border-radius:12px;padding:10px 10px 12px;margin:10px 0}
+.fijos{margin:12px 0;border:1.5px solid var(--accent);border-radius:14px;background:var(--panel)}
+.fijos>summary{list-style:none;cursor:pointer;display:flex;align-items:flex-start;gap:12px;padding:14px 16px;-webkit-tap-highlight-color:transparent}
+.fijos>summary::-webkit-details-marker{display:none}
+.fijos>summary .fx{flex:1;display:grid;gap:3px}.fijos>summary b{font-size:16px;line-height:1.25}
+.fijos>summary .fx-n{font-size:13px;color:var(--muted)}.fijos>summary .fx-n.con{color:var(--accent);font-weight:600}
+.fijos>summary::after{content:'';flex:none;width:9px;height:9px;margin:0 4px 4px 0;border-right:2.5px solid var(--accent);border-bottom:2.5px solid var(--accent);transform:rotate(45deg);transition:transform .2s;margin-top:10px}
+.fijos[open]>summary::after{transform:rotate(-135deg);margin:16px 4px 0 0}
+.fijos>.fx-b{padding:0 8px 4px}
+.fijos .fx-pic{display:block;margin-top:8px}.fijos .fx-pic figure{margin:0}.fijos .fx-pic img{display:block;width:100%;max-height:170px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;box-sizing:border-box}
 .row.pt.isbad{background:linear-gradient(90deg,var(--bad-soft),var(--bg) 70%)}
 .row.pt>.lbl.first{order:-1;flex-basis:100%;font-weight:700} /* número y nombre del punto arriba, antes del dibujo */
 .row.pt input.t,.row.pt select,.row.pt textarea{background:var(--panel)}
@@ -960,6 +969,9 @@ function parseLimit(t){
 function evalLimit(lim,val){
   if(!lim||!val)return null;
   if(/[¿?]|preg/i.test(val))return null;
+  // miles con punto («1.200») o un solo número con espacio («1 200 mm») son 1200, no 1,2 (4 nov)
+  if(/^\s*\d{1,3}(?: \d{3})+\s*(mm|kg|%|º|°)?\s*$/i.test(val))val=val.replace(/(\d) (?=\d{3})/g,'$1');
+  val=val.replace(/(?<![\d.,])\d{1,3}(?:\.\d{3})+(?![\d.,])/g,m=>m.replace(/\./g,''));
   const ns=(val.match(/-?\d+(?:[.,]\d+)?/g)||[]).map(x=>parseFloat(x.replace(',','.')));
   if(!ns.length||/^\s*[-–]\s*$/.test(val))return null;
   return ns.every(n=>{
@@ -1124,7 +1136,25 @@ function fillUI(){
   document.querySelectorAll('[data-cb]').forEach(b=>{const on=!!state.v['c'+b.dataset.cb];b.setAttribute('aria-pressed',on);b.classList.toggle('auto',on&&!state.manual['c'+b.dataset.cb])});
   lucesUI();lucesCalc();
   {const mi=$('#ltMedida');if(mi)mi.value=(state.lt&&state.lt.medida)||''}ltCalc();cjDif();bnCalc();latNota();
-  refresh();hereSoon();
+  plegarFijos();refresh();hereSoon();
+}
+// protección lateral: «Instala elementos fijos…» y sus cotas 1-4 (6.7-6.12) en un desplegable cerrado que se abre al tocarlo
+// (Daniel, 4 nov). Solo en la app: el Word sale igual. Arriba dice si tiene datos para que no se quede nada sin ver.
+function plegarFijos(){
+  const rows=[...document.querySelectorAll('#form .row[data-r]')],pt=r=>(r.querySelector('.ptxt')||{}).textContent||'';
+  const i=rows.findIndex(r=>/^Instala elementos fijos/i.test(pt(r)));if(i<0||rows[i].closest('.fijos'))return;
+  const g=[rows[i]];for(let k=i+1;k<rows.length&&rows[k].parentElement===rows[i].parentElement&&/^Instala elementos fijos|^COTA \d/i.test(pt(rows[k]));k++)g.push(rows[k]);
+  const d=document.createElement('details');d.className='fijos';
+  d.innerHTML='<summary><span class="fx"><b>Elementos fijos que hacen función de protección lateral</b><span class="fx-n"></span></span></summary><div class="fx-b"></div>';
+  g[0].before(d);const b=d.querySelector('.fx-b');g.forEach(r=>b.appendChild(r));d.addEventListener('toggle',contarFijos);
+  // el dibujo de las cotas 1-4 del COP va en la cabecera para reconocerlo cerrado (Daniel, 4 nov); dentro ya no se repite
+  const pc=g.map(r=>r.querySelector('.pics')).find(Boolean);if(pc){pc.className='fx-pic';d.querySelector('summary .fx').appendChild(pc)}
+}
+function contarFijos(){
+  const d=document.querySelector('#form .fijos');if(!d)return;const n=d.querySelector('.fx-n');
+  const pts=[...d.querySelectorAll('.pnum')].map(e=>e.textContent.trim()),rango=pts.length?pts[0]+' a '+pts[pts.length-1]:'';
+  const dat=[...d.querySelectorAll('[data-slot]')].filter(i=>i.value.trim()).length+[...d.querySelectorAll('.grp')].filter(g=>g.querySelector('[aria-pressed="true"]')).length;
+  n.textContent=dat?`${rango} · ${dat===1?'1 dato rellenado':dat+' datos rellenados'}`:`${rango} · toca para ${d.open?'cerrar':'abrir'}`;n.classList.toggle('con',!!dat);
 }
 function setCb(cb,on,manual){
   const g=CB_GROUP[cb]||[cb];
@@ -1147,8 +1177,13 @@ function autoCumple(rowEl){
     const [q,bb]=inputs.map(i=>i.value.trim().split('/').map(x=>num(x.replace(/[^\d.,-]/g,''))));
     const okq=inputs.length===2&&[...q,...bb].every(x=>!isNaN(x))&&(q.length===bb.length||q.length===1||bb.length===1);
     res=okq?[Array.from({length:Math.max(q.length,bb.length)},(_,k)=>q[q.length===1?0:k]>=bb[bb.length===1?0:k]).every(Boolean)]:[null]}
-  if(res.some(x=>x===null)){ if(!vals.length){bs.forEach(b=>setCb(+b.dataset.cb,false,false))} return;}
-  setCb(+(res.every(Boolean)?si:no).dataset.cb,true,false);
+  // sin número que comparar («-», «N.P», «¿?»): se quita el Sí/No que puso la app con el número de antes (4 nov);
+  // lo marcado a mano o lo que venía del Word cargado no se toca
+  const A=state.autoC=state.autoC||{};
+  if(res.some(x=>x===null)){if(!vals.length)bs.forEach(b=>setCb(+b.dataset.cb,false,false));
+    else bs.forEach(b=>{if(A[b.dataset.cb]&&state.v['c'+b.dataset.cb])setCb(+b.dataset.cb,false,false)});
+    bs.forEach(b=>delete A[b.dataset.cb]);return;}
+  const pick=res.every(Boolean)?si:no;setCb(+pick.dataset.cb,true,false);bs.forEach(b=>delete A[b.dataset.cb]);A[pick.dataset.cb]=1;
 }
 function refresh(){
   // marca filas con "No" y cuenta por sección
@@ -1171,7 +1206,7 @@ function refresh(){
   chip(nBad.length?'bad':'ok',nBad.length?`${nBad.length} medidas no cumplen`:'Ninguna medida fuera de límite',nBad.length?()=>goTo(nBad[0]):null);
   if(nPend.length)chip('warn',`${nPend.length} pendientes`,()=>goTo(nPend[0]));
   const nc=noCuadran();[...new Set(nc.map(x=>x.chip))].forEach(t=>{const x=nc.find(y=>y.chip===t);chip('warn',t,()=>{if(x.el)goTo(x.el)})});
-  BAD=nBad;PEND=nPend;NOC=nc;
+  BAD=nBad;PEND=nPend;NOC=nc;contarFijos();
 }
 let BAD=[],PEND=[],NOC=[];
 function noCuadran(){ // longitud total y de la caja que no cuadran: arriba, junto a los pendientes, y en «Revisa antes de generar» (Daniel, 15 oct)
@@ -1185,7 +1220,7 @@ function noCuadran(){ // longitud total y de la caja que no cuadran: arriba, jun
     if(![vd,ic,lc,l].some(isNaN)){const d=Math.round((vd+ic+lc-l)*10)/10;if(d!==0)out.push({chip:'Longitud de la caja no cuadra',txt:`${pt(CJ.lc)}Longitud de la caja: no cuadra con la longitud total (${sg(d)} mm)`,el:fila(CJ.lc)})}}
   return out;
 }
-function goTo(el){const d=el.closest('details.sec');if(d)soloAbierto(d);el.scrollIntoView({block:'center',behavior:'smooth'});const i=el.matches('input')?el:el.querySelector('input,button');if(i)i.focus({preventScroll:true})}
+function goTo(el){const d=el.closest('details.sec');if(d)soloAbierto(d);const fx=el.closest('details.fijos');if(fx)fx.open=true;el.scrollIntoView({block:'center',behavior:'smooth'});const i=el.matches('input')?el:el.querySelector('input,button');if(i)i.focus({preventScroll:true})}
 function findSlot(re){return model.slots.find(s=>re.test(s.label))}
 
 document.addEventListener('input',e=>{
@@ -3624,7 +3659,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:36';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:41';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
