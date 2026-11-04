@@ -3624,7 +3624,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:26';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:36';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4987,6 +4987,305 @@ ${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>C
       [['Solo guardar','',()=>saveWord(L)],['Enviar por correo','primary',()=>sendWord(L)]]);
   }
   return {abrirLista,recorteTicket,recorteSello,selloDePdf,pdfDe,ponTicket,ponBast,ticketDeLineas,get P(){return P},set P(v){P=v},pintar};
+})();
+
+/* Reformas (lo pidió Daniel, 4 nov): «Datos para proyecto Reforma de Importancia» (plantilla PDF de 3 hojas, apartados 1-11)
+   y, si lleva grúa, también la hoja 12 «En caso de instalación de Grúa tras cabina». Al empezar se elige «Reforma» o «Reforma con grúa»:
+   sin grúa no sale la hoja de la grúa. Las plantillas no tienen casillas: el PDF se hace escribiendo cada dato encima de su raya
+   (pdf-lib de pesaje-datos.js; plantillas y dibujos en reformas-datos.js). Al tocar una cota sale su dibujo con la cota marcada en rojo
+   y de dónde a dónde se mide. En las medidas vale escribir una suma («1350+290» → 1640).
+   Se guardan en el móvil (IndexedDB «cop-reformas») y no se borran solos. Va después de pesaje.js. */
+const Reformas=(()=>{
+  const SRC='reformas-datos.js',PDFSRC='pesaje-datos.js',K_DB=['cop-reformas','cop-reformas-grua']; // cada tipo se guarda aparte (Daniel, 4 nov)
+  // ---------- las casillas: [clave, etiqueta, hoja, x, línea base (desde arriba, en puntos), dibujo, marca en el dibujo, ayuda] ----------
+  // dibujos: camion 870×450, deposito 330×195, grua 795×867 (px de los recortes de reformas/img)
+  const MK={camion:{X1:[185,22],Lc:[478,22],H:[860,195],Y1:[833,292],X2:[245,365],Vt:[680,365],Lt:[400,415]},
+    deposito:{L:[180,133],A:[268,83],B:[40,155]},
+    grua:{X1:[225,24],X2:[228,386],X3:[258,434],X4:[582,386],X5:[430,689],X6:[725,689],X7:[335,628]}};
+  const TAM={camion:[870,450],deposito:[330,195],grua:[795,867]};
+  const ID=[['marca','Marca',0,120,207],['matricula','Matrícula',0,278,207],['bastidor','N.º de bastidor',0,404,207]];
+  const DIM=[
+    ['vdel','Voladizo delantero',null,0,0,'camion',null,'No va en el PDF: sirve para comprobar la longitud total. Del frontal al centro del 1.er eje.'],
+    ['lt','Longitud total, Lt',0,153,317,'camion','Lt','De la parte delantera a la trasera del todo.'],
+    ['vt','(*) Voladizo posterior, Vt',0,153,335,'camion','Vt','Del centro del último eje a la trasera del todo.'],
+    ['d12','Distancia 1.º/2.º eje',0,153,354,'camion',null,'De centro a centro de las ruedas.'],
+    ['d23','Distancia 2.º/3.º eje',0,153,370,'camion',null,'Solo si tiene 3 ejes.'],
+    ['d34','Distancia 3.º/4.º eje',0,153,386,'camion',null,'Solo si tiene 4 ejes.'],
+    ['h','(*) Altura total, H',0,153,403,'camion','H','Del suelo a lo más alto.'],
+    ['ancho','(*) Anchura total',0,153,419,null,null,'Lo más ancho del vehículo.'],
+    ['x1','(*) Inicio carrocería, X1',0,153,435,'camion','X1','Del centro del 1.er eje al principio de la caja.'],
+    ['lc','(*) Longitud de caja, Lc',0,153,452,'camion','Lc','Del principio al final de la caja.'],
+    ['y1','Altura bastidor, Y1',0,153,469,'camion','Y1','Del suelo a la parte de arriba del bastidor (chasis).'],
+    ['asientos','N.º de asientos',0,153,485,null,null,'']];
+  const DEPO=[['dcap','Capacidad en litros',0,153,540,null,null,'La que pone el depósito. Si no se sabe, rellena L, A y B.'],
+    ['dx2','Ubicación, X2',0,153,560,'camion','X2','Del centro del 1.er eje al centro del depósito.'],
+    ['dl','L (largo)',0,438,560,'deposito','L','Largo del depósito.'],['da','A (alto)',0,438,579,'deposito','A','Alto del depósito.'],['db','B (ancho)',0,438,599,'deposito','B','Ancho del depósito.']];
+  const TARA=[['ta','Tara total, a)',0,153,652],['tb','Tara eje/s delantero/s, b)',0,153,676],['tc','Tara eje/s trasero/s, c)',0,153,700],['comb','Combustible durante el pesaje (litros)',0,153,755]];
+  // perfiles: 7 tipos (casillas de la hoja 2), y sus medidas
+  const PX=[[161.5,219,281.8,341.8,400.2,461.2,520.2],[163.5,221,283.8,343.8,402.2,463.5,522.2],[161.5,219,281.8,341.8,400.2,461.2,520.2]];
+  const PTOP=[331,469.2,620.7],PMED=[[337,356,375,395,414],[473,492,511,531,550],[628,648,667,686,706]];
+  const PERF=[['chasis','Larguero del chasis',['H','B','e','e1','A']],['sobre','Larguero sobre-chasis',['H','B','e','e1','a']],['basc','Carrocería basculante: bastidor de la caja',['H','B','e','e1','a']]];
+  const TOR=[['pizq','Placas atornilladas · Total lado izq.',2,155,347],['pdch','Placas atornilladas · Total lado dcho.',2,155,367],['cizq','Cazoletas · Total lado izq.',2,155,554],['cdch','Cazoletas · Total lado dcho.',2,155,574]];
+  const GID=[['gmarca','Marca',3,196,133],['gmodelo','Modelo',3,196,153],['gcap','Capacidad',3,196,172],['gserie','N.º de serie',3,196,192]];
+  const GDIM=[['gx1','Centro de la grúa, X1',3,196,235,'grua','X1','Del centro del 1.er eje al centro de la grúa (la columna).'],
+    ['gx2','Dist. patas delanteras / 1.er eje, X2',3,196,255,'grua','X2','Del centro del 1.er eje a las patas delanteras (estabilizadores de la grúa).'],
+    ['gx3','Fin de refuerzo lateral, X3',3,196,279,'grua','X3','Del centro del 1.er eje a donde termina el refuerzo lateral.'],
+    ['gx4','Dist. patas traseras / últ. eje, X4',3,196,303,'grua','X4','Del centro del último eje a las patas traseras.'],
+    ['gx5','Anchura máx. patas delanteras, X5',3,196,327,'grua','X5','Patas delanteras abiertas del todo, de punta a punta.'],
+    ['gx6','Anchura máx. patas traseras, X6',3,196,351,'grua','X6','Patas traseras abiertas del todo, de punta a punta.'],
+    ['gx7','Distancia entre tornillos, X7',3,196,375,'grua','X7','Entre las filas de tornillos de la base de la grúa, a lo largo del camión.']];
+  const GTOR=[['gizq','Total lado izquierdo',3,196,448],['gdch','Total lado derecho',3,196,472]];
+  const NUM=new Set([...DIM,...DEPO,...TARA,...GDIM].map(f=>f[0]));
+  const ICO='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 17h13V8H2z"/><path d="M15 11h4l3 3v3h-7"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M5 8V4l6-1"/></svg>';
+  const norm=t=>String(t==null?'':t).replace(/\s+/g,' ').trim();
+
+  // ---------- guardado ----------
+  const DBP=[null,null];
+  function db(g){const i=g?1:0;if(!DBP[i])DBP[i]=new Promise((ok,ko)=>{const r=indexedDB.open(K_DB[i],1);r.onupgradeneeded=()=>r.result.createObjectStore('r',{keyPath:'id'});r.onsuccess=()=>ok(r.result);r.onerror=()=>{DBP[i]=null;ko(r.error)}});return DBP[i]}
+  const req=r=>new Promise((ok,ko)=>{r.onsuccess=()=>ok(r.result);r.onerror=()=>ko(r.error)});
+  async function todos(g){try{const d=await db(g);return (await req(d.transaction('r').objectStore('r').getAll())).sort((a,b)=>b.cambiado-a.cambiado)}catch(e){return []}}
+  async function poner(p){const d=await db(p.grua);await req(d.transaction('r','readwrite').objectStore('r').put(p))}
+  async function quitar(p){const d=await db(p.grua);await req(d.transaction('r','readwrite').objectStore('r').delete(p.id))}
+  const nuevo=grua=>({id:'ref-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6),creado:Date.now(),cambiado:Date.now(),grua:!!grua,
+    v:{},susp:[{},{},{}],neu:[{},{},{}],perf:{chasis:{},sobre:{},basc:{}},pdf:false});
+  let P=null,GT=0;
+  function guardarYa(){clearTimeout(GT);if(!P)return;P.cambiado=Date.now();poner(P).catch(e=>showMsg('No se ha podido guardar la reforma en el móvil: '+(e&&e.message||e),true))}
+  const guardar=()=>{clearTimeout(GT);GT=setTimeout(guardarYa,600)};
+
+  // ---------- datos (plantillas y dibujos) ----------
+  let DATA=null,DP=null;
+  const script=(src,ok,ko)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>{s.remove();ko()};document.head.appendChild(s)};
+  function cargar(){
+    if(DATA)return Promise.resolve(DATA);
+    if(!DP)DP=new Promise((ok,ko)=>{if(window.REF_DATA)return ok(DATA=window.REF_DATA);
+      script(SRC,()=>{DATA=window.REF_DATA;DATA?ok(DATA):ko(new Error('sin datos'))},()=>{DP=null;ko(new Error('No se han podido cargar las plantillas de reformas. Revisa la conexión y vuelve a probar.'))})});
+    return DP;
+  }
+  const pdfLib=()=>window.PDFLib?Promise.resolve():new Promise((ok,ko)=>script(PDFSRC,ok,()=>ko(new Error('No se ha podido cargar el lector de PDF. Revisa la conexión.'))));
+  const imgSrc=n=>DATA&&DATA.img[n]?'data:image/jpeg;base64,'+DATA.img[n]:'';
+
+  // ---------- estilos ----------
+  const st=document.createElement('style');
+  st.textContent=`html[data-vista="ref"] #homeMain,html[data-vista="ref"] #homeMis{display:none!important}html:not([data-vista="ref"]) #reformas{display:none!important}
+button.tile.ref{grid-column:1/-1;flex-direction:row;align-items:center;min-height:0;gap:14px}button.tile.ref .ic{margin:0;flex:none}button.tile.ref>span:last-child{display:grid;gap:3px}
+@media (min-width:760px){button.tile.ref{grid-column:auto;flex-direction:column;align-items:flex-start;min-height:158px}}
+#reformas{display:grid;gap:14px;margin-top:6px;color:var(--ink)}
+#reformas .rnew{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#reformas .rnew button{justify-content:center;padding:14px 8px;border-radius:14px;font-size:16px;font-weight:700;display:grid;gap:2px;text-align:center}
+#reformas .rnew button small{font-size:12px;font-weight:500;opacity:.85}
+#reformas .hh{margin:6px 0 0}
+#reformas .pit{background:var(--panel);border-radius:14px;padding:12px 14px;display:grid;gap:4px;box-shadow:var(--shadow,none);border:1px solid var(--line)}
+#reformas .pit b{font-size:15px}#reformas .pit .m{font-size:13px;color:var(--muted)}
+#reformas .pit .acts{display:flex;gap:6px;margin-top:6px}#reformas .pit .acts button{flex:1;justify-content:center;padding:9px 4px;border-radius:10px;font-size:13px;font-weight:600}
+#reformas .pit .acts .del{flex:none;color:var(--bad);border-color:var(--bad)}
+#reformas .vacio{font-size:14px;color:var(--muted);margin:0}
+#reformas .card,#reformas details.card{background:var(--panel);border-radius:16px;padding:14px;display:grid;gap:12px;box-shadow:var(--shadow,none);border:1px solid var(--line)}
+#reformas .card h3,#reformas details.card>summary{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+#reformas details.card>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:8px}#reformas details.card>summary::after{content:'▸';font-size:14px}
+#reformas details.card[open]>summary::after{content:'▾'}#reformas details.card>summary .n{font-weight:600;text-transform:none;letter-spacing:0;color:var(--ok)}
+#reformas details.card:not([open]){gap:0}
+#reformas .card.grua{border:2px solid var(--accent)}
+#reformas .f{display:grid;gap:5px;font-size:13px;font-weight:600;color:var(--muted)}
+#reformas .f input,#reformas .f textarea{font-size:16px;font-weight:500;color:var(--ink);padding:10px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);width:100%;box-sizing:border-box;font-family:inherit}
+#reformas .f textarea{min-height:70px;resize:vertical}
+#reformas .f input:focus,#reformas .f textarea:focus{border-color:var(--accent);outline:none}
+#reformas .f.cota input{font-variant-numeric:tabular-nums}
+#reformas .f .cal{font-size:12px;font-weight:600;color:var(--accent)}
+#reformas .tres{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}#reformas .dos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#reformas .dib[hidden]{display:none!important}#reformas .dib{display:grid;gap:6px;padding:10px;border-radius:12px;background:#fff;border:1.5px solid var(--accent)}
+#reformas .dib .lienzo{position:relative}#reformas .dib img{width:100%;display:block}
+#reformas .dib .ring{position:absolute;width:13%;aspect-ratio:1;border:3px solid #e01b24;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 3px rgba(224,27,36,.18);pointer-events:none}
+#reformas .dib.dep .ring{width:22%}
+#reformas .dib p{margin:0;font-size:14px;line-height:1.4;color:#1a1a1a}#reformas .dib p b{color:#e01b24}
+#reformas .chk{font-size:13px;line-height:1.4;padding:9px 12px;border-radius:10px;font-weight:600}
+#reformas .chk.ok{background:var(--ok-soft,#e6f6ec);color:var(--ok)}#reformas .chk.mal{background:var(--warn-soft,#fff4e0);color:var(--ink);border:1.5px solid var(--warn,#e08a00)}
+#reformas .chk button{margin-left:6px;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700}
+#reformas .nota{font-size:12px;color:var(--muted);line-height:1.4;margin:0}
+#reformas .seg{display:flex;gap:6px;flex-wrap:wrap}#reformas .seg button{flex:1;min-width:52px;justify-content:center;padding:10px 4px;border-radius:10px;font-size:14px;font-weight:600}
+#reformas .seg button.on{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+#reformas .sus{display:grid;grid-template-columns:70px 1fr;gap:8px;align-items:center;font-size:14px;font-weight:600}
+#reformas .neu{display:grid;grid-template-columns:52px 46px 1fr 80px 46px;gap:6px;align-items:center;font-size:13px}#reformas .neu input{font-size:15px;padding:8px 6px;border-radius:8px;border:1.5px solid var(--line);background:var(--bg);width:100%;box-sizing:border-box;min-width:0}
+#reformas .neu .hd{font-size:11px;color:var(--muted);font-weight:700}
+#reformas .tipos{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}#reformas .tipos button{padding:4px 2px;border-radius:10px;background:#fff;border:2px solid var(--line);display:block;box-shadow:none}
+#reformas .tipos button img{width:100%;display:block}#reformas .tipos button.on{border-color:#e01b24;box-shadow:0 0 0 2px rgba(224,27,36,.25)}
+#reformas .meds{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}#reformas .meds .f input{padding:9px 6px;text-align:center}
+#reformas .foto2{width:100%;border-radius:10px;border:1px solid var(--line);display:block}
+#reformas .gen{width:100%;justify-content:center;padding:15px;border-radius:14px;font-size:17px;font-weight:700}
+#reformas .atras{background:none;border:0;padding:0;color:var(--accent);font-size:14px;font-weight:600;justify-self:start;box-shadow:none}
+#reformas .tipo{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;font-weight:600}
+#reformas .tipo .seg{flex:none;width:230px}`;
+  document.head.appendChild(st);
+  const tiles=document.querySelector('#homeMain .tiles');
+  tiles.insertAdjacentHTML('beforeend',`<button type="button" class="tile ref" id="tRef"><span class="ic">${ICO}</span><span><b>Reformas</b><span class="d">Datos para proyecto de reforma, con o sin grúa: sale el PDF relleno</span></span></button>`);
+  document.getElementById('home').insertAdjacentHTML('beforeend','<div id="reformas"></div>');
+  const box=document.getElementById('reformas');
+  document.getElementById('tRef').onclick=()=>abrirMenu();
+  const cab=(t,s)=>{$('#hT').textContent=t;$('#hsub').textContent=s};
+  const titulo=p=>[p.v.marca,p.v.matricula].filter(Boolean).join(' · ')||'Reforma sin identificar';
+  const tipoTxt=p=>p.grua?'Reforma con grúa':'Reforma';
+  const fecha=t=>{const d=new Date(t);return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()};
+
+  // menú: Reforma / Reforma con grúa (cada una con su lista, independientes)
+  async function abrirMenu(){
+    if(P)guardarYa();P=null;vista('ref');cab('Reformas','Datos para proyecto');
+    const [a,b]=await Promise.all([todos(false),todos(true)]);
+    const n=x=>x.length?(x.length===1?'1 guardada':x.length+' guardadas'):'Ninguna guardada';
+    box.innerHTML=`<div class="rnew"><button type="button" class="primary" data-rtipo="0">Reforma<small>${n(a)}</small></button><button type="button" class="primary" data-rtipo="1">Reforma con grúa<small>${n(b)}</small></button></div>
+<p class="nota">Cada una se guarda por su lado. «Reforma con grúa» añade la hoja 12 de la grúa al PDF.</p>`;
+    for(const x of box.querySelectorAll('[data-rtipo]'))x.onclick=()=>abrirLista(x.dataset.rtipo==='1');
+    window.scrollTo(0,0);cargar().catch(()=>{});
+  }
+  async function abrirLista(g){
+    if(P)guardarYa();P=null;vista('ref');cab(g?'Reformas con grúa':'Reformas',g?'Reforma + hoja de la grúa':'Datos para proyecto');
+    const L=await todos(g);
+    box.innerHTML=`<button type="button" class="atras" data-rmenu>‹ Reformas</button>
+<button type="button" class="primary gen" data-rnuevo>${g?'Nueva reforma con grúa':'Nueva reforma'}</button>
+<h2 class="hh">${g?'Tus reformas con grúa':'Tus reformas'}</h2>${L.length?L.map(p=>`<div class="pit" data-rid="${esc(p.id)}"><b>${esc(titulo(p))}</b><span class="m">${esc([fecha(p.cambiado),p.pdf?'PDF creado':''].filter(Boolean).join(' · '))}</span>
+<div class="acts"><button type="button" data-rabrir>Abrir</button><button type="button" data-rpdf>PDF</button><button type="button" class="del" data-rborrar aria-label="Borrar">Borrar</button></div></div>`).join('')
+      :`<p class="vacio">Aún no hay ${g?'reformas con grúa':'reformas'}. Se guardan solas en este móvil y no se borran: las quitas tú aquí.</p>`}`;
+    box.querySelector('[data-rmenu]').onclick=()=>abrirMenu();
+    box.querySelector('[data-rnuevo]').onclick=()=>{P=nuevo(g);guardarYa();pintar()};
+    for(const it of box.querySelectorAll('.pit')){const p=L.find(x=>x.id===it.dataset.rid);
+      it.querySelector('[data-rabrir]').onclick=()=>{P=p;pintar()};
+      it.querySelector('[data-rpdf]').onclick=()=>{P=p;crear()};
+      it.querySelector('[data-rborrar]').onclick=()=>ask('Borrar esta reforma',`<p><b>${esc(titulo(p))}</b></p><p class="hint">Se borra del móvil. El PDF que ya enviaste no cambia.</p>`,
+        [['Cancelar'],['Borrar','primary',async()=>{await quitar(p);abrirLista(g)}]]);
+    }
+    window.scrollTo(0,0);cargar().catch(()=>{});
+  }
+
+  // ---------- formulario ----------
+  const val=k=>P.v[k]==null?'':P.v[k];
+  const num=k=>{const n=parseFloat(String(val(k)).replace(',','.'));return isFinite(n)?n:null};
+  const campo=([k,l,,,,dib,mk,ay],cls)=>`<label class="f${NUM.has(k)?' cota':''}${cls?' '+cls:''}" data-rf="${k}">${esc(l)}<input data-rk="${k}" value="${esc(val(k))}"${NUM.has(k)?' inputmode="decimal"':''}${k==='bastidor'||k==='matricula'||k==='marca'?' autocapitalize="characters" spellcheck="false"':''}><span class="cal" data-rcal="${k}"></span></label>${dib||ay?`<div class="dib${dib==='deposito'?' dep':''}" data-rdib="${k}" hidden></div>`:''}`;
+  const lleno=fs=>fs.filter(f=>norm(val(f[0]))).length;
+  const det=(id,t,html,abierto,n)=>`<details class="card" data-rsec="${id}"${abierto?' open':''}><summary>${t}${n?`<span class="n">${n}</span>`:''}</summary>${html}</details>`;
+  function pintar(){
+    vista('ref');cab(tipoTxt(P),titulo(P));
+    const sec=P.sec||{};const ab=(id,d)=>sec[id]==null?d:sec[id];
+    const nTara=lleno(TARA),nNeu=P.neu.filter(n=>Object.values(n).some(norm)).length,nSus=P.susp.filter(s=>s.t).length;
+    const perf=([id,t,meds],i)=>{const q=P.perf[id];return `<div class="tipos" data-rpt="${id}">${[1,2,3,4,5,6,7].map(n=>`<button type="button" data-n="${n}" class="${q.tipo===n?'on':''}" aria-label="Perfil tipo ${n}"><img alt="" src="${imgSrc('perfil'+n)}"></button>`).join('')}</div>
+<div class="meds">${meds.map(m=>`<label class="f">${m}<input data-rpm="${id}.${m}" value="${esc(q[m]||'')}" inputmode="decimal"></label>`).join('')}</div>`};
+    box.innerHTML=`<button type="button" class="atras" data-ratras>‹ ${P.grua?'Tus reformas con grúa':'Tus reformas'}</button>
+<div class="card"><p class="nota">Toca una medida y sale su dibujo con la cota marcada en rojo. En las medidas puedes escribir una suma: «1350+290».</p></div>
+<div class="card"><h3>2. Identificación del vehículo</h3>${ID.map(f=>campo(f)).join('')}</div>
+<div class="card"><h3>3. Descripción de la reforma</h3><label class="f">Qué se ha hecho<textarea data-rk="desc" rows="3">${esc(val('desc'))}</textarea></label></div>
+<div class="card"><h3>4. Dimensiones</h3><p class="nota">Las (*) siempre; las otras solo si se han modificado.</p>${DIM.map(f=>campo(f)).join('')}<div data-rchk></div></div>
+<div class="card"><h3>5. Depósito de combustible</h3>${DEPO.map(f=>campo(f)).join('')}</div>
+${det('tara','6. Tara después de la reforma',TARA.map(f=>campo(f)).join('')+'<p class="nota">Normalmente lo rellenan tus compañeros.</p>',ab('tara',nTara>0),nTara?nTara+' datos':'')}
+${det('susp','7. Suspensión',P.susp.map((s,i)=>`<div class="sus"><span>${i+1}.º eje</span><div class="seg" data-rsus="${i}"><button type="button" data-t="m" class="${s.t==='m'?'on':''}">Mecánica</button><button type="button" data-t="n" class="${s.t==='n'?'on':''}">Neumática</button></div></div>`).join('')+'<p class="nota">No cumplimentar si no se ha modificado.</p>',ab('susp',nSus>0),nSus?nSus+' ejes':'')}
+${det('neu','8. Neumáticos',`<div class="neu"><span></span><span class="hd">Nº</span><span class="hd">Dimensiones</span><span class="hd">IC</span><span class="hd">IV</span>${P.neu.map((n,i)=>`<span>${i+1}.º eje</span>${['n','dim','ic','iv'].map(c=>`<input data-rneu="${i}.${c}" value="${esc(n[c]||'')}" aria-label="${c} ${i+1}.º eje">`).join('')}`).join('')}</div><p class="nota">Ejemplo: 2 · 315/80 R22,5 · 154/150 · J. No cumplimentar si no se ha modificado.</p>`,ab('neu',nNeu>0),nNeu?nNeu+' ejes':'')}
+<div class="card"><h3>9. Perfiles · ${esc(PERF[0][1])}</h3><p class="nota">Toca el tipo de perfil (sale la X en su casilla) y pon sus medidas.</p>${perf(PERF[0],0)}</div>
+${det('sobre','9. '+PERF[1][1],perf(PERF[1],1)+'<p class="nota">Solo si se ha añadido sobrechasis.</p>',ab('sobre',!!P.perf.sobre.tipo))}
+${det('basc','9. '+PERF[2][1],perf(PERF[2],2),ab('basc',!!P.perf.basc.tipo))}
+<div class="card"><h3>11. Tornillos carrocería – chasis</h3><img class="foto2" alt="Placas atornilladas" src="${imgSrc('placas')}"><p class="nota"><b>Placas atornilladas:</b> si hay tornillos en chasis y sobrechasis, cuenta el lado con menos tornillos. Escribe por ejemplo «10 tornillos M-10, calidad 8.8».</p>${TOR.slice(0,2).map(f=>campo(f)).join('')}</div>
+${det('caz','11. Cazoletas',`<img class="foto2" alt="Cazoletas" src="${imgSrc('cazoletas')}"><p class="nota">Cuenta solo los tornillos verticales.</p>`+TOR.slice(2).map(f=>campo(f)).join(''),ab('caz',lleno(TOR.slice(2))>0))}
+${P.grua?`<div class="card grua"><h3>12. Grúa tras cabina</h3>
+${det('gid','a) Identificación',GID.map(f=>campo(f)).join('')+'<p class="nota">Solo si no aportas el certificado CE de la grúa.</p>',ab('gid',true),lleno(GID)?lleno(GID)+' de 4':'')}
+<h3>b) Dimensiones</h3>${GDIM.map(f=>campo(f)).join('')}
+<h3>c) Tornillos de fijación</h3><p class="nota">Por ejemplo «8 espárragos roscados M-16, calidad 8.8».</p>${GTOR.map(f=>campo(f)).join('')}
+<p class="nota">d) El esquema a mano de los perfiles no va en la app.</p></div>`:''}
+<button type="button" class="primary gen" data-rcrear>Crear PDF</button>`;
+    box.querySelector('[data-ratras]').onclick=()=>abrirLista(P.grua);
+    for(const d of box.querySelectorAll('details[data-rsec]'))d.ontoggle=()=>{P.sec=P.sec||{};P.sec[d.dataset.rsec]=d.open;guardar()};
+    for(const i of box.querySelectorAll('[data-rk]')){const k=i.dataset.rk;
+      i.oninput=()=>{let v=i.value;if(k==='marca'||k==='bastidor'||k==='matricula')v=v.toUpperCase();if(k==='bastidor')v=v.replace(/\s/g,'');P.v[k]=v;
+        cab(tipoTxt(P),titulo(P));calc(k);comprobar();guardar()};
+      i.onfocus=()=>dibujo(k,true);i.onblur=()=>{suma(i);setTimeout(()=>{if(document.activeElement!==i)dibujo(k,false)},150)}}
+    for(const s of box.querySelectorAll('[data-rsus]'))for(const b of s.querySelectorAll('button'))b.onclick=()=>{const q=P.susp[+s.dataset.rsus];q.t=q.t===b.dataset.t?'':b.dataset.t;
+      for(const x of s.querySelectorAll('button'))x.classList.toggle('on',x.dataset.t===q.t);guardar()};
+    for(const i of box.querySelectorAll('[data-rneu]'))i.oninput=()=>{const [r,c]=i.dataset.rneu.split('.');P.neu[+r][c]=i.value;guardar()};
+    for(const t of box.querySelectorAll('[data-rpt]'))for(const b of t.querySelectorAll('button'))b.onclick=()=>{const q=P.perf[t.dataset.rpt],n=+b.dataset.n;q.tipo=q.tipo===n?0:n;
+      for(const x of t.querySelectorAll('button'))x.classList.toggle('on',+x.dataset.n===q.tipo);guardar()};
+    for(const i of box.querySelectorAll('[data-rpm]'))i.oninput=()=>{const [id,m]=i.dataset.rpm.split('.');P.perf[id][m]=i.value;guardar()};
+    box.querySelector('[data-rcrear]').onclick=()=>crear();
+    for(const k of NUM)calc(k);comprobar();
+    if(!DATA)cargar().then(()=>{if(P)for(const im of box.querySelectorAll('img'))if(!im.getAttribute('src'))pintarImgs()}).catch(e=>showMsg(e.message,true));
+  }
+  function pintarImgs(){const t=box.querySelectorAll('[data-rpt] img');t.forEach((im,j)=>im.src=imgSrc('perfil'+(j%7+1)));const f=box.querySelectorAll('.foto2');if(f[0])f[0].src=imgSrc('placas');if(f[1])f[1].src=imgSrc('cazoletas')}
+  const TODO=[...DIM,...DEPO,...GDIM];
+  function dibujo(k,on){
+    const d=box.querySelector(`[data-rdib="${k}"]`);if(!d)return;
+    if(!on){d.hidden=true;return}
+    const f=TODO.find(x=>x[0]===k);if(!f)return;const [, l,,,,dib,mk,ay]=f;
+    let h='';
+    if(dib&&imgSrc(dib)){const m=mk&&MK[dib][mk],[w,hh]=TAM[dib];h+=`<div class="lienzo"><img alt="" src="${imgSrc(dib)}">${m?`<span class="ring" style="left:${m[0]/w*100}%;top:${m[1]/hh*100}%"></span>`:''}</div>`}
+    if(ay)h+=`<p>${mk?`<b>${esc(mk==='Vd'?'Voladizo delantero':mk)}:</b> `:''}${esc(ay)}</p>`;
+    d.innerHTML=h;d.hidden=!h;
+  }
+  function suma(i){ // «1350+290» → 1640 (también con − y espacios)
+    const k=i.dataset.rk;if(!NUM.has(k))return;const t=i.value.replace(/\s/g,'').replace(/,/g,'.');
+    if(!/^[\d.]+([+\-][\d.]+)+$/.test(t))return;
+    const r=t.match(/[+\-]?[\d.]+/g).reduce((a,x)=>a+parseFloat(x),0);if(!isFinite(r))return;
+    const v=String(Math.round(r*10)/10);i.value=v;P.v[k]=v;P['suma_'+k]=t;calc(k);comprobar();guardar();
+    const c=box.querySelector(`[data-rcal="${k}"]`);if(c)c.textContent=t.replace(/([+\-])/g,' $1 ')+' = '+v;
+  }
+  function calc(k){const c=box.querySelector(`[data-rcal="${k}"]`);if(c&&P['suma_'+k]&&String(num(k))!==String(P['suma_'+k].match(/[+\-]?[\d.]+/g).reduce((a,x)=>a+parseFloat(x),0)))c.textContent=''}
+  function comprobar(){ // longitud total = voladizo delantero + ejes + voladizo trasero; caja = Lt − X1
+    const c=box.querySelector('[data-rchk]');if(!c)return;let h='';
+    const vd=num('vdel'),vt=num('vt'),lt=num('lt'),ej=['d12','d23','d34'].map(num).filter(n=>n!=null);
+    if(vd!=null&&vt!=null&&ej.length){const s=vd+ej.reduce((a,b)=>a+b,0)+vt,t=[vd,...ej,vt].join(' + ')+' = '+s;
+      if(lt==null)h+=`<div class="chk mal">Longitud total calculada: ${t}<button type="button" data-rput="lt" data-v="${s}">Poner</button></div>`;
+      else if(lt===s)h+=`<div class="chk ok">✓ Longitud total cuadra: ${t}</div>`;
+      else h+=`<div class="chk mal">⚠ No cuadra la longitud total: ${t} y has puesto ${lt} (${lt>s?'+':''}${lt-s} mm)</div>`}
+    const x1=num('x1'),lc=num('lc'); // X1 va del 1.er eje al principio de la caja (dibujo de la plantilla)
+    if(lt!=null&&x1!=null&&vd!=null){const s=lt-vd-x1,t=`Lt − voladizo delantero − X1 = ${lt} − ${vd} − ${x1} = ${s}`;
+      if(lc==null)h+=`<div class="chk mal">Longitud de caja si llega hasta atrás del todo: ${t}<button type="button" data-rput="lc" data-v="${s}">Poner</button></div>`;
+      else if(lc===s)h+=`<div class="chk ok">✓ La caja cuadra: ${t}</div>`;
+      else h+=`<div class="chk mal">⚠ ${t}; la caja mide ${lc} (${lc>s?'+':''}${lc-s} mm). Si la caja no llega hasta atrás del todo, está bien.</div>`}
+    else if(lt!=null&&x1!=null&&lc==null)h+=`<div class="chk mal">Para calcular la caja pon el voladizo delantero (X1 se mide desde el 1.er eje).</div>`;
+    c.innerHTML=h;
+    for(const b of c.querySelectorAll('[data-rput]'))b.onclick=()=>{const k=b.dataset.rput;P.v[k]=b.dataset.v;const i=box.querySelector(`[data-rk="${k}"]`);if(i)i.value=b.dataset.v;comprobar();guardar()};
+  }
+
+  // ---------- el PDF: las plantillas con cada dato encima de su raya ----------
+  async function pdfDe(p){
+    const D=await cargar();await pdfLib();
+    const {PDFDocument,StandardFonts,rgb}=PDFLib,b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+    const pdf=await PDFDocument.load(b64(D.n5));
+    if(p.grua){const g=await PDFDocument.load(b64(D.grua));const [pg]=await pdf.copyPages(g,[0]);pdf.addPage(pg)}
+    pdf.setTitle('Datos para proyecto '+[p.v.marca,p.v.matricula].filter(Boolean).join(' '));pdf.setAuthor('');pdf.setCreator('App COP');pdf.setProducer('App COP');
+    const R=await pdf.embedFont(StandardFonts.Helvetica),B=await pdf.embedFont(StandardFonts.HelveticaBold),col=rgb(0,0,0),pgs=pdf.getPages();
+    const limpio=t=>norm(t).replace(/[−–—]/g,'-').replace(/[^\x20-\x7E\xA0-\xFF€]/g,'');
+    const txt=(pi,x,y,t,o)=>{t=limpio(t);if(!t||!pgs[pi])return;o=o||{};let s=o.s||9;const f=o.f||R;
+      if(o.max)while(s>6&&f.widthOfTextAtSize(t,s)>o.max)s-=0.5;
+      const w=f.widthOfTextAtSize(t,s);pgs[pi].drawText(t,{x:o.c?x-w/2:x,y:pgs[pi].getHeight()-y,size:s,font:f,color:col})};
+    const LARGO=new Set(['pizq','pdch','cizq','cdch','gizq','gdch']);
+    const ancho=(k,x,pi)=>LARGO.has(k)?525-x:k==='matricula'?64:k==='bastidor'?160:k==='marca'?96:pi===3?106:x>400?72:62;
+    const uno=([k,,pi,x,y])=>{if(pi!=null)txt(pi,x,y,p.v[k],{max:ancho(k,x,pi)})};
+    [...ID,...DIM,...DEPO,...TARA,...TOR].forEach(uno);
+    // descripción: dos rayas (si es larga, letra más pequeña)
+    const d=limpio(p.v.desc);if(d){const W=455;let s=9,L;
+      const partir=s=>{const ws=d.split(' '),o=[''];for(const w of ws){const t=(o[o.length-1]+' '+w).trim();if(R.widthOfTextAtSize(t,s)>W&&o[o.length-1])o.push(w);else o[o.length-1]=t}return o};
+      while((L=partir(s)).length>2&&s>6)s-=0.5;
+      L.slice(0,3).forEach((l,i)=>txt(0,64,243+i*(L.length>2?11:18),l,{s}))}
+    // suspensión: X en la columna del eje
+    p.susp.forEach((q,i)=>{if(q.t)txt(1,[181.5,244.5,308][i],q.t==='m'?121.5:137.5,'X',{f:B,c:1})});
+    // neumáticos: tabla
+    p.neu.forEach((n,i)=>{const y=[220,237,253][i];[['n',165,38],['dim',225,100],['ic',307,70],['iv',371,60]].forEach(([c,x,m])=>txt(1,x,y,n[c],{c:1,max:m}))});
+    // perfiles: X en la casilla del tipo y las medidas a la izquierda
+    PERF.forEach(([id,,meds],r)=>{const q=p.perf[id]||{};if(q.tipo)txt(1,PX[r][q.tipo-1]+0.8,PTOP[r]+6.6,'X',{f:B});
+      meds.forEach((m,j)=>txt(1,64,PMED[r][j],q[m],{max:52}))});
+    if(p.grua)[...GID,...GDIM,...GTOR].forEach(uno);
+    return new Blob([await pdf.save()],{type:'application/pdf'});
+  }
+  async function crear(){
+    if(!P)return;guardarYa();const p=P;
+    const falta=[!p.v.marca&&'la marca',!p.v.matricula&&'la matrícula',!p.v.bastidor&&'el bastidor',
+      ...DIM.filter(f=>f[1].startsWith('(*)')&&!norm(p.v[f[0]])).map(f=>f[1].replace('(*) ','')),
+      p.grua&&!GID.some(f=>norm(p.v[f[0]]))&&'la identificación de la grúa'].filter(Boolean);
+    showMsg('Preparando el PDF…');
+    let blob;try{blob=await pdfDe(p)}catch(e){showMsg('No se pudo preparar el PDF: '+(e&&e.message||e),true);return}
+    $('#msg').hidden=true;p.pdf=true;guardarYa();
+    const cl=x=>(x||'').replace(/[\\/:*?"<>|]+/g,'.').replace(/\s+/g,'');
+    const name=`Datos proyecto ${[p.v.marca,cl(p.v.matricula)||cl(p.v.bastidor)].filter(Boolean).join(' ')||'reforma'}${p.grua?' con grua':''}.pdf`;
+    const subject=`REFORMA ${[p.v.marca,p.v.matricula].filter(Boolean).join(' ')}`.trim();
+    const body=['DATOS PARA PROYECTO DE REFORMA'+(p.grua?' (CON GRÚA)':''),'Marca: '+(p.v.marca||''),'Matrícula: '+(p.v.matricula||''),'Nº de bastidor: '+(p.v.bastidor||''),'','PDF adjunto: '+name].join('\n');
+    const L={blob,name,subject,body,pdf:true,mime:'application/pdf'};
+    ask('PDF listo',`<p><b>${esc(name)}</b></p><p class="hint">${p.grua?'4 hojas: la reforma (1-11) y la grúa (12).':'3 hojas (apartados 1-11), sin la hoja de la grúa.'}</p>${falta.length?`<p class="hint" style="color:var(--bad)">Falta ${esc(falta.join(', '))}.</p>`:''}<p class="hint">Por correo va adjunto, con el asunto «${esc(subject)}».</p>`,
+      [['Solo guardar','',()=>saveWord(L)],['Enviar por correo','primary',()=>sendWord(L)]]);
+  }
+  return {abrirMenu,abrirLista,pdfDe,nuevo,get P(){return P},set P(v){P=v},pintar,cargar};
 })();
 
 /* PDF de homologación en el COP de máquinas (lo pidió Daniel, 30 oct): el PDF de homologación nacional de tipo que hacen ellos

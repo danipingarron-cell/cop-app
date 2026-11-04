@@ -1,10 +1,10 @@
 /* App COP sin conexión: la app (index.html) va primero por la red, para coger siempre la última versión, y sin red sale la
    guardada; las librerías (jszip, pdf.js, lector de fotos, letras), que llevan versión fija, se guardan la primera vez. */
-const V='cop-643d3216b1';
+const V='cop-08126509d6';
 const COMP='cop-compartido'; // el COC que llega desde «Compartir» del móvil, hasta que la app lo recoge
 const OCR='cop-ocr'; // lector de fotos sin internet (unos 25 MB): no se borra al actualizar la app; si cambian los modelos, cambia su ruta
 const AYU='cop-ayuda'; // vídeos y pósters de la ayuda «?»: se guardan la primera vez que se ven (sirven sin cobertura) y no se borran al actualizar; si se rehace un vídeo, cambiar este nombre
-const APP=['./','palfinger-datos.js','pesaje-datos.js','manifest.webmanifest','icon-192.png','icon-512.png','icon-maskable.png','apple-touch-icon.png'];
+const APP=['./','palfinger-datos.js','pesaje-datos.js','reformas-datos.js','manifest.webmanifest','icon-192.png','icon-512.png','icon-maskable.png','apple-touch-icon.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(V).then(c=>c.addAll(APP)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V&&k!==COMP&&k!==OCR&&k!==AYU).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
