@@ -3124,6 +3124,12 @@ const CocLector=(()=>{
     const vin=(valor('0.10')||'').replace(/\s/g,'').match(VIN);
     const vinTodo=T.find(t=>/identificaci|VIN|identification/i.test(t)&&VIN.test(t.replace(/\s/g,' ')));
     r.bastidor=vin?vin[0]:vinTodo?vinTodo.match(VIN)[0]:vinDe(valor('0.10'))||vinDe((T.find(t=>/identificaci|VIN|identi\S*\s+number/i.test(t)&&vinDe(t)))||'');
+    if(r.bastidor){ // el bastidor sale más veces (pie de cada página «Seite 2 / W1T…», hojas de CO2): cifra a cifra, lo que se lea más veces
+      const b=r.bastidor,vs=[b];
+      for(const t of T){const u=t.toUpperCase().replace(/\s+/g,'');for(let i=u.indexOf(b.slice(0,3));i>=0;i=u.indexOf(b.slice(0,3),i+1)){
+        const c=u.slice(i,i+17).replace(/O|Q/g,'0').replace(/I/g,'1');if(c.length===17&&/^[A-Z0-9]+$/.test(c)&&[...c].filter((x,k)=>x!==b[k]).length<=3)vs.push(c)}}
+      vs.shift();if(vs.length>=3){const v=[...b].map((x,k)=>{const n={};for(const c of vs)n[c[k]]=(n[c[k]]||0)+1;const [m,q]=Object.entries(n).sort((p,q)=>q[1]-p[1])[0];return q*2>vs.length?m:x}).join('');
+        if(VIN.test(v))r.bastidor=v}}
     // homologación del vehículo: la primera después de 0.10/0.11 (antes puede haber las de emisiones o componentes)
     const i10=Math.max(pos('0.10'),pos('0.11'));let h=null;
     for(let k=Math.max(0,i10);k<T.length&&!h;k++){const m=T[k].match(HOMOL);if(m)h=m[0]}
@@ -3134,12 +3140,23 @@ const CocLector=(()=>{
     const i162=pos('16.2');
     const ejesDe=b=>{const ejes=[];
       for(const m of b.matchAll(/(?:^|\s)(\d{1,2})\s*[:.)\-]\s*(\d{1,2}[ .]\d{3}|\d{3,6})(?!\d)/g)){const e=+m[1],v=num(m[2]);if(e>=1&&e<=6&&v>=1000&&v<=30000&&!ejes[e-1])ejes[e-1]=v}
+      if(!ejes.length||ejes.includes(undefined)){ // «1 9000 kg 2 11500 kg 3 7500 kg 4 - kg» (Mercedes): cada masa con su «kg», en orden;
+        // una mal leída («92000») deja su eje vacío y no corre las demás al eje de antes (4 nov, Actros de Daniel)
+        const ks=[...b.matchAll(/(?<![\d.])(\d{1,2}[ .]\d{3}|\d{3,6})\s*k[gq9]\b/gi)].map(m=>{const v=num(m[1]);return v>=1000&&v<=30000?v:{mal:m[1].replace(/\D/g,'')}});
+        if(ks.length>=2&&ks.filter(v=>typeof v==='number').length>=2){ejes.length=0;ejes.push(...ks.slice(0,6));return ejes}}
       if(!ejes.length||ejes.includes(undefined)){ // sin el número de eje: los pesos en orden
         const ns=[...b.matchAll(/(\d{1,2}[ .]\d{3}|\d{3,6})(?!\d)/g)].map(m=>{const v=num(m[1]);return v>30000&&/^\d{4,5}49$/.test(m[1])?Math.floor(v/100):v}).filter(v=>v>=1000&&v<=30000);ejes.length=0;ejes.push(...ns.slice(0,6))} // «800049»: el OCR lee así «8000 kg»
       return ejes};
     if(i162>=0){const b=[resto(T[i162]),...bloque(i162).slice(1)];let ejes=ejesDe(b.join(' '));const pv=previa(i162);
       if(pv&&(ejes.length<2||ejes.includes(undefined)))ejes=ejesDe([pv,...b].join(' '));
-      r.mmta_ejes=ejes.length>=2?ejes:null}
+      // la mal leída se saca del total si sale y sus cifras están en lo leído («92000» → 28000 − 11500 − 7500 = 9000)
+      const mal=ejes.filter(v=>v&&typeof v==='object');
+      if(mal.length===1&&r.mmta_total){const k=ejes.indexOf(mal[0]),f=r.mmta_total-ejes.reduce((a,v)=>a+(typeof v==='number'?v:0),0);
+        let j=0;for(const c of mal[0].mal)if(j<String(f).length&&c===String(f)[j])j++;
+        ejes[k]=f>=1000&&f<=30000&&j===String(f).length?f:null}
+      for(let k=0;k<ejes.length;k++)if(ejes[k]&&typeof ejes[k]==='object')ejes[k]=null;
+      while(ejes.length&&ejes[ejes.length-1]==null)ejes.pop();
+      r.mmta_ejes=ejes.filter(v=>v!=null).length>=2?Array.from(ejes,v=>v==null?null:v):null}
     else r.mmta_ejes=null;
     r.mmtc=kg(valor('16.4'),60000);
     // tablas con varios puntos en una fila y sus datos al final, en el mismo orden (DAF):
@@ -3607,7 +3624,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 3 nov, 23:30';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:24';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
