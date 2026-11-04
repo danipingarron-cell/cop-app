@@ -1,6 +1,6 @@
 /* App COP sin conexión: la app (index.html) va primero por la red, para coger siempre la última versión, y sin red sale la
    guardada; las librerías (jszip, pdf.js, lector de fotos, letras), que llevan versión fija, se guardan la primera vez. */
-const V='cop-cd6ebe1833';
+const V='cop-3b5f5a8b8d';
 const COMP='cop-compartido'; // el COC que llega desde «Compartir» del móvil, hasta que la app lo recoge
 const OCR='cop-ocr'; // lector de fotos sin internet (unos 25 MB): no se borra al actualizar la app; si cambian los modelos, cambia su ruta
 const AYU='cop-ayuda'; // vídeos y pósters de la ayuda «?»: se guardan la primera vez que se ven (sirven sin cobertura) y no se borran al actualizar; si se rehace un vídeo, cambiar este nombre

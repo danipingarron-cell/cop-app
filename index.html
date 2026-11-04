@@ -3659,7 +3659,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:41';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:47';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -5070,7 +5070,39 @@ const Reformas=(()=>{
     ['gx6','Anchura máx. patas traseras, X6',3,196,351,'grua','X6','Patas traseras abiertas del todo, de punta a punta.'],
     ['gx7','Distancia entre tornillos, X7',3,196,375,'grua','X7','Entre las filas de tornillos de la base de la grúa, a lo largo del camión.']];
   const GTOR=[['gizq','Total lado izquierdo',3,196,448],['gdch','Total lado derecho',3,196,472]];
+  // ayuda «?» de cada medida (4 nov): la ficha de los COP (window.ayFicha) con el vídeo de cómo medir del COP general (pt) cuando lo hay
+  const AYU={
+    vdel:{pt:'4.1',q:'Distancia en horizontal desde el punto más adelantado del vehículo hasta el centro del primer eje.',con:'Metro y plomada',pasos:['Vehículo en suelo plano y con las ruedas rectas.','Plomada en el punto más adelantado (parachoques) y marca en el suelo.','Marca en el suelo el centro del primer eje.','Mide entre las dos marcas.'],ojo:'No va en el PDF: sirve para comprobar la longitud total y la caja.'},
+    lt:{pt:'4.5',q:'Largo total del vehículo.',con:'Metro y plomada',pasos:['Plomada en el punto más adelantado y en el más trasero.','Mide en el suelo entre las dos marcas.']},
+    vt:{pt:'4.4',q:'Distancia en horizontal desde el centro del último eje hasta la parte más trasera del vehículo.',con:'Metro y plomada',pasos:['Vehículo en suelo plano y con las ruedas rectas.','Marca en el suelo el centro del último eje.','Marca con la plomada el punto más trasero: caja, grúa, patas o protección, lo que salga más.','Mide entre las dos marcas.']},
+    d12:{pt:'4.2',q:'Distancia entre el centro del 1.er eje y el del 2.º.',con:'Metro',pasos:['Ruedas rectas y suelo plano.','Marca en el suelo el centro de cada eje (centro del buje).','Mide de centro a centro.']},
+    d23:{pt:'4.2',q:'Distancia entre el centro del 2.º eje y el del 3.º.',con:'Metro',pasos:['Marca en el suelo el centro de cada eje.','Mide de centro a centro.'],ojo:'Solo si tiene 3 ejes.'},
+    d34:{pt:'4.2',q:'Distancia entre el centro del 3.er eje y el del 4.º.',con:'Metro',pasos:['Marca en el suelo el centro de cada eje.','Mide de centro a centro.'],ojo:'Solo si tiene 4 ejes.'},
+    h:{pt:'4.6',q:'Alto total del vehículo, vacío (con la grúa recogida).',con:'Metro y regla',pasos:['Apoya una regla horizontal en lo más alto.','Mide del suelo a la regla.','Si no llegas, mide por partes y suma.']},
+    ancho:{pt:'4.7',q:'Ancho total del vehículo, sin espejos.',con:'Metro y plomada',pasos:['Plomada en la parte más ancha de cada lado (sin espejos ni luces).','Mide en el suelo entre las dos marcas.']},
+    x1:{pt:'4.8',q:'Distancia en horizontal desde el centro del primer eje hasta el principio de la caja.',con:'Metro y plomada',pasos:['Marca el centro del primer eje.','Plomada en el principio de la caja.','Mide entre las marcas.']},
+    lc:{pt:'4.12',q:'Largo de la caja.',con:'Metro',pasos:['Mide por fuera, de la parte de delante a la de atrás de la caja.']},
+    y1:{q:'Altura del bastidor (chasis) sobre el suelo.',con:'Metro',pasos:['Vehículo vacío y en suelo plano.','Mide en vertical del suelo a la parte de arriba del larguero del chasis, en la parte de atrás.']},
+    asientos:{q:'Plazas de asiento del vehículo, con el conductor.',con:'A la vista o en la ficha técnica',pasos:['Cuenta los asientos de la cabina.']},
+    dcap:{q:'Capacidad del depósito de combustible en litros.',con:'Placa del depósito, ficha o COC',pasos:['Busca la capacidad en la etiqueta del depósito o en la documentación.'],ojo:'Si no se sabe, deja esta casilla vacía y pon las medidas L, A y B.'},
+    dx2:{pt:'4.9',q:'Distancia desde el centro del primer eje hasta el centro del depósito de combustible.',con:'Metro y plomada',pasos:['Marca el centro del primer eje.','Plomada en el centro del depósito.','Mide entre las marcas.'],ojo:'Ojo: el vídeo es el del COP, que mide al principio del depósito; en la reforma es al centro (mira el dibujo).'},
+    dl:{q:'Largo del depósito.',con:'Metro',pasos:['Mide el depósito de un extremo al otro, a lo largo del camión.']},
+    da:{q:'Alto del depósito.',con:'Metro',pasos:['Mide el depósito de abajo arriba.']},
+    db:{q:'Ancho (fondo) del depósito.',con:'Metro',pasos:['Mide el depósito de la cara de fuera a la de dentro.']},
+    ta:{pt:null,q:'Tara total del vehículo después de la reforma.',con:'Báscula o informe de pesada',pasos:['Pesa el vehículo vacío o usa el informe de pesada (Pesaje).']},
+    tb:{q:'Tara del eje o ejes delanteros.',con:'Báscula',pasos:['Pesa solo los ejes delanteros o cópialo del informe de pesada.']},
+    tc:{q:'Tara del eje o ejes traseros.',con:'Báscula',pasos:['Pesa solo los ejes traseros o cópialo del informe de pesada.']},
+    comb:{q:'Litros de combustible que llevaba al pesarlo.',con:'Indicador del depósito',pasos:['Mira el indicador y calcula los litros con la capacidad del depósito.']},
+    gx1:{q:'Del centro del 1.er eje al centro de la grúa (la columna).',con:'Metro y plomada',pasos:['Marca en el suelo el centro del primer eje.','Plomada en el centro de la columna de la grúa.','Mide entre las marcas.']},
+    gx2:{q:'Del centro del 1.er eje a las patas delanteras (estabilizadores de la grúa).',con:'Metro y plomada',pasos:['Marca el centro del primer eje.','Plomada en el centro de las patas delanteras.','Mide entre las marcas.']},
+    gx3:{q:'Del centro del 1.er eje a donde termina el refuerzo lateral.',con:'Metro y plomada',pasos:['Marca el centro del primer eje.','Plomada en el final del refuerzo lateral del chasis.','Mide entre las marcas.']},
+    gx4:{q:'Del centro del último eje a las patas traseras.',con:'Metro y plomada',pasos:['Marca el centro del último eje.','Plomada en el centro de las patas traseras.','Mide entre las marcas.']},
+    gx5:{q:'Anchura de las patas delanteras abiertas del todo.',con:'Metro',pasos:['Saca las patas delanteras del todo.','Mide de punta a punta.']},
+    gx6:{q:'Anchura de las patas traseras abiertas del todo.',con:'Metro',pasos:['Saca las patas traseras del todo.','Mide de punta a punta.']},
+    gx7:{q:'Distancia entre las filas de tornillos de la base de la grúa, a lo largo del camión.',con:'Metro',pasos:['Mide de centro a centro de los tornillos de delante y los de detrás de la base.']}};
   const NUM=new Set([...DIM,...DEPO,...TARA,...GDIM].map(f=>f[0]));
+  const CAM='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.6"/></svg>';
+  const GAL='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>';
   const ICO='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 17h13V8H2z"/><path d="M15 11h4l3 3v3h-7"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M5 8V4l6-1"/></svg>';
   const norm=t=>String(t==null?'':t).replace(/\s+/g,' ').trim();
 
@@ -5121,17 +5153,30 @@ button.tile.ref{grid-column:1/-1;flex-direction:row;align-items:center;min-heigh
 #reformas details.card:not([open]){gap:0}
 #reformas .card.grua{border:2px solid var(--accent)}
 #reformas .f{display:grid;gap:5px;font-size:13px;font-weight:600;color:var(--muted)}
+#reformas .f .lr{display:flex;align-items:center;gap:8px;min-height:26px}#reformas .f .lr label{flex:1}
+#reformas .f .iw{display:flex;gap:8px}#reformas .f .iw input{flex:1;min-width:0}
+#reformas .rcam{flex:none;width:46px;padding:0;border-radius:10px;display:grid;place-items:center;border:1.5px solid var(--accent);background:var(--accent-soft,var(--panel));color:var(--accent);box-shadow:none}
+#reformas .fotop{display:grid;gap:8px;padding:10px;border-radius:12px;border:1.5px solid var(--accent);background:var(--panel)}
+#reformas .fotop .fh{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--muted);line-height:1.35}#reformas .fotop .fh img{width:72px;height:72px;object-fit:cover;border-radius:8px;flex:none}
+#reformas .fotop .fh b{display:block;color:var(--ink);font-size:14px}
+#reformas .fotop .fb{display:flex;gap:6px}#reformas .fotop .fb button{flex:1;justify-content:center;padding:10px 6px;border-radius:10px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px}
+#reformas .fotop .fb .ok,#reformas .fotop .fb .cam{background:var(--accent);border-color:var(--accent);color:var(--panel)}#reformas .fotop .fb .xx{flex:none;width:44px}
+#reformas .fotop .fv{font-size:16px;padding:9px 10px;border-radius:10px;border:1.5px solid var(--accent);width:100%;box-sizing:border-box;background:var(--bg);color:var(--ink)}
+#reformas .fotop .fl{font-size:12px;font-weight:600;color:var(--muted)}
+#reformas .fotop .chips{display:flex;flex-wrap:wrap;gap:6px}#reformas .fotop .chips button{padding:6px 10px;border-radius:999px;font-size:13px;font-weight:600}
+#reformas .fotop .bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden}#reformas .fotop .bar i{display:block;height:100%;width:5%;background:var(--accent);transition:width .3s}
+#reformas .hecho{font-size:12px;font-weight:700;color:var(--ok)}
 #reformas .f input,#reformas .f textarea{font-size:16px;font-weight:500;color:var(--ink);padding:10px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);width:100%;box-sizing:border-box;font-family:inherit}
 #reformas .f textarea{min-height:70px;resize:vertical}
 #reformas .f input:focus,#reformas .f textarea:focus{border-color:var(--accent);outline:none}
 #reformas .f.cota input{font-variant-numeric:tabular-nums}
 #reformas .f .cal{font-size:12px;font-weight:600;color:var(--accent)}
 #reformas .tres{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}#reformas .dos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-#reformas .dib[hidden]{display:none!important}#reformas .dib{display:grid;gap:6px;padding:10px;border-radius:12px;background:#fff;border:1.5px solid var(--accent)}
-#reformas .dib .lienzo{position:relative}#reformas .dib img{width:100%;display:block}
+#reformas .dib[hidden]{display:none!important}#reformas .dib{display:grid;gap:6px;padding:8px 10px;border-radius:12px;background:#fff;border:1.5px solid var(--accent)}
+#reformas .dib .lienzo{position:relative;max-width:340px;justify-self:center;width:100%}#reformas .dib.gr .lienzo{max-width:240px}#reformas .dib.dep .lienzo{max-width:200px}#reformas .dib img{width:100%;display:block}
 #reformas .dib .ring{position:absolute;width:13%;aspect-ratio:1;border:3px solid #e01b24;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 3px rgba(224,27,36,.18);pointer-events:none}
 #reformas .dib.dep .ring{width:22%}
-#reformas .dib p{margin:0;font-size:14px;line-height:1.4;color:#1a1a1a}#reformas .dib p b{color:#e01b24}
+#reformas .dib p{margin:0;font-size:13px;line-height:1.4;color:#1a1a1a}#reformas .dib p b{color:#e01b24}
 #reformas .chk{font-size:13px;line-height:1.4;padding:9px 12px;border-radius:10px;font-weight:600}
 #reformas .chk.ok{background:var(--ok-soft,#e6f6ec);color:var(--ok)}#reformas .chk.mal{background:var(--warn-soft,#fff4e0);color:var(--ink);border:1.5px solid var(--warn,#e08a00)}
 #reformas .chk button{margin-left:6px;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:700}
@@ -5192,7 +5237,11 @@ button.tile.ref{grid-column:1/-1;flex-direction:row;align-items:center;min-heigh
   // ---------- formulario ----------
   const val=k=>P.v[k]==null?'':P.v[k];
   const num=k=>{const n=parseFloat(String(val(k)).replace(',','.'));return isFinite(n)?n:null};
-  const campo=([k,l,,,,dib,mk,ay],cls)=>`<label class="f${NUM.has(k)?' cota':''}${cls?' '+cls:''}" data-rf="${k}">${esc(l)}<input data-rk="${k}" value="${esc(val(k))}"${NUM.has(k)?' inputmode="decimal"':''}${k==='bastidor'||k==='matricula'||k==='marca'?' autocapitalize="characters" spellcheck="false"':''}><span class="cal" data-rcal="${k}"></span></label>${dib||ay?`<div class="dib${dib==='deposito'?' dep':''}" data-rdib="${k}" hidden></div>`:''}`;
+  const dibHtml=(dib,mk)=>{if(!dib||!imgSrc(dib))return '';const m=mk&&MK[dib][mk],[w,hh]=TAM[dib];
+    return `<div class="lienzo"><img alt="" src="${imgSrc(dib)}">${m?`<span class="ring" style="left:${m[0]/w*100}%;top:${m[1]/hh*100}%"></span>`:''}</div>`};
+  const campo=([k,l,,,,dib,mk,ay],cls)=>`<div class="f${NUM.has(k)?' cota':''}${cls?' '+cls:''}" data-rf="${k}"><div class="lr"><label for="rk-${k}">${esc(l)}</label>${AYU[k]?`<button type="button" class="ay-q" data-ray="${k}" aria-label="Cómo se mide">?</button>`:''}</div>
+<div class="iw"><input id="rk-${k}" data-rk="${k}" value="${esc(val(k))}"${NUM.has(k)?' inputmode="decimal"':''}${k==='bastidor'||k==='matricula'||k==='marca'||k==='gserie'?' autocapitalize="characters" spellcheck="false"':''}><button type="button" class="rcam" data-rcam="${k}" aria-label="Leer el dato de una foto">${CAM}</button></div><span class="cal" data-rcal="${k}"></span>
+${dib||ay?`<div class="dib${dib==='deposito'?' dep':''}${dib==='grua'?' gr':''}" data-rdib="${k}">${dibHtml(dib,mk)}${ay?`<p>${mk?`<b>${esc(mk)}:</b> `:''}${esc(ay)}</p>`:''}</div>`:''}</div>`;
   const lleno=fs=>fs.filter(f=>norm(val(f[0]))).length;
   const det=(id,t,html,abierto,n)=>`<details class="card" data-rsec="${id}"${abierto?' open':''}><summary>${t}${n?`<span class="n">${n}</span>`:''}</summary>${html}</details>`;
   function pintar(){
@@ -5226,7 +5275,9 @@ ${det('gid','a) Identificación',GID.map(f=>campo(f)).join('')+'<p class="nota">
     for(const i of box.querySelectorAll('[data-rk]')){const k=i.dataset.rk;
       i.oninput=()=>{let v=i.value;if(k==='marca'||k==='bastidor'||k==='matricula')v=v.toUpperCase();if(k==='bastidor')v=v.replace(/\s/g,'');P.v[k]=v;
         cab(tipoTxt(P),titulo(P));calc(k);comprobar();guardar()};
-      i.onfocus=()=>dibujo(k,true);i.onblur=()=>{suma(i);setTimeout(()=>{if(document.activeElement!==i)dibujo(k,false)},150)}}
+      i.onblur=()=>suma(i)}
+    for(const b of box.querySelectorAll('[data-ray]'))b.onclick=e=>{e.preventDefault();ayuda(b.dataset.ray)};
+    for(const b of box.querySelectorAll('[data-rcam]'))b.onclick=()=>elegirFoto(b.dataset.rcam);
     for(const s of box.querySelectorAll('[data-rsus]'))for(const b of s.querySelectorAll('button'))b.onclick=()=>{const q=P.susp[+s.dataset.rsus];q.t=q.t===b.dataset.t?'':b.dataset.t;
       for(const x of s.querySelectorAll('button'))x.classList.toggle('on',x.dataset.t===q.t);guardar()};
     for(const i of box.querySelectorAll('[data-rneu]'))i.oninput=()=>{const [r,c]=i.dataset.rneu.split('.');P.neu[+r][c]=i.value;guardar()};
@@ -5235,18 +5286,70 @@ ${det('gid','a) Identificación',GID.map(f=>campo(f)).join('')+'<p class="nota">
     for(const i of box.querySelectorAll('[data-rpm]'))i.oninput=()=>{const [id,m]=i.dataset.rpm.split('.');P.perf[id][m]=i.value;guardar()};
     box.querySelector('[data-rcrear]').onclick=()=>crear();
     for(const k of NUM)calc(k);comprobar();
-    if(!DATA)cargar().then(()=>{if(P)for(const im of box.querySelectorAll('img'))if(!im.getAttribute('src'))pintarImgs()}).catch(e=>showMsg(e.message,true));
+    if(!DATA)cargar().then(()=>{if(P)pintar()}).catch(e=>showMsg(e.message,true));
   }
-  function pintarImgs(){const t=box.querySelectorAll('[data-rpt] img');t.forEach((im,j)=>im.src=imgSrc('perfil'+(j%7+1)));const f=box.querySelectorAll('.foto2');if(f[0])f[0].src=imgSrc('placas');if(f[1])f[1].src=imgSrc('cazoletas')}
-  const TODO=[...DIM,...DEPO,...GDIM];
-  function dibujo(k,on){
-    const d=box.querySelector(`[data-rdib="${k}"]`);if(!d)return;
-    if(!on){d.hidden=true;return}
-    const f=TODO.find(x=>x[0]===k);if(!f)return;const [, l,,,,dib,mk,ay]=f;
-    let h='';
-    if(dib&&imgSrc(dib)){const m=mk&&MK[dib][mk],[w,hh]=TAM[dib];h+=`<div class="lienzo"><img alt="" src="${imgSrc(dib)}">${m?`<span class="ring" style="left:${m[0]/w*100}%;top:${m[1]/hh*100}%"></span>`:''}</div>`}
-    if(ay)h+=`<p>${mk?`<b>${esc(mk==='Vd'?'Voladizo delantero':mk)}:</b> `:''}${esc(ay)}</p>`;
-    d.innerHTML=h;d.hidden=!h;
+  const TODO=[...ID,...DIM,...DEPO,...TARA,...TOR,...GID,...GDIM,...GTOR];
+  const fdef=k=>TODO.find(x=>x[0]===k);
+  function ayuda(k){
+    const d=AYU[k],f=fdef(k);if(!d||!window.ayFicha)return;
+    const pt=d.pt;const vid=pt?{vid:'Cómo se hace · 10 s (vídeo del COP '+pt+')',src:'ayuda/ayuda-'+pt+'.mp4',poster:'ayuda/poster-'+pt+'.jpg'}:{};
+    const dib=dibHtml(f[5],f[6]);
+    ayFicha({q:esc(d.q),con:esc(d.con),pasos:d.pasos.map(esc),ojo:d.ojo?esc(d.ojo):'',...vid,dib:dib?`<div style="position:relative;padding:8px">${dib.replace('class="lienzo"','class="lienzo" style="position:relative;max-width:'+(f[5]==='grua'?260:f[5]==='deposito'?220:340)+'px;margin:0 auto"').replace('<img alt=""','<img alt="" style="width:100%;height:auto;display:block"').replace('class="ring" style="','class="ring" style="position:absolute;width:13%;aspect-ratio:1;border:3px solid #e01b24;border-radius:50%;transform:translate(-50%,-50%);')}</div>`:''},esc(f[1].replace('(*) ','')),null);
+  }
+  // ---------- cámara en cada casilla (como en los COP): foto → Google (con su clave) o el lector del móvil → valor propuesto → «Poner» ----------
+  const GRUPO={gmarca:['gmarca','gmodelo','gcap','gserie'],gmodelo:['gmarca','gmodelo','gcap','gserie'],gcap:['gmarca','gmodelo','gcap','gserie'],gserie:['gmarca','gmodelo','gcap','gserie']};
+  const nom=k=>fdef(k)[1].replace('(*) ','');
+  const clave=()=>{try{return typeof FotoPunto!=='undefined'&&FotoPunto.iaClave()}catch(e){return ''}};
+  function cerrarFoto(k){const w=box.querySelector(`[data-rf="${k}"] .fotop`);if(w){const im=w.querySelector('img');if(im&&im.src.startsWith('blob:'))URL.revokeObjectURL(im.src);w.remove()}}
+  function elegirFoto(k){
+    const f=box.querySelector(`[data-rf="${k}"]`);if(!f)return;const ya=f.querySelector('.fotop.elige');cerrarFoto(k);if(ya)return;
+    f.querySelector('.iw').insertAdjacentHTML('afterend',`<div class="fotop elige"><div class="fh"><div><b>Foto para ${esc(nom(k))}</b>${clave()?'Se lee con Google.':'Se lee en el móvil.'}</div></div><div class="fb"><button type="button" class="cam" data-fc>${CAM} Hacer foto</button><button type="button" data-fg>${GAL} Galería</button><button type="button" class="xx" data-fx aria-label="Cerrar">✕</button></div></div>`);
+    const p=f.querySelector('.fotop');p.querySelector('[data-fc]').onclick=()=>foto(k,false);p.querySelector('[data-fg]').onclick=()=>foto(k,true);p.querySelector('[data-fx]').onclick=()=>cerrarFoto(k);
+  }
+  const tipoDe=k=>k==='bastidor'?'vin':k==='matricula'?'matricula':NUM.has(k)?'numero':/^(pizq|pdch|cizq|cdch|gizq|gdch)$/.test(k)?'tornillos':'texto';
+  function proponer(k,lin){
+    const t=lin.map(l=>l.t),todo=t.join(' '),ti=tipoDe(k);let m;
+    if(ti==='vin'){m=todo.replace(/[\s.\-]/g,'').toUpperCase().match(/[A-HJ-NPR-Z0-9]{17}/);return m?m[0]:''}
+    if(ti==='matricula'){m=todo.toUpperCase().match(/\b(\d{4})\s?-?([BCDFGHJKLMNPRSTVWXYZ]{3})\b/);return m?m[1]+' '+m[2]:''}
+    if(ti==='numero'){const ns=(todo.match(/\d[\d.,]*/g)||[]).map(x=>x.replace(/[.,](?=\d{3}\b)/g,'').replace(',','.')).filter(x=>/^\d{1,5}(\.\d)?$/.test(x));
+      ns.sort((a,b)=>b.replace('.','').length-a.replace('.','').length);return ns[0]||''}
+    return t[0]||'';
+  }
+  const PROMPT=ks=>`Lee esta foto de un vehículo (proyecto de reforma${P&&P.grua?' con grúa tras cabina':''}). Necesito el valor de estas casillas:
+${ks.map((k,i)=>`${i+1}. ${nom(k)}${tipoDe(k)==='numero'?' (número en mm, de un metro o cinta métrica, o escrito; solo la cifra)':tipoDe(k)==='vin'?' (número de bastidor de 17 caracteres)':tipoDe(k)==='matricula'?' (matrícula española: 4 cifras y 3 letras)':tipoDe(k)==='tornillos'?' (cuántos tornillos, métrica M-xx y calidad, p. ej. «8 tornillos M-16, calidad 8.8»)':''}`).join('\n')}
+Si un valor no se ve, déjalo vacío. Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":["otros textos de la foto, cortos"],"dudas":""}`;
+  async function leerLocal(blob,aviso){
+    const c0=await fotoCanvas(blob),k=Math.min(1,2048/Math.max(c0.width,c0.height));let c=c0;
+    if(k<1){c=document.createElement('canvas');c.width=Math.round(c0.width*k);c.height=Math.round(c0.height*k);c.getContext('2d').drawImage(c0,0,0,c.width,c.height)}
+    if(typeof LectorLocal==='undefined')throw new Error('El lector del móvil no está disponible.');
+    return (await LectorLocal.leer(c,aviso)).map(l=>({t:norm(l.t)})).filter(l=>l.t);
+  }
+  function foto(k,galeria){
+    FotoPunto.pedirFoto(async blob=>{
+      const f=box.querySelector(`[data-rf="${k}"]`);if(!f||!P)return;cerrarFoto(k);
+      const ks=(GRUPO[k]||[k]).filter(x=>box.querySelector(`[data-rk="${x}"]`)),url=URL.createObjectURL(blob);
+      f.querySelector('.iw').insertAdjacentHTML('afterend',`<div class="fotop"><div class="fh"><img alt="" src="${url}"><div><b class="fst">${clave()?'Leyendo con Google…':'Leyendo la foto en el móvil…'}</b></div></div><div class="bar"><i></i></div><div class="fb"><button type="button" data-fx>Cancelar</button></div></div>`);
+      const p=f.querySelector('.fotop');let cancel=false;p.querySelector('[data-fx]').onclick=()=>{cancel=true;cerrarFoto(k)};
+      const aviso=(t,pr)=>{if(!p.isConnected)return;if(t)p.querySelector('.fst').textContent=t;const b=p.querySelector('.bar i');if(b)b.style.width=Math.max(5,Math.round((pr||0.3)*100))+'%'};
+      let vals=null,lin=[],nota='';
+      if(clave())try{const {o}=await FotoPunto.iaPedir(blob,PROMPT(ks),t=>aviso(t));vals=ks.map((x,i)=>norm((o.valores||[])[i]));lin=(o.textos||[]).map(t=>({t:norm(t)})).filter(x=>x.t);nota=o.dudas?'Dudas: '+norm(o.dudas):'Leído con Google.'}
+        catch(e){nota=(e instanceof TypeError?'Sin internet':'Google no ha podido')+': leído en el móvil.'}
+      if(cancel||!p.isConnected)return;
+      if(!vals){try{lin=await leerLocal(blob,aviso)}catch(e){if(cancel||!p.isConnected)return;p.innerHTML=`<div class="fh"><img alt="" src="${url}"><div><b>No se pudo leer la foto</b>${esc(String(e&&e.message||e))}</div></div><div class="fb"><button type="button" data-fx>Cerrar</button></div>`;p.querySelector('[data-fx]').onclick=()=>cerrarFoto(k);return}
+        if(cancel||!p.isConnected)return;vals=ks.map(x=>proponer(x,lin))}
+      if(NUM.has(k))vals=vals.map((v,i)=>NUM.has(ks[i])?String(v).replace(/[^\d.,]/g,'').replace(',','.'):v);
+      const nada=!vals.some(Boolean)&&!lin.length;
+      p.innerHTML=`<div class="fh"><img alt="" src="${url}"><div><b>${nada?'No he leído nada en la foto':'Leído de la foto'}</b>${nada?'Prueba más cerca, de frente y con buena luz.':vals.some(Boolean)?'Revisa el valor y corrígelo si hace falta.':'No encuentro el dato: toca abajo el texto que sea o escríbelo.'}${nota?'<br>'+esc(nota):''}</div></div>`+
+        ks.map((x,i)=>`<div><div class="fl">${esc(nom(x))}</div><input class="fv" data-fk="${i}" value="${esc(vals[i]||val(x))}" autocomplete="off" spellcheck="false"></div>`).join('')+
+        (lin.length?`<div class="fl">Textos de la foto (toca uno para ponerlo)</div><div class="chips">${[...new Set(lin.map(l=>l.t))].slice(0,12).map(t=>`<button type="button">${esc(t)}</button>`).join('')}</div>`:'')+
+        `<div class="fb"><button type="button" class="ok" data-fok>✓ Poner</button><button type="button" data-fre>${CAM} Otra</button><button type="button" class="xx" data-fx aria-label="Cerrar">✕</button></div>`;
+      let act=p.querySelector('.fv');p.querySelectorAll('.fv').forEach(x=>x.onfocus=()=>{act=x});
+      p.querySelectorAll('.chips button').forEach(b=>b.onclick=()=>{act.value=b.textContent});
+      p.querySelector('[data-fx]').onclick=()=>cerrarFoto(k);p.querySelector('[data-fre]').onclick=()=>foto(k,false);
+      p.querySelector('[data-fok]').onclick=()=>{let n=0;
+        p.querySelectorAll('.fv').forEach(x=>{const kk=ks[+x.dataset.fk],v=norm(x.value),i=box.querySelector(`[data-rk="${kk}"]`);if(!i||v===i.value)return;i.value=v;i.dispatchEvent(new Event('input',{bubbles:true}));n++});
+        cerrarFoto(k);if(n){const h=document.createElement('span');h.className='hecho';h.textContent=`✓ Puesto desde la foto${n>1?` (${n} casillas)`:''}`;f.querySelector('.iw').after(h);setTimeout(()=>h.remove(),6000)}};
+    },galeria);
   }
   function suma(i){ // «1350+290» → 1640 (también con − y espacios)
     const k=i.dataset.rk;if(!NUM.has(k))return;const t=i.value.replace(/\s/g,'').replace(/,/g,'.');
