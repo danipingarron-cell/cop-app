@@ -3659,7 +3659,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:54';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:58';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -5038,9 +5038,18 @@ const Reformas=(()=>{
   const SRC='reformas-datos.js',PDFSRC='pesaje-datos.js',K_DB=['cop-reformas','cop-reformas-grua']; // cada tipo se guarda aparte (Daniel, 4 nov)
   // ---------- las casillas: [clave, etiqueta, hoja, x, línea base (desde arriba, en puntos), dibujo, marca en el dibujo, ayuda] ----------
   // dibujos: camion 870×450, deposito 330×195, grua 795×867 (px de los recortes de reformas/img)
-  const MK={camion:{X1:[185,22],Lc:[478,22],H:[860,195],Y1:[833,292],X2:[245,365],Vt:[680,365],Lt:[400,415]},
-    deposito:{L:[180,133],A:[268,83],B:[40,155]},
-    grua:{X1:[225,24],X2:[228,386],X3:[258,434],X4:[582,386],X5:[430,689],X6:[725,689],X7:[335,628]}};
+  // línea de cada cota en el dibujo (coordenadas de la imagen): l = la línea de la medida, e = líneas de referencia (4 nov: en rojo en vez del aro)
+  const LN={camion:{X1:{l:[151,33,220,33],e:[[151,31,151,288],[220,26,220,58]]},Lc:{l:[220,33,766,33],e:[[220,26,220,58],[766,26,766,58]]},
+      H:{l:[850,62,850,333],e:[[771,62,852,62],[821,333,852,333]]},Y1:{l:[812,251,812,333],e:[[771,251,815,251],[785,333,815,333]]},
+      X2:{l:[151,379,344,379],e:[[151,300,151,382],[344,295,344,382]]},Vt:{l:[583,379,777,379],e:[[583,300,583,382],[777,230,777,382]]},
+      Lt:{l:[24,428,777,428],e:[[24,288,24,431],[777,390,777,431]]},Vd:{l:[24,405,151,405],e:[[24,288,24,431],[151,300,151,408]]},
+      E12:{l:[151,293,583,293],e:[]},E23:{l:[471,293,583,293],e:[]}},
+    deposito:{L:{l:[130,172,252,106],e:[[92,150,130,172]]},A:{l:[252,55,252,106],e:[[222,42,252,57]]},B:{l:[1,154,45,179],e:[[92,150,45,179]]}},
+    grua:{X1:{l:[171,39,277,39],e:[[171,34,171,300],[277,34,277,80]]},X2:{l:[171,401,291,401],e:[[171,307,171,452],[291,314,291,405]]},
+      X3:{l:[171,449,333,449],e:[[171,307,171,452],[333,291,333,453]]},X4:{l:[533,401,627,401],e:[[533,308,533,405],[627,327,627,404]]},
+      X5:{l:[400,526,400,850],e:[[290,526,405,526],[289,850,404,850]]},X6:{l:[695,577,695,802],e:[[634,577,698,577],[634,802,699,802]]},
+      X7:{l:[252,628,289,628],e:[[252,618,252,650],[289,618,289,650]]}}};
+  const XL={vdel:'Vd',d12:'E12',d23:'E23'};// medidas sin letra en el dibujo
   const TAM={camion:[870,450],deposito:[330,195],grua:[795,867]};
   const ID=[['marca','Marca',0,120,207],['matricula','Matrícula',0,278,207],['bastidor','N.º de bastidor',0,404,207]];
   const DIM=[
@@ -5178,8 +5187,6 @@ button.tile.ref{grid-column:1/-1;flex-direction:row;align-items:center;min-heigh
 #reformas .tres{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}#reformas .dos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 #reformas .dib[hidden]{display:none!important}#reformas .dib{display:grid;gap:6px;padding:8px 10px;border-radius:12px;background:#fff;border:1.5px solid var(--accent)}
 #reformas .dib .lienzo{position:relative;max-width:340px;justify-self:center;width:100%}#reformas .dib.gr .lienzo{max-width:240px}#reformas .dib.dep .lienzo{max-width:200px}#reformas .dib img{width:100%;display:block}
-#reformas .dib .ring{position:absolute;width:13%;aspect-ratio:1;border:3px solid #e01b24;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 3px rgba(224,27,36,.18);pointer-events:none}
-#reformas .dib.dep .ring{width:22%}
 #reformas .dib p{margin:0;font-size:13px;line-height:1.4;color:#1a1a1a}#reformas .dib p b{color:#e01b24}
 #reformas .chk{font-size:13px;line-height:1.4;padding:9px 12px;border-radius:10px;font-weight:600}
 #reformas .chk.ok{background:var(--ok-soft,#e6f6ec);color:var(--ok)}#reformas .chk.mal{background:var(--warn-soft,#fff4e0);color:var(--ink);border:1.5px solid var(--warn,#e08a00)}
@@ -5241,11 +5248,13 @@ button.tile.ref{grid-column:1/-1;flex-direction:row;align-items:center;min-heigh
   // ---------- formulario ----------
   const val=k=>P.v[k]==null?'':P.v[k];
   const num=k=>{const n=parseFloat(String(val(k)).replace(',','.'));return isFinite(n)?n:null};
-  const dibHtml=(dib,mk)=>{if(!dib||!imgSrc(dib))return '';const m=mk&&MK[dib][mk],[w,hh]=TAM[dib];
-    return `<div class="lienzo"><img alt="" src="${imgSrc(dib)}">${m?`<span class="ring" style="left:${m[0]/w*100}%;top:${m[1]/hh*100}%"></span>`:''}</div>`};
+  const dibHtml=(dib,mk)=>{if(!dib||!imgSrc(dib))return '';const m=mk&&LN[dib][mk],[w,hh]=TAM[dib];
+    const ln=(c,a)=>`<line x1="${c[0]}" y1="${c[1]}" x2="${c[2]}" y2="${c[3]}" stroke="#e01b24" vector-effect="non-scaling-stroke" ${a}/>`,r=(w/105).toFixed(1);
+    const svg=m?`<svg viewBox="0 0 ${w} ${hh}" preserveAspectRatio="none" style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible" aria-hidden="true">${m.e.map(c=>ln(c,'stroke-width="1.8" stroke-dasharray="5 3"')).join('')}${ln(m.l,'stroke-width="11" stroke-opacity=".2" stroke-linecap="round"')}${ln(m.l,'stroke-width="3.5" stroke-linecap="round"')}<circle cx="${m.l[0]}" cy="${m.l[1]}" r="${r}" fill="#e01b24"/><circle cx="${m.l[2]}" cy="${m.l[3]}" r="${r}" fill="#e01b24"/></svg>`:'';
+    return `<div class="lienzo" style="position:relative"><img alt="" src="${imgSrc(dib)}" style="width:100%;height:auto;display:block">${svg}</div>`};
   const campo=([k,l,,,,dib,mk,ay],cls)=>`<div class="f${NUM.has(k)?' cota':''}${cls?' '+cls:''}" data-rf="${k}"><div class="lr"><label for="rk-${k}">${esc(l)}</label>${AYU[k]?`<button type="button" class="ay-q" data-ray="${k}" aria-label="Cómo se mide">?</button>`:''}</div>
 <div class="iw"><input id="rk-${k}" data-rk="${k}" value="${esc(val(k))}"${NUM.has(k)?' inputmode="decimal"':''}${k==='bastidor'||k==='matricula'||k==='marca'||k==='gserie'?' autocapitalize="characters" spellcheck="false"':''}><button type="button" class="rcam" data-rcam="${k}" aria-label="Leer el dato de una foto">${CAM}</button></div><span class="cal" data-rcal="${k}"></span>
-${dib||ay?`<div class="dib${dib==='deposito'?' dep':''}${dib==='grua'?' gr':''}" data-rdib="${k}">${dibHtml(dib,mk)}${ay?`<p>${mk?`<b>${esc(mk)}:</b> `:''}${esc(ay)}</p>`:''}</div>`:''}</div>`;
+${dib||ay?`<div class="dib${dib==='deposito'?' dep':''}${dib==='grua'?' gr':''}" data-rdib="${k}">${dibHtml(dib,mk||XL[k])}${ay?`<p>${mk?`<b>${esc(mk)}:</b> `:''}${esc(ay)}</p>`:''}</div>`:''}</div>`;
   const lleno=fs=>fs.filter(f=>norm(val(f[0]))).length;
   const det=(id,t,html,abierto,n)=>`<details class="card" data-rsec="${id}"${abierto?' open':''}><summary>${t}${n?`<span class="n">${n}</span>`:''}</summary>${html}</details>`;
   function pintar(){
@@ -5297,13 +5306,13 @@ ${det('gid','a) Identificación',GID.map(f=>campo(f)).join('')+'<p class="nota">
   function ayuda(k){
     const d=AYU[k],f=fdef(k);if(!d||!window.ayFicha)return;
     const pt=d.pt;const vid=pt?{vid:'Cómo se hace · 10 s (vídeo del COP '+pt+')',src:'ayuda/ayuda-'+pt+'.mp4',poster:'ayuda/poster-'+pt+'.jpg'}:{};
-    const dib=dibHtml(f[5],f[6]);
-    ayFicha({q:esc(d.q),con:esc(d.con),pasos:d.pasos.map(esc),ojo:d.ojo?esc(d.ojo):'',...vid,dib:dib?`<div style="position:relative;padding:8px">${dib.replace('class="lienzo"','class="lienzo" style="position:relative;max-width:'+(f[5]==='grua'?260:f[5]==='deposito'?220:340)+'px;margin:0 auto"').replace('<img alt=""','<img alt="" style="width:100%;height:auto;display:block"').replace('class="ring" style="','class="ring" style="position:absolute;width:13%;aspect-ratio:1;border:3px solid #e01b24;border-radius:50%;transform:translate(-50%,-50%);')}</div>`:''},esc(f[1].replace('(*) ','')),null);
+    const dib=dibHtml(f[5],f[6]||XL[k]);
+    ayFicha({q:esc(d.q),con:esc(d.con),pasos:d.pasos.map(esc),ojo:d.ojo?esc(d.ojo):'',...vid,dib:dib?`<div style="padding:8px">${dib.replace('class="lienzo" style="position:relative','class="lienzo" style="position:relative;max-width:'+(f[5]==='grua'?260:f[5]==='deposito'?220:340)+'px;margin:0 auto')}</div>`:''},esc(f[1].replace('(*) ','')),null);
   }
   // ---------- cámara en cada casilla (como en los COP): foto → Google (con su clave) o el lector del móvil → valor propuesto → «Poner» ----------
   const GRUPO={gmarca:['gmarca','gmodelo','gcap','gserie'],gmodelo:['gmarca','gmodelo','gcap','gserie'],gcap:['gmarca','gmodelo','gcap','gserie'],gserie:['gmarca','gmodelo','gcap','gserie']};
   const nom=k=>fdef(k)[1].replace('(*) ','');
-  const clave=()=>{try{return typeof FotoPunto!=='undefined'&&FotoPunto.iaClave()}catch(e){return ''}};
+  const clave=()=>{try{return localStorage.getItem('ia-fotos')==='google'&&typeof FotoPunto!=='undefined'&&FotoPunto.iaClave()}catch(e){return ''}};// 4 nov: como la cámara de los COP, lee en el móvil salvo ia-fotos=google
   function cerrarFoto(k){const w=box.querySelector(`[data-rf="${k}"] .fotop`);if(w){const im=w.querySelector('img');if(im&&im.src.startsWith('blob:'))URL.revokeObjectURL(im.src);w.remove()}}
   function elegirFoto(k){
     const f=box.querySelector(`[data-rf="${k}"]`);if(!f)return;const ya=f.querySelector('.fotop.elige');cerrarFoto(k);if(ya)return;
