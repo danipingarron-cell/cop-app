@@ -3659,7 +3659,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:47';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 15:54';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -3918,6 +3918,10 @@ const FotoPunto=(()=>{
   const IA_API='https://generativelanguage.googleapis.com/v1beta/';
   const lsG=k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}},lsS=(k,v)=>{try{v?localStorage.setItem(k,v):localStorage.removeItem(k)}catch(e){}};
   const iaClave=()=>lsG('ia-clave');
+  // 4 nov: Daniel «ponme las del móvil para probar»: la cámara de cada casilla lee en el móvil aunque haya clave (con la clave
+  // gratis Google daba error casi siempre). La clave sigue guardada: la usan Dictar, el pesaje, el plano y el COC escaneado.
+  // Para que la cámara vuelva a leer con Google en un móvil: localStorage 'ia-fotos' = 'google'.
+  const fotosGoogle=()=>lsG('ia-fotos')==='google',conGoogle=()=>fotosGoogle()&&!!iaClave();
   async function iaModelos(clave){
     const r=await fetch(IA_API+'models?pageSize=200',{headers:{'x-goog-api-key':clave}});const j=await r.json().catch(()=>({}));
     if(!r.ok)throw new Error((j.error&&j.error.message)||('Error '+r.status));
@@ -4154,12 +4158,12 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
   async function hacer(i,galeria){
     pedirFoto(async blob=>{
       const r=i.closest('.row');if(!r)return;cerrar(r);const ins=grupo(i);const url=URL.createObjectURL(blob);
-      r.insertAdjacentHTML('beforeend',`<div class="fotop" aria-live="polite"><div class="fh"><img alt="" src="${url}"><div class="ft"><b class="fst">${iaClave()?'Leyendo con Google…':'Leyendo la foto…'}</b>${iaClave()?'La foto va a Google para leerla.':'Se lee en el móvil, no sale a internet.'}</div></div><div class="bar"><i></i></div><div class="fb"><button type="button" data-fx>Cancelar</button></div></div>`);
+      r.insertAdjacentHTML('beforeend',`<div class="fotop" aria-live="polite"><div class="fh"><img alt="" src="${url}"><div class="ft"><b class="fst">${conGoogle()?'Leyendo con Google…':'Leyendo la foto…'}</b>${conGoogle()?'La foto va a Google para leerla.':'Se lee en el móvil, no sale a internet.'}</div></div><div class="bar"><i></i></div><div class="fb"><button type="button" data-fx>Cancelar</button></div></div>`);
       const p=r.querySelector('.fotop');let cancel=false;p.querySelector('[data-fx]').onclick=()=>{cancel=true;cerrar(r)};
       try{p.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(e){}
       const aviso=(t,pr)=>{if(!p.isConnected)return;p.querySelector('.fst').textContent=t;p.querySelector('.bar i').style.width=Math.max(5,Math.round((pr||0)*100))+'%'};
       let lin,props,ia=null,sinRed=false,fallo=null;
-      if(iaClave()){let tm=null;
+      if(conGoogle()){let tm=null;
         try{let pr=0.05,msg='Leyendo con Google…';tm=setInterval(()=>{pr=pr+(0.95-pr)*0.06;aviso(msg,pr)},400);ia=await leerIA(blob,ins,t=>{msg=t})}
         catch(e){if(cancel||!p.isConnected)return;
           // Google contesta con un error (límite gratis, saturado, clave…): 4 nov, Daniel se quedaba sin nada; ahora la foto
@@ -4211,7 +4215,7 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
   const GAL='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/></svg>';
   function elegir(i){
     const r=i.closest('.row');if(!r)return;const ya=r.querySelector('.fotop.elige');cerrar(r);if(ya)return; // tocar otra vez la cámara lo cierra
-    r.insertAdjacentHTML('beforeend',`<div class="fotop elige"><div class="ft"><b>Foto para ${escH(nombreDe(i))}</b></div><div class="fb"><button type="button" class="cam" data-fcam>${CAM} Hacer foto</button><button type="button" class="gl" data-fgal>${GAL} Galería</button><button type="button" class="xx" data-fx aria-label="Cerrar">✕</button></div>${iaClave()?'':'<button type="button" class="gal" data-fia>Leer mejor con Google: poner clave</button>'}</div>`); // con la clave ya puesta no sale (a Daniel le liaba); se cambia desde el aviso si Google no la acepta
+    r.insertAdjacentHTML('beforeend',`<div class="fotop elige"><div class="ft"><b>Foto para ${escH(nombreDe(i))}</b></div><div class="fb"><button type="button" class="cam" data-fcam>${CAM} Hacer foto</button><button type="button" class="gl" data-fgal>${GAL} Galería</button><button type="button" class="xx" data-fx aria-label="Cerrar">✕</button></div>${fotosGoogle()&&!iaClave()?'<button type="button" class="gal" data-fia>Leer mejor con Google: poner clave</button>':''}</div>`); // con la clave ya puesta no sale (a Daniel le liaba); se cambia desde el aviso si Google no la acepta
     const p=r.querySelector('.fotop.elige');const fia=p.querySelector('[data-fia]');if(fia)fia.onclick=()=>formClave(p,()=>{cerrar(r);elegir(i)});
     p.querySelector('[data-fcam]').onclick=()=>hacer(i);p.querySelector('[data-fgal]').onclick=()=>hacer(i,true);p.querySelector('[data-fx]').onclick=()=>cerrar(r);
     try{p.scrollIntoView({block:'nearest',behavior:'smooth'})}catch(e){}
