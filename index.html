@@ -1835,6 +1835,11 @@ Extrae estos datos y responde SOLO con un objeto JSON con exactamente estas clav
  "mmr_eje_central": "masa remolcable máxima, remolque de eje central (punto 18.3), kg",
  "mmr_sin_frenos": "masa remolcable máxima, remolque sin frenos (punto 18.4), kg",
  "capacidad_deposito": "capacidad del depósito de combustible, litros",
+ "longitud_max": "longitud máxima admisible (punto 5.1, solo en COC de vehículo incompleto), mm",
+ "anchura_max": "anchura máxima admisible (punto 6.1), mm",
+ "altura_max": "altura máxima admisible (punto 7.1), mm",
+ "voladizo_tras_max": "voladizo trasero máximo admisible (punto 12.1), mm",
+ "masa_min": "masa mínima del vehículo completado (punto 15, solo en COC de vehículo incompleto), kg",
  "distancia_ejes": "array con la distancia entre ejes consecutivos en orden 1-2, 2-3, 3-4 (punto 4, o 4.1 si hay más de dos ejes), mm",
  "neumaticos": "array con la medida del neumático de cada eje en orden (punto 35, la primera combinación de cada eje), escrita como 385/65R 22.5",
  "indices_carga": "array con el índice de carga y velocidad del neumático de cada eje en orden (punto 35), sin espacios y terminado siempre en K aunque el COC traiga otra letra, p. ej. 160K o 156/150K"}
@@ -2438,8 +2443,22 @@ function putzIgual(key,cur,nv,coc){
   if(coc){const n=putzNum(nv);return n.length===1&&putzNum(cur).includes(n[0])} // «< 10167», «13000 / 13000»
   return false;
 }
+// límites del COC en la columna «Homologación / CoC», como los pone la compañera: «< 2213» a la derecha de lo que mide Daniel y
+// «> 3680» en la MOM (puntos 12.1, 5.1, 7.1, 6.1 y 15 del COC de un vehículo incompleto; Daniel, 6 nov). Si el COC no trae altura
+// se pone «< 4000», como ella
+const PUTZ_LIM=[['voladizo_tras_max','Voladizo trasero','<'],['longitud_max','Longitud total','<'],['altura_max','Altura total','<'],['anchura_max','Anchura total','<'],['masa_min','MOM','>']];
+function putzLimites(data){
+  const P=putzInfo(model),out=[],d=data||{},hay=k=>d[k]!=null&&!/^null$/i.test(String(d[k]))&&/\d/.test(String(d[k]));
+  const incompleto=PUTZ_LIM.some(([k])=>k!=='altura_max'&&hay(k));
+  for(const [k,lab,s] of PUTZ_LIM){const par=P.coc.find(([t])=>t.label===lab&&!t.rowLabel);if(!par)continue;
+    let v=hay(k)?String(d[k]).replace(/\D/g,''):'',nota='';
+    if(!v&&k==='altura_max'&&incompleto){v='4000';nota=' (el COC no la trae: 4 m, como tu compañera)'}
+    if(v)out.push({k,slot:par[1],nv:s+' '+v,name:lab+' (columna Homologación / CoC)'+nota})}
+  return out;
+}
 function putzCocFilas(data){
   const P=putzInfo(model),twin=new Map(P.coc.map(([t,h])=>[t.id,h])),out=[];
+  for(const x of putzLimites(data))if(!String(state.v['s'+x.slot.id]||'').trim())out.push({tipo:'llenar',name:x.name,slot:x.slot,nv:x.nv}); // solo si está vacía (Daniel: «nada más»)
   for(const [key,name,slot] of cocTargets()){
     const nv=cocValue(data,key);if(!nv||/^null$/i.test(nv))continue;
     const k=Array.isArray(key)?key[0]:key,cur=String(state.v['s'+slot.id]||'').trim(),suya=slot.sec===P.ident;
@@ -2479,9 +2498,10 @@ showCoc=function(data,fname){
   }]]);
 };
 // COP nuevo de Putzmeister desde el COC: además de lo de siempre, la columna CoC con los mismos valores (como hace la compañera)
-function putzNuevoCoc(st,found){
+function putzNuevoCoc(st,found,data){
   const twin=new Map(putzInfo(model).coc.map(([t,h])=>[t.id,h]));
   for(const x of found){const h=twin.get(x.slot.id);if(h)st.v['s'+h.id]=x.v}
+  for(const x of putzLimites(data))st.v['s'+x.slot.id]=x.nv;
 }
 /* ---------- plano del carrocero (Daniel, 25 oct) ----------
    Con el COP de Putzmeister viene un plano con las medidas del camión, que en teoría tiene que medir exactamente eso. Sus medidas
@@ -3021,7 +3041,7 @@ const cocFound=(data,t)=>conModelo(t==='pal'?{tpl:'pal'}:vacio(),()=>cocTargets(
 async function nuevoConCoc(data,t){
   if(t==='pal'){try{await palCargar()}catch(e){showMsg(e.message||String(e),true);return}}
   const found=cocFound(data,t),st=t==='pal'||t==='putz'?{...vacio(),tpl:t}:vacio();found.forEach(x=>{st.v['s'+x.slot.id]=x.v});
-  if(t==='putz')putzNuevoCoc(st,found);
+  if(t==='putz')putzNuevoCoc(st,found,data);
   abrirEstado(st,nuevoCur('coc'));
   showMsg(`COP nuevo${t==='pal'?' de Palfinger':t==='putz'?' de Putzmeister':''} con ${found.length} datos del COC. Revisa la identificación y sigue con las medidas.`);
 }
@@ -3222,6 +3242,27 @@ const CocLector=(()=>{
       for(const t of T)if(/^4\.?\s/.test(t)&&/ejes|wheel|axle|radstand|achsabst|empattement/i.test(t)){const d=distDe(resto(t));if(d.filter(Boolean).length>1){dist=d;break}} // varios ejes en el punto 4: «4 Achsabstände 1-2 1750 mm 2-3 4000 mm 3-4 1350 mm» (Mercedes; encima va «4 Radstand 7100 mm», la suma)
       const v=i4<0?null:num(tras(T[i4])||(T[i4].includes(':')?'':T[i4].replace(/^.*?(Wheelbase|ejes)\b/i,'')));if(!dist[0]&&enRango(v))dist[0]=v}
     r.distancia_ejes=dist.length?Array.from(dist,v=>v===undefined?null:v):null;
+    // límites del COC de un vehículo incompleto (5.1, 6.1, 7.1, 12.1 y 15): en el COP de Putzmeister van en la columna
+    // «Homologación / CoC», como los pone la compañera («< 2213», «> 3680»; Daniel, 6 nov). Se busca la etiqueta (antes en la
+    // línea que empieza por su número) y el número que la sigue; fuera de rango = mal leído: vacío. «(2600 para el transporte…)»
+    // es una nota del COC español, no el dato
+    const LIM={longitud_max:['5.1',/H\S{1,2}chst\s?zul\S{1,2}ssige\s+L\S{1,2}nge|Longitud\s+m[aá]xima\s+(?:admisible|autorizada)|Maximum\s+permissible\s+length|Longueur\s+maximale/i,3000,20000],
+      anchura_max:['6.1',/H\S{1,2}chst\s?zul\S{1,2}ssige\s+Breite|Anchura\s+m[aá]xima\s+(?:admisible|autorizada)|Maximum\s+permissible\s+width|Largeur\s+maximale/i,1500,2600],
+      altura_max:['7.1',/H\S{1,2}chst\s?zul\S{1,2}ssige\s+H\S{1,2}he|Altura\s+m[aá]xima\s+(?:admisible|autorizada)|Maximum\s+permissible\s+height|Hauteur\s+maximale/i,1500,4500],
+      voladizo_tras_max:['12.1',/\S{1,2}berhang\s+hinten|(?:M[aá]ximo\s+)?voladizo\s+trasero\s+(?:m[aá]ximo\s+)?admisible|Voladizo\s+trasero\s+m[aá]ximo|Maximum\s+(?:permissible\s+)?rear\s+overhang|Porte\S{0,2}\s?faux\s+arri\S{1,2}re\s+maxim/i,200,6000],
+      masa_min:['15',/Mindestmasse\s+des\s+(?:Fahrzeug|vervo)|Masa\s+m[ií]nima\s+(?:admisible\s+)?del\s+veh[ií]culo\s+(?:complet|una\s+vez)|Minimum\s+mass\s+of\s+(?:the\s+)?(?:completed|vehic\S*\s+when\s+compl)|Masse\s+minimale\s+du\s+v/i,1000,40000]};
+    const soloNum=/^\s*\(?\s*(?:mm|kg)?\s*\)?\s*[:\-]?\s*\d{1,2}[ .]?\d{3}\s*(?:mm|kg)?\s*$/i;
+    // dos en una fila con los datos al final, en el mismo orden (DAF): «5.1 Longitud máxima admisible 6.1 Anchura máxima admisible 12311 mm 2550 mm»
+    const fl={};
+    for(const t of T){const ls=Object.entries(LIM).map(([k,[,re]])=>{const m=t.match(re);return m?{k,i:m.index,f:m.index+m[0].length}:null}).filter(Boolean).sort((x,y)=>x.i-y.i);
+      if(ls.length<2)continue;const ns=[...t.slice(ls[ls.length-1].f).matchAll(/(?<![\d.])(\d{1,2}[ .]\d{3}|\d{3,5})(?!\d)/g)].map(m=>num(m[1]));
+      if(ns.length===ls.length)ls.forEach((l,j)=>{const [,,a,z]=LIM[l.k];if(ns[j]>=a&&ns[j]<=z&&!(l.k in fl))fl[l.k]=ns[j]})}
+    for(const [k,[cod,re,a,z]] of Object.entries(LIM)){r[k]=k in fl?fl[k]:null;if(r[k]!==null)continue;
+      const ini=new RegExp('^'+cod.replace('.','\\.')+'\\.?\\s'),cand=[];
+      T.forEach((t,i)=>{if(re.test(t))cand.push(i)});cand.sort((x,y)=>ini.test(T[y])-ini.test(T[x]));
+      for(const i of cand){const m=T[i].match(re),sig=T[i+1]&&soloNum.test(T[i+1])?' '+T[i+1]:'';
+        const v=(T[i].slice(m.index+m[0].length)+sig).match(/^\D{0,40}?(\d{1,2}[ .]\d{3}|\d{3,5})(?!\d)/);
+        if(!v||/\(\s*$/.test(v[0].slice(0,-v[1].length)))continue;const n=num(v[1]);if(n!==null&&n>=a&&n<=z){r[k]=n;break}}}
     // neumáticos (punto 35), para la plantilla de Palfinger: por eje la primera combinación, «1: 385/65R22.5 - 160 K / 22.5x11.75»
     // → medida «385/65R 22.5» e índice de carga y velocidad «160K» (así los escribe Daniel; la letra siempre K, aunque el COC diga L)
     const nd=[],ni=[],i35=pos('35');
@@ -3659,7 +3700,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 4 nov, 16:26';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 6 nov, 15:19';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
