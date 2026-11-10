@@ -2078,7 +2078,7 @@ fillUI=function(){
   if(TPL_ACT==='pal'){palCalc();refresh()}
 };
 // aspecto «como el PDF de Palfinger» (Daniel lo eligió el 12 oct): pal-tema.css, que build.sh mete aquí; solo afecta a los COP de Palfinger
-const PAL_CSS="/* Aspecto \u00abcomo el PDF de Palfinger\u00bb (solo en los COP de Palfinger): papel blanco, tablas con raya negra, casillas verdes,\n   cabeceras azul claro, t\u00edtulos de apartado en rojo y S\u00ed/No como cuadraditos. La plantilla general no cambia. */\nhtml[data-tpl=\"pal\"]{--py:#ffd400;--pred:#d90012;--pgreen:#ccffcc;--pgline:#8cc98c;--pblue:#ddebf7;--pline:#1a1a1a;--ppaper:#ffffff;--pink:#111;--pmut:#555;\n  --pfont:Calibri,Carlito,\"Segoe UI\",Arial,sans-serif}\n@media (prefers-color-scheme:dark){html[data-tpl=\"pal\"]:not([data-theme=\"light\"]){--pred:#ff6b6b;--pgreen:#1f3d24;--pgline:#3f7a4a;--pblue:#1f3347;--pline:#8a8a8a;--ppaper:#161616;--pink:#eee;--pmut:#aaa}}\nhtml[data-tpl=\"pal\"][data-theme=\"dark\"]{--pred:#ff6b6b;--pgreen:#1f3d24;--pgline:#3f7a4a;--pblue:#1f3347;--pline:#8a8a8a;--ppaper:#161616;--pink:#eee;--pmut:#aaa}\nhtml[data-tpl=\"pal\"] #form{font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] #form::before{content:\"PALFINGER\";display:block;margin-top:12px;padding:10px 14px;background:var(--py);color:#000;font:800 20px/1 var(--pfont);letter-spacing:.04em;\n  border:2px solid #000;border-bottom:3px solid var(--pred)}\nhtml[data-tpl=\"pal\"] details.sec{border-radius:0;border:1px solid var(--pline);box-shadow:none;background:var(--ppaper);margin-top:10px;--secr:0}\nhtml[data-tpl=\"pal\"] details.sec>summary{background:var(--ppaper)!important;color:var(--pink)!important;border-radius:0!important;padding:12px 12px}\nhtml[data-tpl=\"pal\"] details.sec>summary .snum{background:none!important;color:var(--pred)!important;border:0;font:800 18px/1 var(--pfont);min-width:0;width:auto;height:auto;padding:0 2px 0 0}\nhtml[data-tpl=\"pal\"] details.sec>summary .snum::after{content:\".\"}\nhtml[data-tpl=\"pal\"] details.sec>summary h2{color:var(--pred)!important;font:800 15px/1.25 var(--pfont);text-decoration:underline;text-underline-offset:3px;letter-spacing:0}\nhtml[data-tpl=\"pal\"] details.sec>summary .count{color:var(--pmut)!important;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] details.sec[open]>summary{border-bottom:1px solid var(--pline)}\nhtml[data-tpl=\"pal\"] .secbody{padding:8px 10px 12px}\nhtml[data-tpl=\"pal\"] h3.sub.band1,html[data-tpl=\"pal\"] .row.band1{background:var(--pblue)!important;color:var(--pink)!important;border:1px solid var(--pline);border-radius:0!important;\n  font:italic 700 14px/1.25 var(--pfont);text-transform:none;letter-spacing:0;text-align:center;padding:7px 8px;margin:12px 0 0}\nhtml[data-tpl=\"pal\"] .blk1{border-radius:0}\nhtml[data-tpl=\"pal\"] .row,html[data-tpl=\"pal\"] .row.pt{background:var(--ppaper)!important;border:1px solid var(--pline)!important;border-top-width:0!important;border-radius:0!important;\n  box-shadow:none!important;margin:0!important;padding:8px 9px}\nhtml[data-tpl=\"pal\"] h3.sub.band1+.row,html[data-tpl=\"pal\"] .blk1>.row:first-child{border-top-width:1px!important}\nhtml[data-tpl=\"pal\"] .pnum{background:none!important;color:var(--pmut)!important;border:1px solid var(--pline);border-radius:0;font:600 11px/1.4 var(--pfont);padding:0 4px}\nhtml[data-tpl=\"pal\"] .lbl.first,html[data-tpl=\"pal\"] .ptxt{font:700 14.5px/1.3 var(--pfont);color:var(--pink)}\nhtml[data-tpl=\"pal\"] .fld label{font:600 11px/1.2 var(--pfont);color:var(--pmut);text-transform:uppercase;letter-spacing:.02em}\nhtml[data-tpl=\"pal\"] input.t,html[data-tpl=\"pal\"] textarea.notes,html[data-tpl=\"pal\"] select{background:var(--pgreen)!important;border:1px solid var(--pgline)!important;border-radius:0!important;\n  color:var(--pink);font-family:Arial,Helvetica,sans-serif;font-size:15px;box-shadow:none}\nhtml[data-tpl=\"pal\"] input.t::placeholder,html[data-tpl=\"pal\"] textarea.notes::placeholder{color:color-mix(in srgb,var(--pink) 40%,transparent)}\nhtml[data-tpl=\"pal\"] .lbl.lim{background:var(--ppaper)!important;color:var(--pink)!important;border:1px solid var(--pline)!important;border-radius:0!important;font:600 13px var(--pfont)}\n/* S\u00ed / No como las casillas del PDF: \u25a0 S\u00cd  \u2610 NO */\nhtml[data-tpl=\"pal\"] .grp{background:none!important;border:0!important;border-radius:0!important;padding:0;gap:4px;display:inline-flex}\nhtml[data-tpl=\"pal\"] .grp button{background:none!important;color:var(--pink)!important;border:0!important;border-radius:0!important;box-shadow:none!important;\n  padding:6px 8px;font:700 14px var(--pfont);text-transform:uppercase;display:inline-flex;align-items:center;gap:6px}\nhtml[data-tpl=\"pal\"] .grp button::before{content:\"\";flex:none;width:16px;height:16px;border:1.5px solid var(--pink);background:var(--pgreen)}\nhtml[data-tpl=\"pal\"] .grp button[aria-pressed=\"true\"]::before{background:var(--pink);box-shadow:inset 0 0 0 3px var(--pgreen)}\nhtml[data-tpl=\"pal\"] .row.isbad{outline:2px solid var(--pred);outline-offset:-2px}\nhtml[data-tpl=\"pal\"] .calc,html[data-tpl=\"pal\"] .pics img,html[data-tpl=\"pal\"] .ltdif{border-radius:0!important}\nhtml[data-tpl=\"pal\"] .pics img{border:1px solid var(--pline)}\nhtml[data-tpl=\"pal\"] .sectools button{border-radius:0;border:1px solid var(--pline);box-shadow:none;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] .grp.palmisma{flex-basis:100%}\nhtml[data-tpl=\"pal\"] .grp.palmisma button{text-transform:none;font-weight:600}\nhtml[data-tpl=\"pal\"] input.t.copiado{opacity:.75;background:repeating-linear-gradient(135deg,var(--pgreen),var(--pgreen) 6px,color-mix(in srgb,var(--pgreen) 70%,var(--ppaper)) 6px,color-mix(in srgb,var(--pgreen) 70%,var(--ppaper)) 12px)!important}\nhtml[data-tpl=\"pal\"] .row.pt.apcu{display:grid!important;grid-template-columns:4.6em auto 1fr;align-items:center;column-gap:10px;row-gap:6px}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.lbl.first{grid-column:1/-1}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.lbl:not(.first){grid-column:1;margin:0!important;padding:0!important}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.grp{grid-column:2;margin:0!important;flex-wrap:nowrap;gap:18px}\nhtml[data-tpl=\"pal\"] .fld.sd label,html[data-tpl=\"pal\"] .fld.si label{color:#fff!important;font-size:12px;letter-spacing:.06em}\nhtml[data-tpl=\"pal\"] .fld.sd,html[data-tpl=\"pal\"] .fld.si{border-width:3px}\nhtml[data-tpl=\"pal\"] .fld.sd input.t,html[data-tpl=\"pal\"] .fld.si input.t{background:color-mix(in srgb,var(--sidec) 22%,var(--ppaper))!important;border:2px solid var(--sidec)!important}\nhtml[data-tpl=\"pal\"] .palpes{border:1px solid var(--pline);border-bottom:0;padding:10px;background:var(--ppaper)}\nhtml[data-tpl=\"pal\"] .palpesbtn{display:flex;gap:8px;flex-wrap:wrap}\nhtml[data-tpl=\"pal\"] .palpes button{border-radius:0;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] .palpeslista{display:flex;flex-direction:column;gap:6px;margin-top:8px}\nhtml[data-tpl=\"pal\"] .palpeslista button{text-align:left}\n";
+const PAL_CSS="/* Aspecto \u00abcomo el PDF de Palfinger\u00bb (solo en los COP de Palfinger): papel blanco, tablas con raya negra, casillas verdes,\n   cabeceras azul claro, t\u00edtulos de apartado en rojo y S\u00ed/No como cuadraditos. La plantilla general no cambia. */\nhtml[data-tpl=\"pal\"]{--py:#ffd400;--pred:#d90012;--pgreen:#ccffcc;--pgline:#8cc98c;--pblue:#ddebf7;--pline:#1a1a1a;--ppaper:#ffffff;--pink:#111;--pmut:#555;\n  --pfont:Calibri,Carlito,\"Segoe UI\",Arial,sans-serif}\n@media (prefers-color-scheme:dark){html[data-tpl=\"pal\"]:not([data-theme=\"light\"]){--pred:#ff6b6b;--pgreen:#1f3d24;--pgline:#3f7a4a;--pblue:#1f3347;--pline:#8a8a8a;--ppaper:#161616;--pink:#eee;--pmut:#aaa}}\nhtml[data-tpl=\"pal\"][data-theme=\"dark\"]{--pred:#ff6b6b;--pgreen:#1f3d24;--pgline:#3f7a4a;--pblue:#1f3347;--pline:#8a8a8a;--ppaper:#161616;--pink:#eee;--pmut:#aaa}\nhtml[data-tpl=\"pal\"] #form{font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] #form::before{content:\"PALFINGER\";display:block;margin-top:12px;padding:10px 14px;background:var(--py);color:#000;font:800 20px/1 var(--pfont);letter-spacing:.04em;\n  border:2px solid #000;border-bottom:3px solid var(--pred)}\nhtml[data-tpl=\"pal\"] details.sec{border-radius:0;border:1px solid var(--pline);box-shadow:none;background:var(--ppaper);margin-top:10px;--secr:0}\nhtml[data-tpl=\"pal\"] details.sec>summary{background:var(--ppaper)!important;color:var(--pink)!important;border-radius:0!important;padding:12px 12px}\nhtml[data-tpl=\"pal\"] details.sec>summary .snum{background:none!important;color:var(--pred)!important;border:0;font:800 18px/1 var(--pfont);min-width:0;width:auto;height:auto;padding:0 2px 0 0}\nhtml[data-tpl=\"pal\"] details.sec>summary .snum::after{content:\".\"}\nhtml[data-tpl=\"pal\"] details.sec>summary h2{color:var(--pred)!important;font:800 15px/1.25 var(--pfont);text-decoration:underline;text-underline-offset:3px;letter-spacing:0}\nhtml[data-tpl=\"pal\"] details.sec>summary .count{color:var(--pmut)!important;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] details.sec[open]>summary{border-bottom:1px solid var(--pline)}\nhtml[data-tpl=\"pal\"] .secbody{padding:8px 10px 12px}\nhtml[data-tpl=\"pal\"] h3.sub.band1,html[data-tpl=\"pal\"] .row.band1{background:var(--pblue)!important;color:var(--pink)!important;border:1px solid var(--pline);border-radius:0!important;\n  font:italic 700 14px/1.25 var(--pfont);text-transform:none;letter-spacing:0;text-align:center;padding:7px 8px;margin:12px 0 0}\nhtml[data-tpl=\"pal\"] .blk1{border-radius:0}\nhtml[data-tpl=\"pal\"] .row,html[data-tpl=\"pal\"] .row.pt{background:var(--ppaper)!important;border:1px solid var(--pline)!important;border-top-width:0!important;border-radius:0!important;\n  box-shadow:none!important;margin:0!important;padding:8px 9px}\nhtml[data-tpl=\"pal\"] h3.sub.band1+.row,html[data-tpl=\"pal\"] .blk1>.row:first-child{border-top-width:1px!important}\nhtml[data-tpl=\"pal\"] .pnum{background:none!important;color:var(--pmut)!important;border:1px solid var(--pline);border-radius:0;font:600 11px/1.4 var(--pfont);padding:0 4px}\nhtml[data-tpl=\"pal\"] .lbl.first,html[data-tpl=\"pal\"] .ptxt{font:700 14.5px/1.3 var(--pfont);color:var(--pink)}\nhtml[data-tpl=\"pal\"] .fld label{font:600 11px/1.2 var(--pfont);color:var(--pmut);text-transform:uppercase;letter-spacing:.02em}\nhtml[data-tpl=\"pal\"] input.t,html[data-tpl=\"pal\"] textarea.notes,html[data-tpl=\"pal\"] select{background:var(--pgreen)!important;border:1px solid var(--pgline)!important;border-radius:0!important;\n  color:var(--pink);font-family:Arial,Helvetica,sans-serif;font-size:15px;box-shadow:none}\nhtml[data-tpl=\"pal\"] input.t::placeholder,html[data-tpl=\"pal\"] textarea.notes::placeholder{color:color-mix(in srgb,var(--pink) 40%,transparent)}\nhtml[data-tpl=\"pal\"] .lbl.lim{background:var(--ppaper)!important;color:var(--pink)!important;border:1px solid var(--pline)!important;border-radius:0!important;font:600 13px var(--pfont)}\n/* S\u00ed / No como las casillas del PDF: \u25a0 S\u00cd  \u2610 NO */\nhtml[data-tpl=\"pal\"] .grp{background:none!important;border:0!important;border-radius:0!important;padding:0;gap:4px;display:inline-flex}\nhtml[data-tpl=\"pal\"] .grp button{background:none!important;color:var(--pink)!important;border:0!important;border-radius:0!important;box-shadow:none!important;\n  padding:6px 8px;font:700 14px var(--pfont);text-transform:uppercase;display:inline-flex;align-items:center;gap:6px}\nhtml[data-tpl=\"pal\"] .grp button::before{content:\"\";flex:none;width:16px;height:16px;border:1.5px solid var(--pink);background:var(--pgreen)}\nhtml[data-tpl=\"pal\"] .grp button[aria-pressed=\"true\"]::before{background:var(--pink);box-shadow:inset 0 0 0 3px var(--pgreen)}\nhtml[data-tpl=\"pal\"] .row.isbad{outline:2px solid var(--pred);outline-offset:-2px}\nhtml[data-tpl=\"pal\"] .calc,html[data-tpl=\"pal\"] .pics img,html[data-tpl=\"pal\"] .ltdif{border-radius:0!important}\nhtml[data-tpl=\"pal\"] .pics img{border:1px solid var(--pline)}\nhtml[data-tpl=\"pal\"] .sectools button{border-radius:0;border:1px solid var(--pline);box-shadow:none;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] .grp.palmisma{flex-basis:100%}\nhtml[data-tpl=\"pal\"] .grp.palmisma button{text-transform:none;font-weight:600}\nhtml[data-tpl=\"pal\"] input.t.copiado{opacity:.75;background:repeating-linear-gradient(135deg,var(--pgreen),var(--pgreen) 6px,color-mix(in srgb,var(--pgreen) 70%,var(--ppaper)) 6px,color-mix(in srgb,var(--pgreen) 70%,var(--ppaper)) 12px)!important}\nhtml[data-tpl=\"pal\"] .row.pt.apcu{display:grid!important;grid-template-columns:4.6em auto 1fr;align-items:center;column-gap:10px;row-gap:6px}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.lbl.first{grid-column:1/-1}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.lbl:not(.first){grid-column:1;margin:0!important;padding:0!important}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.grp{grid-column:2;margin:0!important;flex-wrap:nowrap;gap:18px}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.ltnota{grid-column:1/-1;margin:2px 0 0}\nhtml[data-tpl=\"pal\"] .row.pt.apcu.luz3{grid-template-columns:5.6em auto 1fr}\nhtml[data-tpl=\"pal\"] .fld.sd label,html[data-tpl=\"pal\"] .fld.si label{color:#fff!important;font-size:12px;letter-spacing:.06em}\nhtml[data-tpl=\"pal\"] .fld.sd,html[data-tpl=\"pal\"] .fld.si{border-width:3px}\nhtml[data-tpl=\"pal\"] .fld.sd input.t,html[data-tpl=\"pal\"] .fld.si input.t{background:color-mix(in srgb,var(--sidec) 22%,var(--ppaper))!important;border:2px solid var(--sidec)!important}\nhtml[data-tpl=\"pal\"] .palpes{border:1px solid var(--pline);border-bottom:0;padding:10px;background:var(--ppaper)}\nhtml[data-tpl=\"pal\"] .palpesbtn{display:flex;gap:8px;flex-wrap:wrap}\nhtml[data-tpl=\"pal\"] .palpes button{border-radius:0;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] .palpeslista{display:flex;flex-direction:column;gap:6px;margin-top:8px}\nhtml[data-tpl=\"pal\"] .palpeslista button{text-align:left}\n";
 document.head.insertAdjacentHTML('beforeend','<style>'+PAL_CSS+'</style>');
 // opciones largas (p. ej. 8.1 tipología): que bajen de línea en vez de salirse de la pantalla
 document.head.insertAdjacentHTML('beforeend','<style>html[data-tpl="pal"] .grp{flex-wrap:wrap;max-width:100%}html[data-tpl="pal"] .grp:has(> :nth-child(3)){border-radius:18px}html[data-tpl="pal"] .grp:has(> :nth-child(3)) button{border-radius:16px}</style>');
@@ -2094,14 +2094,16 @@ render=function(){
   // comprobaciones de longitud (criterio de aceptación máx. 3 %) y textos de ayuda
   for(const k of ['check1','check2']){const el=palRowEl(k);if(el&&!el.querySelector('.ltdif'))el.insertAdjacentHTML('beforeend',`<div class="ltdif" data-pchk="${k}" hidden></div><p class="ltnota" data-pnota="${k}"></p>`+(k==='check2'?'<div class="ltdif" data-pcmp hidden></div>':''))}
   const n=palRowEl('lados');if(n&&!n.querySelector('.ltnota'))n.insertAdjacentHTML('beforeend','<p class="ltnota">Si coinciden, en el PDF van solo las del lado izquierdo (como dice la plantilla) y el lado derecho no hace falta rellenarlo.</p>');
-  const lz=palRowEl('presentes');if(lz&&!lz.querySelector('.ltnota'))lz.insertAdjacentHTML('beforeend','<p class="ltnota">Marca las luces que lleva el vehículo. En la tabla, A = altura del borde superior, B = altura del borde inferior, C = separación entre luces y D = distancia al lateral.</p>');
+  // 10.4 (plantilla de noviembre 2026): medidas del grupo y Sí/No por luz; la calculadora rellena el grupo y la altura y distancia de cada luz
+  {const c=document.querySelector('.calc .hint');if(c)c.textContent='Elige el tipo de piloto y mete la altura del borde superior y la distancia entre ellos: se rellenan solas las medidas del grupo de luces y los Sí/No de altura y distancia de cada luz, redondeadas a 0 o 5 (los del ángulo los marcas tú). Lo que cambies a mano se respeta.'}
+  {const g=palRowEl('grp.inf');if(g&&!g.querySelector('.ltnota'))g.insertAdjacentHTML('beforeend','<p class="ltnota">Salen solas de la calculadora de arriba. Ojo: la plantilla pone la A en el borde inferior y la B en el superior, al revés que el dibujo; aquí cada altura va en la fila que dice su texto.</p>')}
+  for(const l of PAL_LUCES){const r=palRowEl('cl.'+l.g);if(r&&!r.querySelector('[data-luzinfo]'))r.insertAdjacentHTML('beforeend',`<p class="ltnota" data-luzinfo="${l.g}"></p>`)}
   // 10.1: luz de posición y catadióptrico con la misma marca y contraseña (Daniel, 12 oct): un botón y se copian al catadióptrico
   const l1=palRowEl('lat1');if(l1&&!l1.querySelector('[data-palmisma]'))l1.insertAdjacentHTML('beforeend','<span class="grp palmisma" role="group"><button type="button" data-palmisma aria-pressed="false">Misma marca y contraseña en el catadióptrico</button></span>');
   palMisma();
   for(const [c,q] of [['catI','posI'],['catD','posD']]){const r=palRowEl(c);if(r&&!r.querySelector('[data-pal60]'))r.insertAdjacentHTML('beforeend',`<span class="latpos"><button type="button" data-pal60="${c}|${q}">Poner en luces de posición: distancias entre luces + 60 mm</button><span class="latnota" data-pal60n="${c}">Copia d1-2, d2-3, d3-4 y d4-5 a las luces de posición de este lado con 60 mm más cada una. d1, df y las alturas no se tocan.</span></span>`)}
   for(const s of PAL_MODEL.slots)if(s.select&&s.selPh){const sel=document.querySelector(`select[data-slot="${s.id}"]`);if(sel){sel.options[0].textContent=s.selPh;sel.setAttribute('aria-label',s.rowLabel||s.label);sel.classList.remove('col')}}
-  document.querySelectorAll('.row.pt').forEach(r=>{const l=[...r.querySelectorAll(':scope>.lbl:not(.first)')].map(x=>x.textContent.trim());if(l.join('|')==='Aplica|Cumple')r.classList.add('apcu')});
-  {const pz=palRowEl('presentes');if(pz)pz.querySelectorAll('[data-cb]').forEach(b=>{CB_GROUP[+b.dataset.cb]=[+b.dataset.cb]})} // 10.4.3: varias luces a la vez (22 oct)
+  document.querySelectorAll('.row.pt').forEach(r=>{const l=[...r.querySelectorAll(':scope>.lbl:not(.first)')].map(x=>x.textContent.trim());if(/^(Aplica\|Cumple|Altura\|Distancia\|Ángulo)$/.test(l.join('|')))r.classList.add('apcu');if(l[0]==='Altura')r.classList.add('luz3')});
   for(const m of ['mp','ml']){const r=palRowEl(m+'Contr');if(r&&!r.querySelector('[data-palsiempre]'))r.insertAdjacentHTML('beforeend',`<span class="grp palmisma" role="group"><button type="button" data-palsiempre="${m}" aria-pressed="false">La de siempre: ${PAL_MARCADO.marca} · ${PAL_MARCADO.contr}</button></span>`)}
   palSiempre();
   {const r=palRowEl('eje1'),bk=r&&(r.closest('.blk1')||r.parentNode);if(bk&&!bk.querySelector('.palpes'))r.insertAdjacentHTML('beforebegin',`<div class="palpes"><div class="palpesbtn"><button type="button" class="primary" data-palpes>Adjuntar documento de masas</button><button type="button" data-palpeslis>De mis pesajes</button></div><input type="file" id="palPesFile" accept="application/pdf,image/*" hidden><p class="ltnota">El de ELESA, el informe de pesada o el de la ITV: pone la tara de cada eje y el combustible.</p><div class="palpesres" hidden></div><div class="palpeslista" hidden></div></div>`);palPesPinta()}
@@ -2194,6 +2196,7 @@ function palCalc(){
     let res=[];for(const rk of rows){const r=PAL_MODEL.rowKey[rk];r.items.filter(i=>i.t==='slot').forEach((i,j)=>{const v=palV(PAL_MODEL.slots[i.id]);if(v)res.push(evalLimit(parseLimit(r.lims[j]),v))})}
     palCumple(key,!res.length||res.some(x=>x===null)?null:res.every(Boolean));
   }
+  palLuces();
   palVer();
 }
 // partes que no aplican: el lado derecho de las luces laterales si coinciden, el sistema antiproyección que no lleva,
@@ -2246,6 +2249,7 @@ async function palPdf(){
   const pdf=await PDFDocument.load(b64ToBytes(PAL.tpl));
   const form=pdf.getForm();
   for(const s of model.slots){
+    if(!s.f.length)continue; // hueco: casilla de la plantilla de 2024 que ya no está
     const raw=state.v['s'+s.id];
     let v=raw===undefined?(DEFAULTS['s'+s.id]!==undefined?DEFAULTS['s'+s.id]:null):String(raw).trim().replace(/°/g,'º');
     if(v===null&&!/^fill_18$/.test(s.f[0]))continue; // sin tocar: como venga la plantilla
@@ -2253,7 +2257,9 @@ async function palPdf(){
   }
   // responsable de la homologación de Palfinger: Francisco González Nogueira (como trae la plantilla, sin el espacio delante)
   try{form.getTextField('Nombre del responsable de la Homologación PALFINGER').setText('Francisco González Nogueira')}catch(e){}
-  for(const c of model.cbs){const f=form.getCheckBox(c.f);if(state.v['c'+c.id])f.check();else f.uncheck()}
+  for(const c of model.cbs){if(!c.f)continue;const on=!!state.v['c'+c.id];
+    if(c.tx){const f=form.getTextField(c.f);f.setAlignment(PDFLib.TextAlignment.Center);f.setFontSize(7);f.setText(on?'X':'')} // opciones de una sola elección: en la de 2026 son de texto
+    else{const f=form.getCheckBox(c.f);if(on)f.check();else f.uncheck()}}
   pdf.setTitle('Conformidad de la producción FC12-06');pdf.setAuthor('');pdf.setCreator('');pdf.setProducer('');
   return new Blob([await pdf.save()],{type:PDF_MIME});
 }
@@ -2283,12 +2289,69 @@ async function palLeerPdf(file){
   const pdf=await PDFDocument.load(await file.arrayBuffer(),{ignoreEncryption:true});
   const form=pdf.getForm(),m=PAL_MODEL||palModelo(),v={};
   const nombres=new Set(form.getFields().map(f=>f.getName()));
-  const faltan=m.slots.flatMap(s=>s.f).concat(m.cbs.map(c=>c.f)).filter(n=>!nombres.has(n)).length;
+  // un COP hecho con la plantilla de junio 2024: sus casillas tienen otros nombres (s.o / c.o); el 10.4 luz por luz ya no tiene sitio
+  const vieja=nombres.has('221Valor')||nombres.has('MediciónDeformación de la faldilla posterior');
+  const sl=m.slots.filter(s=>s.f.length),cb=m.cbs.filter(c=>c.f);
+  const nS=s=>vieja&&'o' in s?s.o:s.f[0],nC=c=>vieja&&'o' in c?c.o:c.f;
+  const faltan=[...sl.map(nS),...cb.map(nC)].filter(n=>n&&!nombres.has(n)).length;
   if(faltan>20)throw new Error('Este PDF no es la plantilla de Palfinger FC12-06 rellena.');
-  for(const s of m.slots){if(!nombres.has(s.f[0]))continue;const t=form.getTextField(s.f[0]).getText();if(t&&t.trim())v['s'+s.id]=t.trim()}
-  for(const c of m.cbs){if(!nombres.has(c.f))continue;if(form.getCheckBox(c.f).isChecked())v['c'+c.id]=true}
+  for(const s of sl){const n=nS(s);if(!n||!nombres.has(n))continue;const t=form.getTextField(n).getText();if(t&&t.trim())v['s'+s.id]=t.trim()}
+  for(const c of cb){const n=nC(c);if(!n||!nombres.has(n))continue;
+    if(c.tx&&!vieja?String(form.getTextField(n).getText()||'').trim():form.getCheckBox(n).isChecked())v['c'+c.id]=true}
   return {v,m};
 }
+
+// 10.4 luces traseras (plantilla de noviembre 2026): límites de la tabla del PDF por luz (A máx., B mín., C mín., D máx.; null = «---»)
+const PAL_LUCES=[{g:'freno',A:1500,B:350,C:600,D:null,E:'45-45',G:'15-15'},{g:'intermitente',A:1500,B:350,C:600,D:400,E:'80-45',G:'15-15'},
+  {g:'posicion',A:1500,B:350,C:600,D:400,E:'80-45',G:'15-15'},{g:'catadioptrico',A:900,Ag:1200,B:250,C:600,D:400,E:'30-30',G:'15-15'},
+  {g:'antiniebla',A:1000,Ag:1200,B:250,C:null,D:null,E:'25-25',G:'5-5'},{g:'marchaAtras',A:1200,B:250,C:null,D:null,E:'45-30',G:'15-5'},
+  {g:'galibo',A:null,B:null,C:null,D:400,E:'80-N.P.',G:'5-20',At:'lo más alta posible'},{g:'catTriang',A:900,B:250,C:600,D:400,E:'30-30',G:'15-15'},
+  {g:'tercera',A:null,B:850,C:null,D:null,E:'10-10',G:'10-15'}];
+// Ag: altura máxima si va agrupada con las luces traseras (notas 28 y 29 de la plantilla), que es como va en un piloto
+const PAL_NDEF={freno:'2',intermitente:'2',posicion:'2',catadioptrico:'2',galibo:'2',catTriang:'2'}; // Nº al marcarla presente (antiniebla y marcha atrás: 1 o 2, lo pone él)
+function palCumpleN(key,i,ok){ // Sí/No número i de una fila, si no lo ha tocado a mano
+  const el=palRowEl(key);if(!el)return;const g=el.querySelectorAll('.grp')[i];if(!g)return;
+  const bs=[...g.querySelectorAll('button')];if(bs.some(b=>state.manual['c'+b.dataset.cb]))return;
+  const si=bs.find(b=>/^s[ií]$/i.test(b.textContent.trim())),no=bs.find(b=>/^no$/i.test(b.textContent.trim()));if(!si||!no)return;
+  if(ok===null){bs.forEach(b=>{if(state.v['c'+b.dataset.cb])setCb(+b.dataset.cb,false,false)});return}
+  setCb(+(ok?si:no).dataset.cb,true,false)}
+function palLuces(force){
+  if(TPL_ACT!=='pal'||!PAL_MODEL||typeof LUCES==='undefined')return;const k=PAL_MODEL.key;if(!k['grp.sup'])return;
+  const L=state.luces||{},t=LUCES.find(x=>x.id===L.tipo);
+  const n=v=>{const x=num(String(v||'').replace(/[^\d.,]/g,''));return isNaN(x)?null:x};
+  const A=n(palV(k.anch)),H=n(L.alt),D=n(L.dist);
+  const ev=c=>!c||!t||H===null||D===null||(c[0]&&A===null)?null:Math.round((c[0]*(A||0)+c[1]*H+c[2]*D+c[3])/5+1e-9)*5;
+  // cada luz del piloto con el Excel (A = borde superior, B = inferior, C = separación, D = al lateral)
+  const med={};if(t)for(const g of ['freno','intermitente','posicion','catadioptrico','antiniebla','marchaAtras','galibo'])if(t[g])med[g]={sup:ev(t[g].sup),inf:ev(t[g].inf),sep:ev(t[g].sep),izq:ev(t[g].izq)};
+  // luces presentes (si no hay ninguna marcada, todas las del piloto)
+  const pres=g=>cbOn('pres.'+g,'Presente'),alguna=PAL_LUCES.some(l=>pres(l.g)),esta=g=>!alguna||pres(g);
+  // el grupo: lo más alto y lo más bajo de las luces, la separación más pequeña y la distancia de la luz más de fuera al lateral
+  const vs=c=>Object.entries(med).filter(([g])=>esta(g)).map(([,x])=>x[c]).filter(x=>x!==null),mx=a=>a.length?Math.max(...a):null,mn=a=>a.length?Math.min(...a):null,lat=mn(vs('izq'));
+  state.auto=state.auto||{};let put=0,kept=0;
+  for(const [key,x] of [['grp.inf',mn(vs('inf'))],['grp.sup',mx(vs('sup'))],['grp.sep',mn(vs('sep'))],['grp.der',lat],['grp.izq',lat]]){
+    const s=k[key],val=x===null?'':fmtMm(x),cur=state.v['s'+s.id]||'',prev=state.auto['l'+s.id];
+    if(cur&&cur!==prev&&!(force&&val)){if(val&&cur!==val)kept++;continue} // la ha escrito él: se respeta
+    if(val){state.auto['l'+s.id]=val;put++}else delete state.auto['l'+s.id];
+    if(cur===val)continue;
+    state.v['s'+s.id]=val;const i=document.querySelector(`[data-slot="${s.id}"]`);if(i)i.value=val}
+  // presentes: Nº de siempre al marcarla; Sí/No de altura y distancia de las que están
+  for(const g in PAL_NDEF)palSet(k['nl.'+g],pres(g)?PAL_NDEF[g]:'','nl.'+g);
+  const f=x=>x===null?'':fmtMm(x);
+  for(const l of PAL_LUCES){const m=med[l.g],on=esta(l.g),ok=(a)=>{a=a.filter(x=>x!==null);return a.length?a.every(Boolean):null};
+    const alt=m&&on?ok([l.A!==null&&m.sup!==null?m.sup<=(l.Ag||l.A):null,l.B!==null&&m.inf!==null?m.inf>=l.B:null]):null;
+    const dis=m&&on?ok([l.C!==null&&m.sep!==null?m.sep>=l.C:null,l.D!==null&&m.izq!==null?m.izq<=l.D:null]):null;
+    palCumpleN('cl.'+l.g,0,alt);palCumpleN('cl.'+l.g,1,dis);
+    const nota=document.querySelector(`[data-luzinfo="${l.g}"]`);if(!nota)continue;
+    const lim=[l.A!==null?'A ≤'+l.A+(l.Ag?` (≤${l.Ag} en el grupo)`:''):l.At?'A '+l.At:'',l.B!==null?'B ≥'+l.B:'',l.C!==null?'C ≥'+l.C:'',l.D!==null?'D ≤'+l.D:'','E-F '+l.E,'G-H '+l.G].filter(Boolean).join(' · ');
+    nota.textContent='Límites: '+lim+'.'+(m&&m.sup!==null?` Con tu Excel: A ${f(m.sup)} · B ${f(m.inf)}${m.sep!==null?' · C '+f(m.sep):''}${m.izq!==null?' · D '+f(m.izq):''}${on?'':' (no está marcada como presente)'}.`:'')}
+  const box=document.querySelector('.calc .luzmsg');if(!box)return;
+  const miss=[!t&&'el tipo de piloto',H===null&&'la altura del borde superior',D===null&&'la distancia entre ellos'].filter(Boolean);
+  let msg=miss.length?`Falta ${miss.join(', ').replace(/, ([^,]*)$/,' y $1')} para rellenar las medidas.`:`Rellenadas las medidas del grupo con el tipo ${esc(t.id)} y los Sí/No de altura y distancia de cada luz.`;
+  if(!miss.length&&A===null)msg+=' Falta el ancho del vehículo: sin él no sale la distancia al lateral.';
+  if(kept)msg+=` ${kept===1?'Una medida tiene':kept+' medidas tienen'} otro valor puesto a mano y no se ha${kept===1?'':'n'} tocado.<button type="button" data-luzforce>Poner los del Excel</button>`;
+  box.innerHTML=msg}
+const palLucesCalc0=lucesCalc;
+lucesCalc=function(force){if(TPL_ACT==='pal')return palLuces(force);return palLucesCalc0(force)};
 
 // +60 mm (muestra): distancias entre catadióptricos → luces de posición del mismo lado, d1-2…d4-5 con 60 mm más
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-pal60]');if(!b||TPL_ACT!=='pal')return;
@@ -3735,7 +3798,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 10 nov, 13:43';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 10 nov, 20:01';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -6436,7 +6499,9 @@ const fase=que=>({q:`«Sí» si ${que} venía montado de fábrica (1ª fase); «
 const marca=(que,donde)=>({q:`La marca ${que}.`,con:donde,pasos:[`Léela en ${donde.toLowerCase()} y cópiala tal cual.`]});
 const contr=(que,donde,ojo)=>({q:`La contraseña de homologación ${que}: empieza por «E» y un número de país.`,con:donde,pasos:[`Cópiala de ${donde.toLowerCase()}, entera.`],ojo});
 const LUZTRAS={q:'Las medidas de esta luz, vista desde atrás.',con:'Cinta métrica',pasos:['A: del suelo al borde de arriba de la luz.','B: del suelo al borde de abajo.','C: separación entre las dos luces.','D: de la luz al lateral del camión.','E, F y G: los ángulos en que tiene que verse; comprueba que nada la tapa.'],...vid('tras-luz')};
-const luzT=ojo=>({...LUZTRAS,ojo});
+const pres=(que,ojo)=>({q:`Si el camión lleva ${que} detrás y cuántas hay.`,con:VISTA,pasos:['«Presente» si la lleva.','Nº dispositivos: cuántas hay. Al marcarla se pone 2 (si son otras, cámbialo).'],ojo});
+const grp=(q,pasos,ojo)=>({...LUZTRAS,q,pasos:[...pasos,'Con la calculadora de arriba (tipo de piloto, altura y distancia entre ellos) se pone sola.'],ojo});
+const luz3=ojo=>({q:'Si esta luz cumple la altura, la distancia y el ángulo de la tabla de la plantilla.',con:'La calculadora y la vista',pasos:['Altura y distancia: se marcan solas con la calculadora; debajo salen las medidas de esta luz y sus límites.','Ángulo: comprueba que nada tapa la luz en los ángulos de la tabla (E-F a los lados, G-H arriba y abajo).'],ojo,...vid('tras-luz')});
 const lat=(que,lado,k,lim)=>({q:`Distancias de ${que} del lado ${lado}.`,con:PLOMT,pasos:['d1: de lo más delantero del camión a la 1ª.','d1-2, d2-3…: de cada una a la siguiente.','df: de la última a lo más trasero.','h3 y h1: del suelo al borde de abajo y al de arriba.'],ojo:lim,...vid(k)});
 const LIMLUZ='d: máx. 3.000 · df: máx. 1.000 · h3: mín. 350 · h1: máx. 1.500 mm (2.100 si la carrocería no deja).';
 const LIMCAT='d: máx. 3.000 · df: máx. 1.000 · h3: mín. 250 · h1: máx. 900 mm (1.500 si la carrocería no deja).';
@@ -6560,26 +6625,39 @@ const AYN={
 '10.3.1.4':sn('El color de la cinta de atrás.',['Amarillo o rojo.']),
 '10.3.1.5':{q:'La anchura del camión. Se copia sola de la A del 7.4.',con:'Nada, lo hace la app',pasos:['No hay que medir nada.']},
 '10.3.1.6':{q:'Cuánta cinta hay en horizontal en la trasera.',con:'Cinta métrica',pasos:['Mide cada tramo de cinta de abajo, de lado a lado.','Súmalos.'],ojo:'Lo más cerca posible de los bordes, entre 0,25 y 1,50 m del suelo, y a más de 200 mm de las luces de freno.',...vid('mp-la')},
-'10.3.1.7':{q:'Se calcula solo: LA / A × 100.',con:'Nada, lo hace la app',pasos:['No hay que medir nada.'],ojo:'Mínimo 80 % (60 % si la estructura no deja).'},
+'10.3.1.7':{q:'Se calcula solo: LA / A × 100.',con:'Nada, lo hace la app',pasos:['No hay que medir nada.'],ojo:'Mínimo 80 % (70 % si la estructura no deja).'},
 '10.3.2.1':sn('Si el camión tiene que llevar cinta reflectante en los laterales.',['«Sí» si es N2 de más de 7,5 t o N3 y mide más de 6.000 mm de largo.'],'No aplica en cabinas con bastidor, vehículos incompletos ni tractoras.'),
 '10.3.2.2':marca('de la cinta reflectante','La propia cinta'),
 '10.3.2.3':contr('de la cinta (…104R…), impresa en la cinta cada cierto tramo','La propia cinta','Con «La de siempre» se pone ORAFOL · 104R-000001.'),
 '10.3.2.4':sn('El color de la cinta del lateral.',['Amarillo o blanco.']),
 '10.3.2.5':{q:'La longitud: se copia sola del Check1/Check2 (7.4).',con:'Nada, lo hace la app',pasos:['No hay que medir nada.']},
 '10.3.2.6':{q:'Cuánta cinta hay a lo largo del lateral.',con:'Cinta métrica',pasos:['Mide cada tramo de cinta de abajo.','Súmalos todos.'],ojo:'Entre 0,25 y 1,50 m del suelo. Empieza a 0,6 m como mucho del frente y acaba a 0,6 m como mucho de atrás.',...vid('ml-la')},
-'10.3.2.7':{q:'Se calcula solo: LA / Lc × 100.',con:'Nada, lo hace la app',pasos:['No hay que medir nada.'],ojo:'Mínimo 80 % (60 % si la estructura no deja).'},
+'10.3.2.7':{q:'Se calcula solo: LA / Lc × 100.',con:'Nada, lo hace la app',pasos:['No hay que medir nada.'],ojo:'Mínimo 80 % (70 % si la estructura no deja).'},
 '10.4.1':{q:'El grupo de luces traseras: si es de fábrica, su marca, su contraseña y cuántos hay.',con:'El piloto',pasos:['«Sí» si es el de fábrica; «No» si lo ha puesto Palfinger.','Lee la marca y la contraseña en el piloto.','Nº: cuántos hay.']},
 '10.4.2':{q:'Otro tipo de piloto trasero, si lo hay.',con:'El piloto',pasos:['Igual que el 10.4.1.'],ojo:'Déjalo vacío si solo hay un tipo.'},
-'10.4.3':sn('Qué luces lleva el camión detrás.',['Marca cada luz que lleve.','Luego rellena abajo la fila de cada una.']),
-'10.4.4':luzT('Obligatoria, 2. A: máx. 1.500 mm (2.100 si la carrocería no deja). B: mín. 350 mm.'),
-'10.4.5':luzT('1 o 2. A: máx. 1.200 mm. B: mín. 250 mm.'),
-'10.4.6':luzT('Obligatoria, 2. A: máx. 1.500 mm. B: mín. 350 mm.'),
-'10.4.7':luzT('Obligatoria si el camión mide más de 2.100 mm de ancho. A: lo más alto posible.'),
-'10.4.8':luzT('Obligatoria, 2. A: máx. 1.500 mm. B: mín. 350 mm.'),
-'10.4.9':luzT('A: máx. 1.000 mm. B: mín. 250 mm. Si solo hay una, en el lado izquierdo y a más de 100 mm de la luz de freno.'),
-'10.4.10':luzT('Obligatorio en camiones, 2. A: máx. 900 mm (1.200 si va con las luces). B: mín. 250 mm.'),
-'10.4.11':luzT('Solo en remolques: en camiones está prohibido.'),
-'10.4.12':luzT('Obligatoria en N1 con caja cerrada. Por encima de las otras luces de freno y centrada (máx. 150 mm del centro).'),
+'10.4.3':pres('luz de freno','Obligatoria, 2.'),
+'10.4.4':pres('luz de marcha atrás','Obligatoria en camiones; 1 o 2.'),
+'10.4.5':pres('luz indicadora de dirección (intermitente)','Obligatoria, 2.'),
+'10.4.6':pres('luz de gálibo','Obligatoria si el camión mide más de 2.100 mm de ancho; puede llevarla entre 1.800 y 2.100 mm.'),
+'10.4.7':pres('luz de posición','Obligatoria, 2.'),
+'10.4.8':pres('catadióptrico no triangular','Obligatorio en camiones, 2.'),
+'10.4.9':pres('catadióptrico triangular','Solo en remolques: en camiones está prohibido.'),
+'10.4.10':pres('luz antiniebla','Obligatoria; 1 o 2. Si solo hay una, en el lado izquierdo (el del conductor).'),
+'10.4.11':grp('La altura del borde de abajo del grupo de luces: el de la luz más baja.',['Mide del suelo al borde de abajo de la luz más baja del piloto.'],'La plantilla pone (A) en esta fila, pero en el dibujo la A es el borde de arriba.'),
+'10.4.12':grp('La altura del borde de arriba del grupo de luces: el de la luz más alta.',['Mide del suelo al borde de arriba de la luz más alta del piloto.'],'Máximo 1.500 mm (2.100 si la carrocería no deja).'),
+'10.4.13':grp('La separación entre los dos grupos de luces (derecho e izquierdo).',['Mide de borde a borde por dentro, entre las luces de un lado y las del otro.'],'Mínimo 600 mm (400 si el camión mide menos de 1.300 mm de ancho).'),
+'10.4.14':grp('Distancia del grupo de luces al lateral derecho del camión.',['Mide del borde de fuera de la luz más exterior hasta lo más ancho del camión.'],'Máximo 400 mm.'),
+'10.4.15':grp('Distancia del grupo de luces al lateral izquierdo del camión.',['Igual que el derecho, en el lado del conductor.'],'Máximo 400 mm.'),
+'10.4.16':sn('Que el grupo de luces está bien sujeto al chasis.',['Mira los soportes y tornillos.','Muévelo con la mano: no tiene que bailar.']),
+'10.4.17':luz3('Obligatoria, 2.'),
+'10.4.18':luz3('Obligatoria, 2.'),
+'10.4.19':luz3('Obligatoria, 2.'),
+'10.4.20':luz3('Obligatorio en camiones. A: máx. 900 mm (1.200 si va con las luces).'),
+'10.4.21':luz3('Si solo hay una, en el lado izquierdo y a más de 100 mm de la luz de freno. A: hasta 1.200 si va con las luces.'),
+'10.4.22':luz3('1 o 2.'),
+'10.4.23':luz3('A: lo más alta posible. Solo se mide la distancia al lateral.'),
+'10.4.24':luz3('Solo en remolques: en camiones está prohibido.'),
+'10.4.25':luz3('Obligatoria en N1 con caja cerrada. Por encima de las otras luces de freno y centrada (máx. 150 mm del centro).'),
 // ---- 11 protección lateral ----
 '11.1.1':sn('Qué hace de protección lateral.',['Largueros con etiqueta «73R» → homologado.','Largueros sin etiqueta → no homologado.','Cajas, depósitos o la carrocería → «Mediante carrocería…».','Si hay de las dos cosas → «Mezcla de sistemas».']),
 '11.1.2':obs(),
@@ -6622,7 +6700,6 @@ const AYN={
 '12.3.3.2':{q:'Distancia desde la parte de atrás del neumático hasta la faldilla.',con:METRO,pasos:['Mide en horizontal, a la altura del centro de la rueda.'],ojo:'Máximo 300 mm. Si entre dos ejes hay menos de 250 mm, solo hace falta faldilla en el último.',...vid('fp-dist')},
 '12.3.3.3':{q:'La altura del borde de abajo de la faldilla.',con:METRO,pasos:['Mide en vertical desde el suelo hasta el borde de abajo de la faldilla.'],ojo:'Máximo 200 mm (300 mm si Rv no pasa de R).',...vid('fp-alt')},
 '12.3.3.4':sn('Que no haya hueco entre el guardabarros y la faldilla.',['Mira por donde se juntan.']),
-'12.3.3.5':{q:'Cuánto se dobla la faldilla hacia atrás si la empujas un poco.',con:METRO,pasos:['Empuja la faldilla hacia atrás con poca fuerza, a 5 cm de su borde de abajo.','Mide cuánto se mueve el borde.'],ojo:'Máximo 100 mm.'},
 '12.4.2.1':{q:'Distancia desde el lado de fuera del neumático hasta la faldilla del costado.',con:'Regla y metro',pasos:['Apoya una regla en el lado de fuera del neumático.','Mide en horizontal hasta la cara de dentro de la faldilla.'],ojo:'Máximo 100 mm.',...vid('fe-dist')},
 '12.4.2.2':{q:'El alto de la faldilla del costado que cuelga de la carrocería.',con:METRO,pasos:['Mide de su borde de abajo al de arriba.'],ojo:'Mínimo 100 mm. Tiene que bajar hasta la altura de lo más alto de las ruedas.',...vid('fe-alto2')},
 '12.4.3.1':{q:'El ancho de la faldilla de detrás de la rueda (q) comparado con el de las ruedas (b).',con:METRO,pasos:['b: el ancho de las ruedas, de fuera a fuera.','q: el ancho de la faldilla.'],ojo:'q igual o mayor que b.',...vid('fp-q')},
