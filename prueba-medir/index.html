@@ -25,7 +25,7 @@ button.sec{background:#333;color:#fff}
 <body>
 <div id="inicio">
   <h1>Prueba: medir con la cámara</h1>
-  <p style="font-size:12px;opacity:.6">Versión 2 (arreglo de la cámara)</p>
+  <p style="font-size:12px;opacity:.6">Versión 3 (marca también en puntos sueltos, no solo en superficies planas)</p>
   <p>Página de prueba, aparte de la app COP. Sirve para ver si tu móvil puede medir en realidad aumentada (como «Medidas» del iPhone).</p>
   <div id="estado">Comprobando el móvil…</div>
   <button id="empezar" disabled>Empezar a medir</button>
@@ -67,7 +67,7 @@ const scene=new THREE.Scene(), cam=new THREE.PerspectiveCamera();
 scene.add(new THREE.HemisphereLight(0xffffff,0x444444,2));
 const ret=new THREE.Mesh(new THREE.RingGeometry(.02,.03,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xf5c400}));
 ret.matrixAutoUpdate=false;ret.visible=false;scene.add(ret);
-const bola=()=>new THREE.Mesh(new THREE.SphereGeometry(.012),new THREE.MeshBasicMaterial({color:0x2f7bff}));
+const bola=()=>new THREE.Mesh(new THREE.SphereGeometry(.02),new THREE.MeshBasicMaterial({color:0x2f7bff}));
 const objs=[];
 function linea(a,b,c=0xf5c400){const g=new THREE.BufferGeometry().setFromPoints([a,b]);const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:c}));scene.add(l);objs.push(l);}
 const mm=v=>Math.round(v*1000).toLocaleString('es-ES')+' mm';
@@ -79,9 +79,9 @@ $('#borrar').onclick=()=>limpiar(true);
 $('#salir').onclick=()=>sesion&&sesion.end();
 $('#marcar').onclick=()=>{
   if(!hit){$('#aviso').textContent='Aún no encuentra superficie: mueve el móvil despacio';return;}
-  const p=hit.clone();const b=bola();b.position.copy(p);scene.add(b);objs.push(b);
+  const p=hit.clone();try{navigator.vibrate&&navigator.vibrate(60)}catch(e){}const b=bola();b.position.copy(p);scene.add(b);objs.push(b);
   if(modo==='dist'){pts.push(p);
-    if(pts.length===1){$('#aviso').textContent='Ahora marca el punto B';}
+    if(pts.length===1){$('#aviso').textContent='✅ Punto A marcado. Ahora marca el punto B';}
     else{const d=pts[0].distanceTo(pts[1]);linea(pts[0],pts[1]);$('#medida').textContent=mm(d);anota('Distancia '+mm(d));pts=[];$('#aviso').textContent='Marca el punto A de otra medida';}
   }else{
     if(!suelo){suelo=p;$('#aviso').textContent='Suelo marcado. Ahora marca los puntos a medir';}
@@ -99,7 +99,7 @@ btn.onclick=async()=>{
     await renderer.xr.setSession(sesion);
     refSpace=renderer.xr.getReferenceSpace();
     const viewer=await sesion.requestReferenceSpace('viewer');
-    hitSrc=await sesion.requestHitTestSource({space:viewer});
+    try{hitSrc=await sesion.requestHitTestSource({space:viewer,entityTypes:['point','plane']});}catch(e){hitSrc=await sesion.requestHitTestSource({space:viewer});}
   }catch(e){$('#aviso').textContent='Error al arrancar: '+(e.name||'')+' '+e.message;return;}
   const prof=sesion.depthUsage?' (con sensor de profundidad)':'';
   $('#aviso').textContent='Mueve el móvil despacio…'+prof;
