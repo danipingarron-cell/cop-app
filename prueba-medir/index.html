@@ -25,6 +25,7 @@ button.sec{background:#333;color:#fff}
 <body>
 <div id="inicio">
   <h1>Prueba: medir con la cámara</h1>
+  <p style="font-size:12px;opacity:.6">Versión 2 (arreglo de la cámara)</p>
   <p>Página de prueba, aparte de la app COP. Sirve para ver si tu móvil puede medir en realidad aumentada (como «Medidas» del iPhone).</p>
   <div id="estado">Comprobando el móvil…</div>
   <button id="empezar" disabled>Empezar a medir</button>
@@ -93,10 +94,13 @@ btn.onclick=async()=>{
       domOverlay:{root:$('#ov')},depthSensing:{usagePreference:['cpu-optimized','gpu-optimized'],dataFormatPreference:['luminance-alpha','float32']}});
   }catch(e){estado.textContent='No se pudo abrir la cámara en RA: '+e.message;return;}
   renderer.domElement.style.display='block';$('#ov').style.display='block';$('#inicio').style.display='none';
-  await renderer.xr.setSession(sesion);
-  refSpace=await sesion.requestReferenceSpace('local');
-  const viewer=await sesion.requestReferenceSpace('viewer');
-  hitSrc=await sesion.requestHitTestSource({space:viewer});
+  try{
+    renderer.xr.setReferenceSpaceType('local');
+    await renderer.xr.setSession(sesion);
+    refSpace=renderer.xr.getReferenceSpace();
+    const viewer=await sesion.requestReferenceSpace('viewer');
+    hitSrc=await sesion.requestHitTestSource({space:viewer});
+  }catch(e){$('#aviso').textContent='Error al arrancar: '+(e.name||'')+' '+e.message;return;}
   const prof=sesion.depthUsage?' (con sensor de profundidad)':'';
   $('#aviso').textContent='Mueve el móvil despacio…'+prof;
   sesion.addEventListener('end',()=>{renderer.domElement.style.display='none';$('#ov').style.display='none';$('#inicio').style.display='block';hitSrc=null;limpiar(true);});
