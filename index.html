@@ -3798,7 +3798,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 12 nov, 08:04';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 13 nov, 00:58';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4532,161 +4532,786 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
   return {quiere,clase,proponer,contrasena,placaLocal,decorar,iaPedir,iaClave,formClave,pedirFoto,leerFoto};
 })();
 
-/* Dictar (3 nov): botón «Dictar» abajo a la derecha en los COP abiertos
-   (general, Palfinger, Putzmeister y máquinas). Daniel habla seguido («voladizo trasero 1200, altura total 3850…»); el móvil lo
-   pasa a texto (reconocimiento de voz del navegador) y el lector de Google (la misma clave de la cámara, ia-clave, solo en el móvil)
-   reparte cada dato en su casilla. Sin clave se reparte en el móvil buscando el nombre de la casilla. No se escribe nada hasta
-   que Daniel pulsa «Poner». Va después de foto-punto.js. Instalado el 3 nov (Daniel: «instálalo y mañana lo pruebo»). */
+/* Dictar (13 nov 2026): un micro POR APARTADO y POR BLOQUE del COP, en lugar del botón «Dictar» global del 3 nov.
+   Daniel: «en vez de por punto exacto, quiero ponerlo por punto en general: un audio para protección lateral izquierdo,
+   otro para masas y voladizos, otro para protección trasera, etc.».
+   - Arriba de cada apartado (Masas y dimensiones, Protección trasera…): «Dictar el apartado».
+   - En la cabecera de cada bloque con varios puntos (Perfil derecho, Perfil izquierdo, Parte trasera…): «Dictar».
+   - COP de máquinas: arriba de cada apartado.
+   - Se dicen muchos puntos seguidos: «voladizo delantero 1250, entre ejes 4185 1350, altura total tres metros ochenta…».
+     Se sabe qué punto es por sus palabras (o «punto 24»); mientras se habla sale la lista de puntos con lo que se va oyendo.
+     Se puede ir midiendo: sigue escuchando hasta que se toca «Listo».
+   - Al acabar, hoja «Esto he entendido» con cada punto y su dato para corregir y «Poner». Después, «Deshacer».
+   - Todo se entiende EN EL MÓVIL, sin la clave de Google (números en palabras, lados, ejes, máx./mín., letras deletreadas,
+     contraseñas, «no procede», «sí/no» en las preguntas).
+   Va después de foto-punto.js (usa FotoPunto.clase para saber qué es cada casilla con cámara). */
 const Dictar=(()=>{
-  const MIC='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>';
+  const MIC='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>';
   const st=document.createElement('style');
-  st.textContent=`#dicB{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:60;display:none;align-items:center;gap:8px;padding:13px 18px 13px 15px;border-radius:999px;border:0;background:var(--accent);color:#fff;font-size:16px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25)}
-html.dic-on #dicB{display:inline-flex}
-#dicS{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--panel);color:var(--ink);border-radius:20px 20px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.25);padding:16px 16px calc(16px + env(safe-area-inset-bottom));max-height:78vh;overflow:auto;display:grid;gap:12px}
-#dicS h3{margin:0;font-size:17px}#dicS .sub{font-size:13px;color:var(--muted);line-height:1.4;margin:0}
-#dicS .oye{display:flex;gap:12px;align-items:center}
-#dicS .pulso{flex:none;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#fff;animation:dicP 1.4s ease-in-out infinite}
-@keyframes dicP{0%,100%{box-shadow:0 0 0 0 rgba(79,70,229,.45)}50%{box-shadow:0 0 0 12px rgba(79,70,229,0)}}
-#dicS .txt{min-height:64px;padding:10px 12px;border-radius:12px;background:var(--bg);border:1px solid var(--line);font-size:16px;line-height:1.45}
-#dicS .txt i{color:var(--muted)}
-#dicS .fb{display:flex;gap:8px;position:sticky;bottom:calc(-16px - env(safe-area-inset-bottom));background:var(--panel);margin:0 -16px calc(-16px - env(safe-area-inset-bottom));padding:10px 16px calc(16px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}#dicS .fb button{flex:1;padding:12px 6px;border-radius:12px;font-size:15px;font-weight:700;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
-#dicS .fb .ok{background:var(--ok);border-color:var(--ok);color:#fff;flex:1.5}#dicS .fb .pr{background:var(--accent);border-color:var(--accent);color:#fff;flex:1.5}#dicS .fb .xx{flex:none;width:48px}
-#dicS .bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}#dicS .bar i{display:block;height:100%;width:5%;background:var(--accent);transition:width .3s}
-#dicS .dl{display:grid;gap:8px}
-#dicS .dr{display:grid;grid-template-columns:24px 1fr 44%;gap:3px 8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
-#dicS .dr input[type=checkbox]{width:22px;height:22px;margin:0;accent-color:var(--ok)}
-#dicS .dr .n{font-size:13px;font-weight:700;line-height:1.3}#dicS .dr .n small{display:block;font-weight:500;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
-#dicS .dr input.v{grid-column:3;width:100%;box-sizing:border-box;font-size:16px;font-weight:600;padding:7px 9px;border-radius:9px;border:2px solid var(--ok);background:var(--panel);color:var(--ink)}
-#dicS .dr .ya{grid-column:2/4;font-size:12px;color:var(--bad,#c81e1e);font-weight:600}
-#dicS .dr .oi{grid-column:2/4;font-size:12px;color:var(--muted);font-style:italic}
-#dicS .sin{font-size:13px;padding:10px 12px;border-radius:12px;background:var(--bg);border:1px dashed var(--line);color:var(--muted)}#dicS .sin b{color:var(--ink)}
-#dicS .ia{color:var(--accent);font-weight:700}
-.dic-hecho{outline:3px solid var(--ok)!important;outline-offset:1px;transition:outline-color 2s}
-#dicT{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:71;background:var(--ok);color:#fff;font-weight:700;font-size:14px;padding:10px 16px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.2)}`;
+  st.textContent=`@keyframes micP{0%,100%{box-shadow:0 0 0 0 rgba(79,70,229,.45)}50%{box-shadow:0 0 0 9px rgba(79,70,229,0)}}
+.micg-bar{padding:10px 0 2px}
+#maquinas .msec>.micg-bar{padding:10px 14px 4px}
+.micg{display:inline-flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;border:1.5px solid var(--accent);background:var(--accent-soft,var(--panel));color:var(--accent);font:inherit;font-size:14px;font-weight:700;padding:8px 14px 8px 11px;cursor:pointer;line-height:1.15;white-space:nowrap;text-transform:none;letter-spacing:0}
+.micg-bar .micg{width:100%;padding:11px 12px;font-size:15px}
+.micg-bar .micg small{font-weight:600;opacity:.75;font-size:12.5px}
+.micg.on{background:var(--accent);color:#fff;animation:micP 1.3s ease-in-out infinite}
+.mic-band{display:flex!important;align-items:center;gap:8px}
+.mic-band>.micg{margin-left:auto;flex:none;background:var(--panel);font-size:13px;padding:5px 10px 5px 8px;border-radius:999px}
+.mic-band>.micg svg{width:17px;height:17px}
+.micg-sh{position:fixed;left:0;right:0;bottom:0;z-index:9000;max-height:84vh;max-height:84dvh;display:flex;flex-direction:column;gap:9px;padding:14px 14px calc(12px + env(safe-area-inset-bottom));background:var(--panel);color:var(--ink);border-radius:18px 18px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.28);border-top:3px solid var(--accent);box-sizing:border-box;max-width:640px;margin:0 auto;font-weight:400;text-transform:none;letter-spacing:0}
+.micg-sh .gh{display:flex;gap:10px;align-items:center}
+.micg-sh .pulso{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#fff;animation:micP 1.3s ease-in-out infinite}
+.micg-sh .pulso.quieto{animation:none;background:var(--ok)}
+.micg-sh .mt{flex:1;min-width:0;font-size:12.5px;color:var(--muted);line-height:1.35}.micg-sh .mt b{display:block;font-size:15px;color:var(--ink);margin-bottom:1px}
+.micg-sh .x{flex:none;width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:17px;padding:0}
+.micg-sh .txt{max-height:4.3em;overflow:auto;padding:7px 10px;border-radius:10px;background:var(--bg);border:1px solid var(--line);font-size:15px;line-height:1.4;color:var(--ink);flex:none}
+.micg-sh .txt i{color:var(--muted)}
+.micg-sh .gl{overflow:auto;flex:1 1 auto;min-height:60px;display:grid;gap:5px;align-content:start;overscroll-behavior:contain}
+.micg-sh .gsep{font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:6px 2px 0}
+.micg-sh .gsep em{font-style:normal;text-transform:none;letter-spacing:0;font-weight:600}
+.micg-sh .gi{display:grid;grid-template-columns:auto 1fr auto;gap:0 9px;align-items:center;padding:6px 9px;border-radius:10px;background:var(--bg);border:1.5px solid transparent}
+.micg-sh .pn{font:700 12px/1.2 var(--f-mono,ui-monospace,monospace);background:var(--ink);color:var(--panel);border-radius:6px;padding:3px 6px;white-space:nowrap}
+.micg-sh .pn.nada{background:transparent;color:var(--muted);padding:3px 0}
+.micg-sh .gn{min-width:0}.micg-sh .gn b{display:block;font-size:14.5px;line-height:1.25}.micg-sh .gn small{display:block;font-size:11.5px;color:var(--muted);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.micg-sh .gv{font-weight:800;font-size:15px;color:var(--muted);text-align:right;max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.micg-sh .gi.si{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 9%,var(--panel))}.micg-sh .gi.si .gv{color:var(--ok)}
+.micg-sh .gi.dud{border-color:#d97706}.micg-sh .gi.dud .gv{color:#b45309}
+.micg-sh .gr{padding:8px 10px;border-radius:12px;background:var(--bg);border:1.5px solid var(--ok);display:grid;gap:6px}
+.micg-sh .gr.dud{border-color:#d97706;background:color-mix(in srgb,#f59e0b 8%,var(--panel))}
+.micg-sh .gr .gt{display:flex;gap:8px;align-items:baseline;font-size:13.5px;font-weight:700;line-height:1.3}
+.micg-sh .fr{display:grid;grid-template-columns:minmax(76px,36%) 1fr;gap:3px 8px;align-items:center}
+.micg-sh .fr.uno{grid-template-columns:1fr}
+.micg-sh .fr label{font-size:12.5px;color:var(--muted);font-weight:700;line-height:1.2}
+.micg-sh .fr input[type=text]{width:100%;box-sizing:border-box;font-size:17px;font-weight:700;padding:7px 10px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-family:inherit}
+.micg-sh .fr input.mono{font-family:var(--f-mono,ui-monospace,monospace);font-size:15.5px}
+.micg-sh .fr.chk{grid-template-columns:auto 1fr;font-size:15px;font-weight:700}.micg-sh .fr.chk input{width:22px;height:22px;accent-color:var(--ok)}
+.micg-sh .gr small{grid-column:1/-1;font-size:12px;color:var(--muted);line-height:1.3}.micg-sh .gr small.mal{color:#b45309;font-weight:700}
+.micg-sh .gr.sin{border-style:dashed;border-color:var(--line);background:transparent}.micg-sh .gr.sin div{font-size:13.5px;color:var(--muted)}
+.micg-sh .ej{font-size:13px;color:var(--muted);line-height:1.4;flex:none}.micg-sh .ej b{color:var(--ink);font-weight:700}
+.micg-sh .fb{display:flex;gap:6px;flex:none}.micg-sh .fb button{flex:1;text-align:center;justify-content:center;padding:12px 4px;border-radius:11px;font-size:14.5px;font-weight:700;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-family:inherit;white-space:nowrap}
+.micg-sh .fb .ok{background:var(--ok);border-color:var(--ok);color:#fff;flex:1.5}.micg-sh .fb .lis{background:var(--accent);border-color:var(--accent);color:#fff;flex:2}.micg-sh .fb .sg{border-color:var(--accent);color:var(--accent)}
+.micg-sh .err{color:var(--bad,#c81e1e);font-weight:600;font-size:14px;line-height:1.4}
+.micg-ok{position:fixed;left:12px;right:12px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:9000;max-width:600px;margin:0 auto;background:var(--ink);color:var(--panel);border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center;font-size:14px;line-height:1.35;box-shadow:0 8px 30px rgba(0,0,0,.3)}
+.micg-ok button{margin-left:auto;flex:none;background:none;border:0;color:inherit;font:inherit;font-weight:800;text-decoration:underline;padding:4px}
+.dic-ok{box-shadow:0 0 0 3px var(--ok)!important;transition:box-shadow .5s}`;
   document.head.appendChild(st);
   const norm=t=>String(t||'').replace(/\s+/g,' ').trim();
   const escH=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const lsG=k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}};
+  const llano=t=>String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const pal=()=>typeof TPL_ACT!=='undefined'&&TPL_ACT==='pal';
-  const vista=()=>document.documentElement.dataset.vista||'';
-  const enMaq=()=>vista()==='maq'&&!!document.querySelector('#maquinas details.msec');
-  // ---------- las casillas del COP abierto, con el nombre que se le dice a Google ----------
-  function casillas(){
-    const L=[];
-    if(enMaq()){
-      document.querySelectorAll('#maquinas [data-mk]').forEach(i=>{if(i.readOnly||i.disabled)return;
-        const it=i.closest('.it'),sec=i.closest('details.msec'),lab=i.closest('label');
-        const sub=norm(lab&&[...lab.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' '));
-        L.push({i,sec:norm(sec&&sec.querySelector('.st')&&sec.querySelector('.st').textContent),pn:'',nom:norm(it&&it.querySelector('.l')&&it.querySelector('.l').textContent).replace(/(\S)Color:/,'$1 · Color:'),sub})});
-      return L}
-    if(vista()!=='cop')return L;
-    document.querySelectorAll('details.sec input[data-slot], details.sec textarea[data-slot]').forEach(i=>{
-      if(i.readOnly||i.disabled||i.type==='checkbox'||i.type==='radio'||i.closest('.fotop,#dlg,.luzin'))return;
-      const r=i.closest('.row'),sec=i.closest('details.sec');
-      if(/calcula sol/i.test(i.placeholder||''))return; // la longitud total y las que salen solas no se dictan
-      const al=norm(i.getAttribute('aria-label')),pt=norm(r&&r.querySelector('.ptxt')&&r.querySelector('.ptxt').textContent);
-      const nom=pt||norm(al.split('·')[0])||norm(i.placeholder);
-      // la etiqueta propia de la casilla (Derecha, eje 1, «(N2)»…) y el límite de la fila (6.18 y 6.19 solo se distinguen por «(N2) ≥ 50» / «(N3) ≥ 100»)
-      const lim=norm(r&&r.querySelector('.lim')&&r.querySelector('.lim').textContent);
-      const sub=[...new Set([al.includes('·')?al.split('·').pop():al,i.placeholder].map(norm))].filter(x=>x&&x!==nom&&!nom.startsWith(x)&&!x.startsWith(nom)).join(' · ');
-      // 3 nov (Daniel: «¿cómo diferencia el larguero derecho del izquierdo?»): el bloque del apartado (Perfil derecho / Perfil izquierdo,
-      // Lado izquierdo (conductor), Parte trasera…) va con la casilla, que hay nombres repetidos en cada lado
-      const blk=i.closest('.blk[data-title]'),bt=norm(blk&&blk.dataset.title);
-      L.push({i,sec:norm(sec&&sec.querySelector('h2')&&sec.querySelector('h2').textContent).split(':')[0]+(bt?' › '+bt:''),pn:norm(r&&r.querySelector('.pnum')&&r.querySelector('.pnum').textContent),nom,sub,lim})});
-    return L}
-  const nombre=c=>(c.pn?c.pn+' ':'')+c.nom+(c.sub?' · '+c.sub:'');
-  // ---------- Google: el texto dictado → {casilla: valor} ----------
-  function prompt(txt,L){
-    return `Eres el ayudante de un inspector que rellena un COP (control de conformidad de producción) ${enMaq()?'de una máquina':pal()?'de una grúa Palfinger':'de un vehículo'} midiendo en el taller.
-Ha dictado esto (reconocimiento de voz en español, puede tener fallos: «mil doscientos» = 1200, «coma» = decimal, «por» = x, letras deletreadas de matrícula o bastidor):
-"""${txt}"""
-${(()=>{const c=L.find(c=>/categor/i.test(c.nom)&&norm(c.i.value));return c?'Categoría del vehículo: '+norm(c.i.value)+' (si una casilla es solo para N2 o N3, elige la de esta categoría).\n':''})()}Casillas del COP (id | apartado | nombre):
-${L.map((c,k)=>k+' | '+c.sec+' | '+nombre(c)+(c.lim?' (límite '+c.lim+')':'')).join('\n')}
-Reparte cada dato dictado en la casilla que corresponde. Reglas:
-- Las medidas en milímetros y las masas en kg, solo el número (sin unidades), como las escribe el inspector: 1200, 3850, 2,5.
-- Si una casilla tiene «Medición» y «Homologación», lo dictado va a «Medición» salvo que diga «homologación» o «según COC».
-- Si dice «lado derecho / izquierdo», «eje 1 / eje 2», «delantero / trasero», elige la casilla de ese lado o eje (mira también el bloque del apartado, p. ej. «Perfil derecho»).
-- Si dice el apartado o el lado al principio («protección lateral derecha: …»), vale para todos los datos que siguen hasta que diga otro.
-- Si el mismo nombre está en dos lados o bloques y no ha dicho cuál, no elijas: ponlo en "sin_sitio" añadiendo «(¿qué lado?)».
-- Matrículas, bastidores y contraseñas en mayúsculas y sin espacios de más. El bastidor (VIN) son 17 letras y números seguidos, sin guiones ni espacios; si lo deletrea, las letras dichas («uve doble» = W, «eme» = M, «be» = B, «ese» = S…) van como letra. Si lo oído se repite, cuenta una sola vez.
-- Si sale repetido el mismo trozo varias veces (fallo del reconocedor), tómalo una vez.
-- Si un dato no encaja con ninguna casilla, no lo inventes: ponlo en "sin_sitio".
-Contesta solo JSON: {"datos":[{"id":número de casilla,"valor":"…","oido":"el trozo dictado"}],"sin_sitio":["…"]}`}
-  async function google(txt,L){
-    const clave=lsG('ia-clave');let modelo=lsG('ia-modelo')||'gemini-flash-latest';
-    const body={contents:[{role:'user',parts:[{text:prompt(txt,L)}]}],generationConfig:{temperature:0,responseMimeType:'application/json',...(/gemini-3/.test(modelo)?{thinkingConfig:{thinkingLevel:'low'}}:{})}};
-    const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(modelo)+':generateContent',{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':clave},body:JSON.stringify(body)});
-    const j=await r.json();if(!r.ok)throw new Error((j.error&&j.error.message)||('Google contesta '+r.status));
-    const t=(((j.candidates||[])[0]||{}).content||{parts:[]}).parts.map(x=>x.text||'').join('');
-    const o=JSON.parse(t.replace(/^```(json)?|```$/g,'').trim());
-    return {datos:(o.datos||[]).map(d=>({c:L[+d.id],v:norm(d.valor),oido:norm(d.oido)})).filter(d=>d.c&&d.v),sin:(o.sin_sitio||[]).map(norm).filter(Boolean)}}
-  // ---------- sin clave: en el móvil, «nombre de la casilla + número» ----------
-  const llano=t=>norm(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ');
-  function local(txt,L){
-    const trozos=llano(txt).replace(/(\d) (?=\d{3}\b)/g,'$1').split(/(\d+(?:[.,]\d+)?)/);const datos=[],sin=[];
-    for(let k=1;k<trozos.length;k+=2){const pal=trozos[k-1].split(' ').filter(w=>w.length>2);if(!pal.length){continue}
-      let mej=null,pts=0;for(const c of L){const n=llano(nombre(c)+' '+c.sec);const p=pal.filter(w=>n.includes(w)).length/pal.length;if(p>pts){pts=p;mej=c}}
-      if(mej&&pts>=0.5&&!datos.some(d=>d.c===mej))datos.push({c:mej,v:trozos[k].replace('.',','),oido:norm(trozos[k-1]+' '+trozos[k])});else sin.push(norm(trozos[k-1]+' '+trozos[k]))}
-    return {datos,sin}}
-  // trozos de texto oído → uno solo: si un trozo repite el anterior y sigue (Android), se queda el largo; si ya estaba, no se pone
+  const enMaq=e=>!!(e&&e.closest&&e.closest('#maquinas'));
+  const enRef=e=>!!(e&&e.closest&&e.closest('#reformas'));
+
+  // ---------- palabras → números ----------
+  const NUMW={cero:0,un:1,uno:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12,trece:13,catorce:14,
+    quince:15,dieciseis:16,diecisiete:17,dieciocho:18,diecinueve:19,veinte:20,veintiun:21,veintiuno:21,veintiuna:21,veintidos:22,veintitres:23,
+    veinticuatro:24,veinticinco:25,veintiseis:26,veintisiete:27,veintiocho:28,veintinueve:29,treinta:30,cuarenta:40,cincuenta:50,sesenta:60,
+    setenta:70,ochenta:80,noventa:90,cien:100,ciento:100};
+  ['dos','tres','cuatro','quin','seis','sete','ocho','nove'].forEach((p,k)=>{const n=(k+2)*100,r=p==='quin'?'quinient':p==='sete'?'setecient':p==='nove'?'novecient':p+'cient';NUMW[r+'os']=n;NUMW[r+'as']=n});
+  const esDig=w=>/^\d+(?:[.,]\d+)*$/.test(w);
+  const esNumW=w=>Object.prototype.hasOwnProperty.call(NUMW,w)||w==='mil';
+  const esNum=w=>!!w&&(esDig(w)||esNumW(w));
+  const lugar=n=>{if(!n)return 1;let p=1;while(n%(p*10)===0)p*=10;return p}; // 200→100, 1000→1000, 1250→10
+  // texto → palabras sueltas (sin tildes, en minúscula); separa letras de cifras («d1-2» → d 1 - 2) y los signos
+  function tokens(txt){
+    const t=llano(txt).replace(/[“”«»"]/g,' ')
+      .replace(/(\d)\s*[x×]\s*(?=\d)/g,'$1 x ')
+      .replace(/([a-z])(?=\d)/g,'$1 ').replace(/(\d)(?=[a-z])/g,'$1 ')
+      .replace(/[+*\/\-º°%]/g,m=>' '+(m==='°'?'º':m)+' ')
+      .replace(/(?<!\d)[.,]|[.,](?!\d)/g,' ').replace(/[;:!?¿¡()\[\]]/g,' ');
+    return t.split(/\s+/).filter(Boolean)}
+  // números de una lista de palabras: [{s:'1250',n:1250}] y las palabras que no son números
+  function numeros(tk,op={}){
+    const items=[],desc=[];let cur=null,pre='',neg=false;
+    const fmt=c=>(c.neg?'-':'')+(op.texto&&c.raw?c.raw:String(c.n)+(c.dec!=null&&c.dec!==''?','+c.dec:''));
+    const sigue=()=>{if(cur)cerrar()}; // número nuevo: cierra el anterior, pero no lo que va antes de «x», «+» o «/»
+    const cerrar=()=>{if(cur){items.push({s:pre+fmt(cur),n:pre?null:(cur.neg?-1:1)*(cur.n+(cur.dec?+('0.'+cur.dec):0)),gr:cur.gr,dig:cur.dig,toks:cur.toks});cur=null;pre=''}
+      else if(pre){items.push({s:pre.replace(/[+x\/\-]$/,''),n:null,toks:[]});pre=''}};
+    for(let k=0;k<tk.length;k++){const w=tk[k],nx=tk[k+1];
+      if(cur&&cur.decAbierto){ // decimales: cada número que sigue se añade tal cual
+        if(esDig(w)&&!w.includes('.')){cur.dec+=w;cur.toks.push(w);continue}
+        if(esNumW(w)&&w!=='mil'&&NUMW[w]<100){cur.dec+=String(NUMW[w]);cur.toks.push(w);continue}
+        cur.decAbierto=false}
+      if(w==='mil'){
+        if(cur&&!cur.dec&&cur.n<1000&&cur.n>0&&!cur.metros){cur.n*=1000;cur.lim=1000;cur.toks.push(w);cur.dig=false;continue}
+        sigue();cur={n:1000,lim:1000,toks:[w],neg};neg=false;continue}
+      if(esDig(w)){
+        let x=w;if(!op.texto&&/^\d{1,3}(\.\d{3})+$/.test(x))x=x.replace(/\./g,''); // 1.200 → 1200 ; 12.000 → 12000
+        if(/[.,]/.test(x)&&!op.texto){sigue();const [a,b]=x.replace(/\./g,',').split(',');cur={n:+a,dec:b,lim:1,toks:[w],neg};neg=false;continue}
+        const n=+x;
+        if(cur&&!op.texto&&!cur.dec&&n>0&&n<cur.lim&&!(cur.metros&&n>=100)){cur.n+=cur.metros?n*10:n;cur.lim=cur.metros?1:lugar(cur.n);cur.toks.push(w);cur.metros=false;continue}
+        sigue();cur={n,raw:x,lim:n>=1000&&n%1000===0?lugar(n):1,toks:[w],neg,dig:x.length===1};neg=false;continue}
+      if(esNumW(w)){const n=NUMW[w];
+        if(cur&&!cur.dec&&!cur.raw&&n>0&&n<cur.lim&&!(cur.metros&&n>=100)){cur.n+=cur.metros?n*10:n;cur.lim=cur.metros?1:lugar(cur.n);cur.toks.push(w);cur.dig=false;cur.metros=false;continue}
+        if(cur&&!cur.dec&&cur.raw&&cur.lim>1&&n>0&&n<cur.lim&&!op.texto){cur.n+=n;cur.raw=null;cur.lim=lugar(cur.n);cur.toks.push(w);continue}
+        sigue();cur={n,lim:n===0?1:lugar(n)>=10&&n<20?1:lugar(n),toks:[w],neg,dig:n<10};neg=false;continue}
+      if(op.texto){cerrar();desc.push(w);continue}
+      if(w==='y'&&cur){
+        if(nx==='medio'||nx==='media'){cur.dec='5';k++;continue}
+        if(esNumW(nx)&&nx!=='mil'&&NUMW[nx]<cur.lim)continue; // treinta y cinco
+        cerrar();desc.push(w);continue}
+      if((w==='coma'||w==='con'||w==='punto')&&cur&&!cur.dec&&esNum(nx)&&nx!=='mil'){cur.dec='';cur.decAbierto=true;cur.toks.push(w);continue}
+      if((w==='metro'||w==='metros')&&cur&&!pre){const v=cur.n+(cur.dec?+('0.'+cur.dec):0);cur.n=Math.round(v*1000);cur.dec=null;cur.lim=1000;cur.metros=true;cur.raw=null;cur.toks.push(w);continue}
+      if((w==='centimetro'||w==='centimetros'||w==='cm')&&cur&&!pre&&!cur.metros){const v=cur.n+(cur.dec?+('0.'+cur.dec):0);cur.n=Math.round(v*10);cur.dec=null;cur.raw=null;cur.lim=1;continue}
+      if((w==='tonelada'||w==='toneladas')&&cur&&!pre){const v=cur.n+(cur.dec?+('0.'+cur.dec):0);cur.n=Math.round(v*1000);cur.dec=null;cur.raw=null;cur.lim=1000;continue}
+      if((w==='º'||w==='grado'||w==='grados')&&cur){cur.gr=true;continue}
+      if((w==='mas'||w==='+'||w==='x'||w==='por'||w==='/'||w==='barra')&&cur&&esNum(nx)){
+        const o=w==='mas'||w==='+'?'+':w==='/'||w==='barra'?'/':'x';pre+=fmt(cur)+o;cur=null;continue}
+      if((w==='menos'||w==='-')&&esNum(nx)){if(cur){pre+=fmt(cur)+'-';cur=null}else neg=true;continue}
+      cerrar();desc.push(w)}
+    cerrar();
+    return {items,desc}}
+
+  // ---------- palabras → letras y cifras (bastidor, contraseñas, tipos) ----------
+  const LET={a:'A',b:'B',be:'B',c:'C',ce:'C',d:'D',de:'D',e:'E',f:'F',efe:'F',g:'G',ge:'G',h:'H',hache:'H',i:'I',j:'J',jota:'J',k:'K',ka:'K',
+    l:'L',ele:'L',m:'M',eme:'M',n:'N',ene:'N',o:'O',p:'P',pe:'P',q:'Q',cu:'Q',r:'R',erre:'R',ere:'R',s:'S',ese:'S',t:'T',te:'T',u:'U',
+    v:'V',uve:'V',ve:'V',w:'W',x:'X',equis:'X',y:'Y',z:'Z',zeta:'Z',ceta:'Z',zeda:'Z'};
+  const FUERTE=new Set(['be','ce','efe','ge','hache','jota','ka','ele','eme','ene','pe','cu','erre','ere','ese','uve','equis','zeta','ceta','zeda',
+    'b','c','d','f','g','h','j','k','l','m','n','p','q','r','s','t','v','w','x','z']);
+  const SIMB={asterisco:'*','*':'*',estrella:'*',barra:'/','/':'/',guion:'-','-':'-',raya:'-',punto:'.',espacio:' ','+':'+'};
+  function piezas(tk,cls){
+    const P=[],ult=()=>P[P.length-1];let k=0;
+    while(k<tk.length){const w=tk[k],nx=tk[k+1];
+      // «be de Barcelona», «uve de Valencia»: la palabra solo dice qué letra es
+      if((w==='de'||w==='como')&&ult()&&ult().t==='L'&&nx&&nx.length>=3&&!LET[nx]&&!esNum(nx)&&nx[0]===ult().s.toLowerCase()){k+=2;continue}
+      if((['uve','ve','u'].includes(w)&&nx==='doble')||(w==='doble'&&['uve','ve','u'].includes(nx))){P.push({t:'L',s:'W',w:'uve'});k+=2;continue}
+      if(w==='i'&&nx==='griega'){P.push({t:'L',s:'Y',w:'ye'});k+=2;continue}
+      if(w==='i'&&nx==='latina'){P.push({t:'L',s:'I',w:'i'});k+=2;continue}
+      if((w==='doble'||w==='triple')&&nx){const s=piezas([nx],cls);if(s.length===1&&s[0].t!=='W'){for(let j=0;j<(w==='doble'?2:3);j++)P.push({...s[0]});k+=2;continue}}
+      if(esNum(w)){const run=[];let j=k;
+        while(j<tk.length){const t=tk[j];if(esNum(t)){run.push(t);j++;continue}
+          if(t==='y'&&run.length&&esNumW(tk[j+1])&&tk[j+1]!=='mil'&&!esDig(run[run.length-1])){run.push(t);j++;continue}break}
+        for(const it of numerosTexto(run))P.push({t:'N',s:it});
+        k=j;if(tk[k]==='y'&&(tk[k+1]==='medio'||tk[k+1]==='media')){ult().s+='.5';k+=2}
+        continue}
+      if(w==='por'&&ult()&&ult().t==='N'&&esNum(nx)){P.push({t:'S',s:/contr|luz|ultfase/.test(cls||'')?'*':'x'});k++;continue}
+      if(w==='coma'&&ult()&&ult().t==='N'&&esNum(nx)){P.push({t:'S',s:/^(neum|indice)$/.test(cls||'')?'.':','});k++;continue}
+      if(SIMB[w]!==undefined){P.push({t:'S',s:SIMB[w]});k++;continue}
+      if(LET[w]){P.push({t:'L',s:LET[w],w});k++;continue}
+      P.push({t:'W',s:w.toUpperCase(),w});k++}
+    return P}
+  // números dentro de un código: «cero cero uno» = 001; «doce mil trescientos» = 12300; «1.200» se deja como lo escribe Chrome
+  function numerosTexto(run){const out=[];let pal=[];
+    const vaciar=()=>{if(pal.length){for(const it of numeros(pal).items)out.push(it.s.replace(',','.'));pal=[]}};
+    for(const t of run){if(esDig(t)){vaciar();out.push(t)}else pal.push(t)}
+    vaciar();return out}
+  const codigo=P=>P.map(p=>p.s).join('');
+  const hayPalabra=P=>P.some(p=>p.t==='W'&&p.w&&p.w.length>=3);
+  // como palabras: «MERCEDES BENZ», «EUROCARGO ML120E25», «TGS 33.470»; las letras deletreadas se juntan («eme a ene» → MAN)
+  function palabras(P){const out=[];let k=0;
+    while(k<P.length){const p=P[k];
+      if(p.t==='L'){let j=k;while(j<P.length&&P[j].t==='L')j++;const run=P.slice(k,j);
+        if(run.length>=2&&run.some(x=>FUERTE.has(x.w)))out.push({t:'C',s:run.map(x=>x.s).join('')});
+        else for(const x of run)out.push(x.w.length===1||FUERTE.has(x.w)?{t:'C',s:x.s}:{t:'W',s:x.w.toUpperCase(),pal:x.w.length>=3});
+        k=j;continue}
+      if(p.t==='N'){let j=k,s='';while(j<P.length&&(P[j].t==='N'||(P[j].t==='S'&&/^[.\-\/x+]$/.test(P[j].s)&&P[j+1]&&P[j+1].t==='N'))){s+=P[j].s;j++}
+        out.push({t:'N',s:s.toUpperCase()});k=j;continue}
+      out.push(p.t==='S'?{t:'S',s:p.s}:{t:'W',s:p.s,pal:!!(p.w&&p.w.length>=3)});k++}
+    let s='';for(let k=0;k<out.length;k++){const o=out[k],a=out[k-1];s+=(!a||o.t==='S'||a.t==='S'||!(o.pal||a.pal))?o.s:' '+o.s}
+    return norm(s).toUpperCase()}
+  const CODIGO=/^(tipo|variante|version|serie|clase)$/;
+  const frase=t=>{t=norm(t);return t?t[0].toUpperCase()+t.slice(1):''};
+  function contrasena(P,cls){
+    let pre='',R=P;
+    if(P[0]&&P[0].t==='L'&&P[0].s==='E'&&P[1]&&P[1].t==='N'&&/^\d{1,2}$/.test(P[1].s)){pre='E'+P[1].s;R=P.slice(2)}
+    let s=codigo(R).toUpperCase().replace(/\s+/g,'');
+    if(s.includes('*'))return (pre?pre.toLowerCase():'')+s; // e3*2007/46*0187*15
+    s=s.replace(/^(\d{2,3})R-?(?=\d)/,'$1R-');
+    if(cls==='banda'){const m=(pre+s).match(/104R-?(\d+)/);if(m)return '104R-'+m[1]}
+    return pre?pre+(s?' '+s:''):s}
+  // el valor de una casilla de texto, como lo escribe Daniel
+  function texto(cls,tk,raw){
+    if(cls==='nota')return {v:frase(acentos(raw))};
+    const P=piezas(tk,cls);if(!P.length)return {v:''};
+    const M={...ACC};for(const w of String(raw).split(/[^A-Za-zÀ-ÿ0-9]+/))if(w)M[llano(w)]=w; // la palabra con sus tildes
+    for(const p of P)if(p.t==='W'&&M[p.w])p.s=M[p.w].toUpperCase();
+    switch(cls){
+      case 'vin':{const s=codigo(P).toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/[OQ]/g,'0').replace(/I/g,'1');
+        return {v:s,info:s.length===17?'17 de 17 ✓':s.length+' de 17 (al bastidor le faltan o sobran)',mal:s.length!==17}}
+      case 'contr':case 'luz':case 'ultfase':case 'banda':return {v:contrasena(P,cls)};
+      case 'categoria':return {v:codigo(P).toUpperCase().replace(/[^A-Z0-9]/g,'')};
+      case 'neum':{const n=P.filter(p=>p.t==='N').map(p=>p.s);if(n.length>=3)return {v:`${n[0]}/${n[1]}R ${n[2].replace(',','.')}`};return {v:codigo(P).toUpperCase()}}
+      case 'indice':{const n=P.filter(p=>p.t==='N').map(p=>p.s.replace(/\D/g,'')).filter(Boolean);if(n.length)return {v:n.slice(0,2).join('/')+'K'};return {v:codigo(P).toUpperCase()}}
+      case 'cabina':{const m=llano(raw).match(/con litera|litera|corta|media|doble/);return {v:m?(m[0]==='litera'?'CON LITERA':m[0].toUpperCase()):palabras(P)}}
+      case 'maquina':return {v:palabras(P).replace(/^([A-Z]{1,4})(\d)/,'$1 $2')};
+      case 'marca':case 'denom':return {v:palabras(P)};
+      default:{const largas=P.filter(p=>p.t==='W'&&p.w.length>=4).length;
+        return {v:(CODIGO.test(cls)?(largas>=2||largas===1&&P.length===1):hayPalabra(P))?palabras(P):codigo(P).toUpperCase().trim()}}}}
+
+  // ---------- casillas de cada punto ----------
+  const SEL='input.t[data-slot],textarea[data-slot],select[data-slot]';
+  function dictable(i){
+    if(!i||i.readOnly||i.disabled||i.hidden||i.closest('[hidden],.fotop,.micp,#dlg,.luzin'))return false;
+    if(i.tagName==='INPUT'&&/^(checkbox|radio|file|date|hidden|button|time)$/.test(i.type))return false;
+    if(/calcula sol|dd\/mm/i.test(i.placeholder||''))return false;
+    if(/fecha/i.test(etiqueta(i)))return false;
+    return true}
+  function etiqueta(i){
+    if(enMaq(i)){const l=i.closest('label');if(l){const t=norm([...l.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' '));if(t)return t}
+      return norm(i.placeholder)||norm(String(i.getAttribute('aria-label')||'').split(',').pop())||'Medición'}
+    if(enRef(i)){const f=i.closest('.f'),l=f&&f.querySelector('label');return norm(l?l.textContent:i.closest('label')?.childNodes[0]?.textContent)||'Dato'}
+    const fl=i.closest('.fld'),lb=fl&&fl.querySelector(':scope>label');if(lb&&norm(lb.textContent))return norm(lb.textContent);
+    const ph=norm(i.placeholder);if(ph&&!/^medici/i.test(ph))return ph;
+    const al=norm(String(i.getAttribute('aria-label')||'').split('·').pop());
+    const r=i.closest('.row'),pt=r&&r.querySelector('.ptxt');
+    if(al&&!(pt&&llano(norm(pt.textContent)).startsWith(llano(al))))return al;
+    return ph||(pt&&norm(pt.textContent))||'Medición'}
+  function tituloMaq(it){const l=it.querySelector(':scope>.cab>.l,:scope>.l');if(!l)return '';const c=l.cloneNode(true);c.querySelectorAll('.lim,small,.micb').forEach(x=>x.remove());
+    let t=norm(c.textContent);
+    if(it.querySelector(':scope>.fila')){let p=it.previousElementSibling;while(p&&!p.matches('h4'))p=p.previousElementSibling;if(p&&p.matches('h4.dev'))t=norm(p.textContent)+' · '+t}
+    if(!t&&it.closest('details.msec'))t=norm(it.querySelector('.cab .lab')?.textContent)||'Datos';return t}
+  function clase(i,t){
+    if(i.tagName==='SELECT')return 'sel';
+    const lab=llano(etiqueta(i)),tit=llano(t.titulo||'');
+    if(enMaq(i)){
+      if(i.dataset.mk==='notas')return 'nota';
+      if(/^n[ºo°]$/.test(lab)||/numeric|decimal/.test(i.inputMode||i.getAttribute('inputmode')||''))return 'num';
+      if(/bastidor/.test(tit))return 'vin';
+      if(/neumatico/.test(tit)&&/dimensi/.test(tit))return 'neum';
+      if(/indice de carga/.test(tit))return 'indice';
+      if(/homologaci|contrasena/.test(tit))return 'contr';
+      if(i.closest('.it')&&i.closest('.it').querySelector('[data-mk$=".1"][inputmode="numeric"]')&&/luz|catadi|indicador|giratoria/.test(tit))return 'luz'; // luces: la contraseña
+      if(/^numero$|^numero de (ejes|ruedas|neumaticos|cilindros)|cilindrada|potencia|distancia|vias|voladizo|longitud|altura|anchura|mmta|mma|tara|mom|capacidad|llenado/.test(tit))return 'num';
+      return 'texto'}
+    if(enRef(i)){const k=i.dataset.rk||'';
+      if(i.tagName==='TEXTAREA')return 'nota';if(k==='bastidor')return 'vin';if(k==='marca')return 'marca';
+      if(/decimal|numeric/.test(i.getAttribute('inputmode')||''))return 'num';return 'texto'}
+    if(i.tagName==='TEXTAREA'||/observ|notas|descripci/.test(lab))return 'nota';
+    if(i.dataset.camfoto!==undefined&&typeof FotoPunto!=='undefined'){const c=FotoPunto.clase(i);return c==='D'||c==='U'||c==='carga'?'num':c}
+    if(/^(marca|tipo|denominaci|pedido|otros equipos|contrase|homologacion$|n[ºo] homolog)/.test(lab))return 'texto';
+    return 'num'}
+  // palabras que llevan a cada casilla («derecha», «eje 2», «homologación», «máxima», «d1-2»…)
+  const S=(...l)=>new Set(l);
+  const NUMDE={1:['1','uno','un','una','primer','primero','primera'],2:['2','dos','segundo','segunda'],3:['3','tres','tercer','tercero','tercera'],
+    4:['4','cuatro','cuarto','cuarta'],5:['5','cinco','quinto','quinta'],6:['6','seis','sexto','sexta'],7:['7','siete'],8:['8','ocho']};
+  const NOMBRE_LETRA=Object.entries(LET).reduce((o,[w,l])=>{(o[l]=o[l]||[]).push(w);return o},{});
+  const PALABRA_VACIA=new Set('el la los las lo de del en al con por para que una uno mas medida medicion cada total vehiculo dispositivo respecto'.split(' '));
+  function facetas(f,campos,t){
+    const lab=llano(f.lab).replace(/\(.*?\)/g,' ').trim(),F=[],add=(k,v,fr,need)=>F.push({k,v,fr,need});
+    const fld=f.el.closest('.fld');
+    if(fld&&fld.classList.contains('sd')||/derech/.test(lab))add('lado','d',[[S('derecha','derecho','dcha')]]);
+    if(fld&&fld.classList.contains('si')||/izquierd/.test(lab))add('lado','i',[[S('izquierda','izquierdo','izda')]]);
+    if(/homolog|informe/.test(lab))add('mh','h',[[S('homologacion','homologada','homologado','homologar','informe','coc','ficha')]]);
+    if(/^medici/.test(lab))add('mh','m',[[S('medicion','medida','medido','mido','medimos')]]);
+    let m=lab.match(/eje (\d)/);if(m)add('eje',m[1],[[S('eje','ejes'),S(...NUMDE[m[1]])],[S(...NUMDE[m[1]].filter(x=>!/^\d$|^un/.test(x))),S('eje')]]);
+    if(/^\d$/.test(lab)){const n=lab;if(/eje/.test(llano(t.titulo))){add('eje',n,[[S('eje','ejes'),S(...NUMDE[n])],[S(...NUMDE[n].filter(x=>!/^\d$|^un/.test(x))),S('eje')]]);add('eje',n,[[S(...NUMDE[n].slice(0,2))]],'big')}
+      else add('n',n,[[S('cota','numero','la','el'),S(...NUMDE[n])],[S(...NUMDE[n].slice(0,2))]],'big')}
+    m=lab.match(/^(?:d)?\s*(\d)\s*-\s*(\d)$/);
+    if(m){const [a,b]=[m[1],m[2]],d=/^d/.test(lab);
+      const fr=[[S(...NUMDE[a].slice(0,2)),S('-','a','y'),S(...NUMDE[b].slice(0,2))],[S(...NUMDE[a].slice(0,2)),S(...NUMDE[b].slice(0,2))],[S('entre'),S('el','eje','ejes'),S(...NUMDE[a]),S('y'),S('el','eje'),S(...NUMDE[b])],[S('entre'),S(...NUMDE[a]),S('y'),S(...NUMDE[b])]];
+      if(d)for(const x of fr.slice(0,2))fr.push([S('d','de'),...x]);
+      fr.push([S(a+b)]);if(d)fr.push([S('d','de'),S(a+b)]);
+      add('par',a+'-'+b,fr,'num')}
+    if(/\bmax|maxim/.test(lab))add('mm','max',[[S('maxima','maximo','max','maxima')]]);
+    if(/\bmin\b|minim|\bmin\./.test(lab))add('mm','min',[[S('minima','minimo','min')]]);
+    if(/^n[ºo°]\b|^numero|por lado|^n[ºo°] /.test(lab)||lab==='nº'||lab==='n')add('num','',[[S('numero','cantidad','unidades')],[S('por'),S('lado')]]);
+    if(/anterior/.test(lab))add('ap','a',[[S('anterior','delantera','delantero')]]);
+    if(/posterior/.test(lab))add('ap','p',[[S('posterior','trasera','trasero')]]);
+    if(/superior/.test(lab))add('ss','s',[[S('superior','arriba')]]);
+    if(/inferior/.test(lab))add('ss','i',[[S('inferior','abajo')]]);
+    // etiquetas cortas tipo código: d1, df, h3, bt, sr, D, Dc, S, V, U, q, b
+    const cod=lab.replace(/[^a-z0-9]/g,'');
+    if(cod&&cod.length<=3&&/^[a-z]+\d?$/.test(cod)&&!/^n$/.test(cod)&&!F.length){
+      const pzs=cod.match(/[a-z]|\d/g).map(c=>/\d/.test(c)?S(...NUMDE[c].slice(0,2)):S(...(NOMBRE_LETRA[c.toUpperCase()]||[c])));
+      const fr=[pzs];if(cod.length>1)fr.push([S(cod)]);if(/^[a-z]\d$/.test(cod))fr.push([S(cod[0]),S(cod[1])]);
+      add('cod',cod,fr,cod.length<=2?'num':null)}
+    // palabras propias de la casilla («MMTA», «tara», «neumático», «capacidad», «marca», «contraseña»…)
+    for(const w of lab.split(/[^a-z0-9ñ]+/))if(w.length>=4&&!PALABRA_VACIA.has(w)&&!/^(derech|izquierd|homolog|medici|maxim|minim|anterior|posterior|superior|inferior)/.test(w))
+      add('w',w,[[S(w,w+'s',w.replace(/o$/,'a'))]]);
+    return F}
+  function preparar(t){
+    const els=t.els().filter(dictable);
+    const campos=els.map(el=>({el,lab:etiqueta(el)}));
+    for(const f of campos){f.cls=clase(f.el,t);f.kind=f.cls==='num'?'num':f.cls==='sel'?'sel':f.cls==='nota'?'nota':'txt'}
+    // nombre que se enseña
+    const veces={};campos.forEach(f=>{veces[f.lab]=(veces[f.lab]||0)+1});const vistos={};
+    for(const f of campos){let n=f.lab.replace(/:\s*$/,'');if(/^\d$/.test(n))n=(/eje/.test(llano(t.titulo))?'Eje ':/cota/.test(llano(t.titulo))?'Cota ':'Nº ')+n;
+      if(veces[f.lab]>1){vistos[f.lab]=(vistos[f.lab]||0)+1;n+=' '+vistos[f.lab]}
+      f.nom=campos.length===1?norm(t.corto||n).replace(/:\s*$/,''):n;f.nom=f.nom.charAt(0).toUpperCase()+f.nom.slice(1)}
+    for(const f of campos)f.fac=facetas(f,campos,t);
+    // una palabra que está en dos casillas no sirve para elegir
+    const cuenta={};for(const f of campos)for(const fc of f.fac)if(fc.k==='w')cuenta[fc.v]=(cuenta[fc.v]||0)+1;
+    for(const f of campos)f.fac=f.fac.filter(fc=>fc.k!=='w'||cuenta[fc.v]===1);
+    const titW=new Set(tokens([t.titulo,t.corto,...campos.map(f=>f.lab+' '+(f.el.placeholder||''))].join(' ')).filter(w=>w.length>=3&&!esNum(w)));
+    return {...t,campos,titW}}
+
+  // ---------- entender lo dicho ----------
+  const RELLENO=new Set(('el la los las lo le de del es son mide miden mido medida medidas mm milimetro milimetros kg kilo kilos kilogramo kilogramos '+
+    'litro litros l grado grados metro metros cm centimetro centimetros tonelada toneladas pon ponme poner pongo vale ok okey eh pues bueno unos unas '+
+    'aprox aproximadamente en al a y que lado lados con por ciento % total esta estan hay tiene tienen ahi aqui valor cota eje ejes numero medicion '+
+    'punto queda sale da dame seria sea o mas menos casi exacto exactos justo justos vale').split(' '));
+  const TODAS=[[S('las','los','en'),S('dos','2')],[S('ambas','ambos','todas','todos','iguales')],[S('en'),S('las','los'),S('dos','2')]];
+  const ORDEN_NP=/^(no procede|no aplica|exento|np|n p|na|n a|no tiene|no lleva|no hay)$/;
+  function grande(tk,k){const w=tk[k];if(!w)return false;if(esDig(w))return w.replace('.','').length>=3;
+    if(w==='mil'||(esNumW(w)&&NUMW[w]>=100))return true;return esNumW(w)&&tk[k+1]==='mil'}
+  const tiene=(f,fc)=>f.fac.some(x=>x.k===fc.k&&x.v===fc.v);
+  const preferir=fs=>fs.slice().sort((a,b)=>(tiene(a,{k:'mh',v:'h'})?1:0)-(tiene(b,{k:'mh',v:'h'})?1:0));
+  const ANG=t=>!enMaq(t.cont)&&!pal()&&/angulo/.test(llano(t.titulo));
+  function valorNum(it,ctx){let s=it.s;if((it.gr||ANG(ctx))&&/^-?\d+(,\d+)?$/.test(s))s+='º';return s}
+  // lo dicho para UNA casilla
+  function valorPara(f,tk,raw,ctx){
+    if(f.kind==='num'){
+      const {items,desc}=numeros(tk),malas=desc.filter(w=>!RELLENO.has(w)&&!ctx.titW.has(w));
+      if(!items.length){const P=piezas(tk.filter(w=>!RELLENO.has(w)&&!ctx.titW.has(w)),'texto');return P.length?{v:palabras(P),dud:true,texto:true}:null}
+      if(items.length===1)return {v:valorNum(items[0],ctx),dud:malas.length>0,malas};
+      if(items.every(x=>x.dig&&/^\d$/.test(x.s)))return {v:items.map(x=>x.s).join(''),dud:malas.length>0,malas}; // «uno, dos, cinco, cero» → 1250
+      if(items.every(x=>/^\d+$/.test(x.s))&&items.map(x=>x.s).join('').length<=5)return {v:items.map(x=>x.s).join(''),dud:true,malas}; // «doce cincuenta» → 1250
+      return {v:valorNum(items[0],ctx),resto:items.slice(1),dud:true,malas}}
+    if(f.kind==='sel'){const o=opcion(f,tk);return o?{v:o}:null}
+    // «el número de bastidor es …»: se quita lo de delante
+    let t2=tk;if(f.cls!=='nota'){let j=-1;tk.forEach((w,k)=>{if(ctx.titW.has(w)&&k<tk.length-1)j=k});if(j>=0)t2=tk.slice(j+1);
+      while(t2.length>1&&['es','son','pon','ponme','pone','el','la','que','seria','sera','esta','lleva','pues','vale'].includes(t2[0]))t2=t2.slice(1)}
+    const r=texto(f.cls,t2,raw);
+    return r.v?{...r,dud:true,texto:true}:null}
+  const SINONIMO={ambar:'amarillo',naranja:'amarillo',auto:'auto'};
+  function opcion(f,tk){const ops=[...f.el.options].filter(o=>norm(o.text)&&o.value!==''&&!/…$/.test(o.text));
+    const t=' '+tk.map(w=>SINONIMO[w]||w).join(' ')+' ';let mejor=null;
+    for(const o of ops){const w=' '+tokens(o.text).join(' ')+' ';if(t.includes(w)&&(!mejor||w.length>mejor.l))mejor={o,l:w.length}}
+    return mejor?mejor.o.text:null}
+  function entender(ctx,txt){
+    const F=ctx.campos,raw=norm(txt);if(!raw||!F.length)return null;
+    const tk=tokens(raw),res={oido:raw,asig:[],accion:null,conf:true};
+    if(!tk.length)return null;
+    const pon=(f,r)=>{if(!r||r.v==null)return;const ya=res.asig.find(a=>a.f===f);if(ya)ya.v=r.v;else res.asig.push({f,...r});if(r.dud)res.conf=false};
+    // notas: todo lo dicho, tal cual
+    if(F.length===1&&F[0].cls==='nota'){pon(F[0],{v:frase(acentos(raw)),dud:true,texto:true,mas:true});return res}
+    const tl=tk.join(' ');
+    // «no procede», «no aplica», «exento»
+    if(ORDEN_NP.test(tl)){const b=botonNP(ctx);if(b){res.accion={tipo:'np',b,txt:norm(b.textContent)};return res}}
+    // «borrar» (todo el punto, o lo que diga: «borra la izquierda»)
+    if(/^(borra|borrar|borralo|borrala|quita|quitar|quitalo|vacia|vaciar|limpia|limpiar)\b/.test(tl)){
+      const m=marcas(ctx,tk.slice(1));const fs=m.fac.length?F.filter(f=>m.fac.every(fc=>tiene(f,fc))):F;
+      for(const f of fs)res.asig.push({f,v:'',borrar:true});return res}
+    // máquinas: «igual que la homologación» → el botón «=»
+    if(enMaq(ctx.cont)&&/(igual|lo mismo|copia|copiar|como la homologacion)/.test(tl)&&!tk.some(esNum)){const b=ctx.cont.querySelector('.cp');if(b){res.accion={tipo:'copia',b,txt:'= copia la homologación'};return res}}
+    if(F.length===1){if(tk.some(w=>!RELLENO.has(w)||esNum(w)))pon(F[0],valorPara(F[0],tk,raw,ctx));return res.asig.length?res:null}
+    const {segs,sel}=marcas(ctx,tk);
+    for(const s of sel)pon(s.f,{v:s.v});
+    const usados=new Set(sel.map(s=>s.f)),libres=[];
+    let mh=null;for(const s of segs){const m=s.fac.find(fc=>fc.k==='mh');if(m)mh=m;else if(mh&&s.fac.length&&F.some(f=>tiene(f,mh)&&s.fac.every(fc=>tiene(f,fc))))s.fac.push(mh)}
+    for(const s of segs){
+      const todas=s.fac.some(fc=>fc.k==='todas'),fs=s.fac.filter(fc=>fc.k!=='todas');
+      if(!fs.length&&!todas){libres.push(s);continue}
+      let cand=fs.length?F.filter(f=>fs.every(fc=>tiene(f,fc))):F.filter(f=>f.kind==='num');
+      if(!cand.length)cand=F.filter(f=>fs.some(fc=>tiene(f,fc)));
+      if(!cand.length){libres.push(s);res.conf=false;continue}
+      if(todas){const g=cand.filter(f=>f.kind===cand[0].kind),r=valorPara(g[0],s.toks,raw,ctx);if(r)for(const f of g){pon(f,{...r,resto:null});usados.add(f)}continue}
+      cand=preferir(cand);const f=cand.find(f=>!usados.has(f))||cand[0];
+      const r=valorPara(f,s.toks,raw,ctx);if(!r){res.conf=false;continue}
+      pon(f,r);usados.add(f);
+      if(r.resto&&r.resto.length)libres.push({fac:[],toks:[],items:r.resto})}
+    for(const s of libres){
+      const quedan=preferir(F.filter(f=>!usados.has(f)&&f.kind!=='sel'));if(!quedan.length){res.conf=false;break}
+      const nr=s.items?{items:s.items,desc:[]}:numeros(s.toks),malas=nr.desc.filter(w=>!RELLENO.has(w)&&!ctx.titW.has(w));
+      const numF=quedan.filter(f=>f.kind==='num'),txtF=quedan.filter(f=>f.kind!=='num');
+      if(nr.items.length&&numF.length&&(!malas.length||!txtF.length)){
+        let its=nr.items,dest;
+        if(its.length===numF.length)dest=numF;
+        else if(its.length<numF.length){const vac=numF.filter(f=>!norm(f.el.value));dest=(vac.length>=its.length?vac:numF).slice(0,its.length);if(vac.length<its.length)res.conf=false}
+        else{if(numF.length===1&&its.every(x=>x.dig&&/^\d$/.test(x.s)))its=[{s:its.map(x=>x.s).join('')}];else res.conf=false;dest=numF}
+        dest.forEach((f,j)=>{if(its[j]){pon(f,{v:valorNum(its[j],ctx)});usados.add(f)}});
+        if(malas.length)res.conf=false;
+        continue}
+      if(txtF.length&&s.toks.length){const vac=txtF.filter(f=>!norm(f.el.value)),f=(vac[0]||txtF[0]);const r=valorPara(f,s.toks,raw,ctx);if(r){pon(f,r);usados.add(f)}continue}
+      if(s.toks.some(w=>!RELLENO.has(w)&&!ctx.titW.has(w)))res.conf=false}
+    if(!res.asig.length)return null;
+    res.asig.sort((a,b)=>F.indexOf(a.f)-F.indexOf(b.f));
+    // varias casillas, todas llenas y un solo dato sin decir cuál: mejor preguntar
+    if(F.length>1&&res.asig.some(a=>norm(a.f.el.value)&&norm(a.f.el.value)!==a.v)&&!segs.some(s=>s.fac.length))res.conf=false;
+    return res}
+  // busca en lo dicho las palabras de cada casilla y parte el texto en trozos: [{fac:[…], toks:[…]}]
+  function marcas(ctx,tk){
+    const FR=[];
+    for(const f of ctx.campos){
+      if(f.kind==='sel'){for(const o of [...f.el.options].filter(o=>o.value!==''&&norm(o.text)&&!/…$/.test(o.text))){const w=tokens(o.text);if(w.length)FR.push({toks:w.map(x=>S(x,...Object.keys(SINONIMO).filter(k=>SINONIMO[k]===x))),sel:{f,v:o.text}})}continue}
+      for(const fc of f.fac)for(const fr of fc.fr)FR.push({toks:fr,fc,need:fc.need})}
+    if(ctx.campos.filter(f=>f.kind!=='sel').length>1)for(const fr of TODAS)FR.push({toks:fr,fc:{k:'todas',v:''}});
+    FR.sort((a,b)=>b.toks.length-a.toks.length);
+    const segs=[],sel=[];let cur={fac:[],toks:[]};
+    const lleno=c=>c.toks.some(w=>!RELLENO.has(w));
+    for(let k=0;k<tk.length;){let hit=null;
+      for(const fr of FR){const n=fr.toks.length;if(k+n>tk.length)continue;let ok=true;
+        for(let j=0;j<n;j++)if(!fr.toks[j].has(tk[k+j])){ok=false;break}
+        if(!ok)continue;
+        if(fr.need==='num'&&!esNum(tk[k+n]))continue;
+        if(fr.need==='big'&&!grande(tk,k+n))continue;
+        hit=fr;break}
+      if(hit){k+=hit.toks.length;
+        if(hit.sel){sel.push(hit.sel);continue}
+        if(lleno(cur)){segs.push(cur);cur={fac:[],toks:[]}}
+        cur.fac.push(hit.fc);continue}
+      cur.toks.push(tk[k]);k++}
+    segs.push(cur);
+    return {segs:segs.filter(s=>s.fac.length||s.toks.length),sel,fac:segs.flatMap(s=>s.fac)}}
+  function botonNP(ctx){const bs=[...ctx.cont.querySelectorAll('.grp button,.seg button')];
+    return bs.find(b=>/^(np|na|n\.a\.|exento|no procede|no aplica)$/i.test(norm(b.textContent)))||null}
+
+  // ---------- poner en las casillas ----------
+  function escribir(el,v){
+    if(el.tagName==='SELECT'){const o=[...el.options].find(o=>llano(o.text)===llano(v));el.value=o?o.value:'';}
+    else el.value=v;
+    el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));
+    if(el.tagName==='TEXTAREA'&&el.style){try{el.style.height='auto';el.style.height=el.scrollHeight+'px'}catch(e){}}}
+  function aplicar(asig){const prev=[];
+    for(const a of asig){const el=a.f.el;let v=a.v;
+      if(a.mas&&norm(el.value))v=el.value.replace(/\s+$/,'')+(el.tagName==='TEXTAREA'?'\n':'. ')+v;
+      prev.push({el,v:el.value});escribir(el,v);
+      el.classList.add('dic-ok');setTimeout(()=>el.classList.remove('dic-ok'),2600)}
+    return prev}
+  function deshacer(prev){for(const p of prev)escribir(p.el,p.v)}
+
+  // ---------- un apartado o bloque entero: qué punto se nombra ----------
+  let ACC={}; // palabras de lo dicho con sus tildes (para los textos)
+  function acentos(s){return String(s).replace(/[a-z0-9ñ]+/gi,w=>{const a=ACC[llano(w)];return a&&a.length===w.length?a:w})}
+  const VACIA=new Set('el la los las lo de del en al a con por para que y o u e su sus un una se si mm cm kg lleva instalada instalado caso retro sobre'.split(' '));
+  const NEXO=new Set('el la los las lo de del en al a con por para que y o u e su sus un una se mas sobre punto es son hasta desde entre'.split(' '));
+  const ORDW={primer:'1',primero:'1',primera:'1',segundo:'2',segunda:'2',tercer:'3',tercero:'3',tercera:'3',cuarto:'4',cuarta:'4',quinto:'5',quinta:'5',sexto:'6',sexta:'6'};
+  const CIFW={uno:'1',dos:'2',tres:'3',cuatro:'4',cinco:'5',seis:'6',siete:'7',ocho:'8',nueve:'9'};
+  const CANON={anchur:'anch',intermitent:'indicador',reflectant:'reflectiv',retrorreflectant:'reflectiv',retrorreflectiv:'reflectiv',retroreflectiv:'reflectiv',
+    retroreflectant:'reflectiv',luc:'luz',alt:'altur',gasoil:'combustibl',gasoleo:'combustibl',instalad:'instal',catadriptic:'catadioptric',catadioptic:'catadioptric',
+    tracer:'traser',delanter:'delanter',anterior:'anterior'};
+  const GEN=new Set(['distanci','dispositiv','vehicul','desd','medid','respect','luz','proteccion']);
+  const ADJ=new Set(['superior','inferior','anterior','posterior','exterior','interior','lateral','traser','delanter','total','maxim','minim','extern','intern','izquierd','derech']);
+  const LADO={derecha:'d',derecho:'d',dcha:'d',drcha:'d',izquierda:'i',izquierdo:'i',izda:'i',izq:'i'};
+  const UNE=new Set(['cota','eje','fase','grupo','categoria','posicion','maquina']);
+  function raiz(w){w=llano(w);if(!w)return '';
+    if(/^\d+$/.test(w))return w;const m=w.match(/^(\d+)(?:er|o|a|ª|º)$/);if(m)return m[1];
+    if(ORDW[w])return ORDW[w];
+    if(w.length>3&&w.endsWith('s'))w=w.slice(0,-1);
+    if(w.length>3&&/[aeo]$/.test(w))w=w.slice(0,-1);
+    return CANON[w]||w}
+  // «Máximo Cota A proveedor» → [máximo] [cota A] [proveedor]; «Distancia entre 1er eje…» → [distancia] [entre] [1] [eje]…
+  function unidades(nombre){
+    const s=String(nombre).replace(/\(.*?\)/g,' ').replace(/(\d)\s*[ªº°]/g,'$1').replace(/\b(\d)er\b/gi,'$1').replace(/ad\s*blue/gi,'adblue');
+    const ws=s.split(/[^A-Za-zÀ-ÿñÑ0-9]+/).filter(Boolean),U=[],dp=s.indexOf(':');
+    // lo que va después de «:» («AR», «S1 o S2», «IIIA») y los códigos («VD», «D12») no hace falta decirlo
+    const sp=t=>t.split(/[^A-Za-zÀ-ÿñÑ0-9]+/).filter(Boolean),pre=dp>=0?sp(s.slice(0,dp)):ws,post=dp>=0?sp(s.slice(dp+1)):[];
+    const codigoW=o=>/^(?:[A-Z0-9]{1,5}|\d[a-z]|[a-z]\d|o|y)$/.test(o);
+    let desde=1e9,hasta=-1; // «Luz de freno: S1 o S2» → S1, S2 ; «Vd: Voladizo delantero» → Vd
+    if(post.length&&post.every(codigoW))desde=pre.length;else if(dp>=0&&pre.length===1&&pre[0].length<=3)hasta=0;
+    const nLlenas=ws.filter(o=>!VACIA.has(llano(o))).length;
+    const esCod=(o,k)=>k>=desde||k<=hasta||/\d/.test(o)&&/[a-z]/i.test(o)||k===0&&(/^[A-Z]{1,3}$/.test(o)&&nLlenas>=3||o.length===2&&nLlenas>=3);
+    for(let k=0;k<ws.length;k++){const o=ws[k],w=llano(o);
+      const letra=/^[A-Z]$/.test(o)&&k>0,cifra=/^\d$/.test(w);
+      const u=U[U.length-1];
+      if((letra||cifra)&&u&&u.k.length===1&&u.fin===k-1&&UNE.has(llano(ws[k-1]))){u.k.push(letra?'#'+w:w);u.fin=k;continue}
+      if(VACIA.has(w)||(w.length<2&&!cifra))continue;
+      U.push({k:[raiz(w)],ini:k,fin:k,cod:esCod(o,k)})}
+    if(U.length&&U.every(u=>u.cod))U.forEach(u=>u.cod=false);
+    U.forEach(u=>{u.id=u.k.join(' ');u.ws=ws});
+    return U}
+  // lo que va entre paréntesis («(N2)», «(Para N2>8tn, N3, O3 y O4)») ayuda a elegir entre dos puntos que se llaman igual
+  function subsDe(txt){const S=new Set();for(const m of String(txt).matchAll(/\(([^)]*)\)/g))for(const c of m[1].matchAll(/\b([A-Za-z])\s?(\d)([A-Za-z])?/g))S.add((c[1]+c[2]+(c[3]||'')).toLowerCase());return S}
+  const textoU=(u,ws)=>ws.slice(u.ini,u.fin+1).join(' ');
+  const sigla=o=>/^[A-ZÑ]{2,5}$/.test(o)&&!/^(COTA|LUZ|EJE|FASE|PARA|CON|SIN|DEL|LAS|LOS)$/.test(o);
+  const bonito=s=>s.split(' ').map(o=>sigla(o)?o:/^[A-Z]$/.test(o)?o:o.toLowerCase()).join(' ').replace(/\b(\d) (\d)\b/g,'$1-$2');
+  // nombre del apartado: «MASAS Y DIMENSIONES: REQUISITOS…» → «Masas y dimensiones»
+  function nombreSec(s){const h=s.querySelector('summary h2,summary .st');let t=norm(h?h.textContent:'').split(':')[0].replace(/\(.*?\)/g,'').trim();
+    t=t.toLowerCase();return t.charAt(0).toUpperCase()+t.slice(1)}
+  function bloqueDe(el,scope){const b=el.closest('.blk[data-title]');return b&&scope.contains(b)&&b!==scope?b:null}
+  function objetivos(scope){
+    const T=[];
+    if(enMaq(scope)){
+      for(const it of scope.querySelectorAll('.it')){if(it.closest('[hidden]'))continue;
+        const els=()=>[...it.querySelectorAll('textarea[data-mk],input[data-mk]')];const ok=els().filter(dictable);if(!ok.length)continue;
+        const tit=tituloMaq(it)||etiqueta(ok[0]),l=it.querySelector(':scope>.cab>.l,:scope>.l');
+        let lt=l?norm([...l.childNodes].filter(n=>!(n.classList&&n.classList.contains('micb'))).map(n=>n.textContent).join(' ')).replace(/\(\d+\)|[\d.,]+\s*[º°]?|[<>≤≥–\-]/g,' '):'';
+        let dev=it.previousElementSibling;while(dev&&!dev.matches('h4'))dev=dev.previousElementSibling;if(dev&&!dev.matches('h4.dev'))dev=null;
+        const nom=norm((dev?norm(dev.textContent)+' ':'')+(norm(lt)||tit.split(' · ').pop()));
+        T.push({cont:it,pn:'',titulo:tit,corto:tit,nombre:nom,els,extra:'',sep:dev,sepT:dev?norm(dev.textContent):''})}}
+    else for(const r of scope.querySelectorAll('.row')){
+      if(r.closest('[hidden]')||r.classList.contains('band1')||r.classList.contains('band2'))continue;
+      const pn=r.querySelector('.pnum'),els=[...r.querySelectorAll(SEL)];
+      if(pn){const pt0=norm(r.querySelector('.ptxt')?.textContent).replace(/[¿?]/g,' ').trim(),pt=pt0.replace(/:\s*$/,''),ok=els.filter(dictable);
+        if(!ok.length&&(els.length||r.querySelectorAll('.grp').length!==1))continue;
+        const extra=ok.length===1?String(ok[0].placeholder||'')+' '+String(ok[0].getAttribute('aria-label')||''):'';
+        const det=(extra.match(/\([^)]*\)/)||[''])[0];
+        T.push({cont:r,pn:norm(pn.textContent),titulo:(norm(pn.textContent)+' '+pt),corto:pt,nombre:norm(pt.replace(/:/g,': ')),det,els:()=>[...r.querySelectorAll(SEL)],preg:!ok.length,extra});continue}
+      for(const i of els){if(!dictable(i))continue;const nom=etiqueta(i).replace(/:\s*$/,'');T.push({cont:r,pn:'',titulo:nom,corto:nom,nombre:nom,els:()=>[i],extra:''})}}
+    for(const t of T){t.units=unidades(t.nombre);t.subs=subsDe(t.nombre+' '+t.extra);
+      const bl=t.cont.closest('.blk[data-side]');t.lado=bl&&scope.contains(bl)||bl&&bl.contains(scope)?bl.dataset.side:null;
+      if(!enMaq(scope)){t.blk=bloqueDe(t.cont,scope);t.sep=t.blk;t.sepT=t.blk?t.blk.dataset.title:''}else t.blk=null;t.ctx=t.preg?{...t,campos:[],titW:new Set()}:preparar(t);
+      t.ladoF=!!(t.ctx.campos||[]).some(f=>f.fac.some(x=>x.k==='lado'));
+      t.facW=new Set();for(const f of t.ctx.campos||[])for(const fc of f.fac)for(const fr of fc.fr)for(const s of fr)for(const w of s)t.facW.add(w)}
+    // palabras que solo tiene un punto (bastan para nombrarlo)
+    const cuenta={};for(const t of T)for(const id of new Set(t.units.map(u=>u.id)))cuenta[id]=(cuenta[id]||0)+1;
+    for(const t of T)for(const u of t.units)u.unico=cuenta[u.id]===1&&u.id.length>=3;
+    // lo que conviene decir para cada punto (dentro de su bloque)
+    for(const t of T)t.pista=pista(t,T.filter(x=>x.blk===t.blk));
+    // dos puntos que se dicen igual: lo de los paréntesis («altura travesaño N3»)
+    for(const t of T){const igual=T.filter(x=>x!==t&&x.blk===t.blk&&x.pista===t.pista);if(!igual.length||!t.subs.size)continue;
+      const s=[...t.subs].find(s=>!igual.some(x=>x.subs.has(s)));if(s)t.pista2=t.pista+' '+s.toUpperCase()}
+    for(const t of T)if(t.pista2)t.pista=t.pista2;
+    return T}
+  function pista(t,ambito){
+    const ws=t.units[0]?t.units[0].ws:[];if(!t.units.length)return norm(t.nombre);
+    const U=t.units.filter(u=>!u.cod);
+    const otros=ambito.filter(x=>x!==t),tiene=(x,id)=>x.units.some(v=>v.id===id);
+    const unico=sel=>!otros.some(x=>sel.every(u=>tiene(x,u.id)));
+    const peso=u=>otros.filter(x=>tiene(x,u.id)).length+(GEN.has(u.k[0])?5:0);
+    const corte=sel=>{const a=Math.min(...sel.map(u=>u.ini));let b=Math.max(...sel.map(u=>u.fin));
+      const ix=U.findIndex(u=>u.fin===b);if(ix===U.length-2&&sel.length>=2&&sel.length<U.length&&!GEN.has(U[U.length-1].k[0]))b=U[U.length-1].fin; // se acaba la frase: «MMTA en cada eje»
+      return bonito(ws.slice(a,b+1).join(' '))};
+    if(U.length<=2)return corte(U);
+    const raro=U.map((u,i)=>({u,i,p:peso(u)})).sort((a,b)=>a.p-b.p||a.i-b.i)[0];
+    if(raro.u.k.length>1&&unico([raro.u]))return raro.u.k[0]==='eje'&&U[raro.i+1]&&/^\d$/.test(U[raro.i+1].id)?corte(U.slice(Math.max(0,raro.i-1),raro.i+2)):corte([raro.u]);
+    const pre=U[raro.i-1],pos=U[raro.i+1];
+    const cands=[];if(pre)cands.push([pre,raro.u]);if(pos)cands.push([raro.u,pos]);
+    if(ADJ.has(raro.u.k[0])&&pre&&!GEN.has(pre.k[0]));else cands.sort((a,b)=>peso(a.find(x=>x!==raro.u))-peso(b.find(x=>x!==raro.u)));
+    for(const c of cands)if(unico(c))return corte(c);
+    for(let n=3;n<=U.length;n++)for(let a=Math.max(0,raro.i-n+1);a<=raro.i&&a+n<=U.length;a++){const c=U.slice(a,a+n);if(unico(c))return corte(c)}
+    if(!otros.some(x=>x.units.filter(u=>!u.cod).length===U.length&&U.every(u=>tiene(x,u.id))))return corte(U); // no hay otro que se llame igual
+    // se llama igual que otro: las dos primeras palabras (y «punto 24»)
+    return bonito(ws.slice(U[0].ini,U[Math.min(1,U.length-1)].fin+1).join(' '))}
+  // dónde se nombra cada punto en lo dicho
+  function menciones(T,tk){
+    const n=tk.length,sd=tk.map(w=>CIFW[w]||ORDW[w]||raiz(w)),M=[];
+    const casa=(u,j)=>{if(sd[j]!==u.k[0])return 0;if(u.k.length===1)return 1;const s=u.k[1],w=tk[j+1];if(!w)return 0;
+      if(s[0]==='#')return LET[w]&&LET[w].toLowerCase()===s.slice(1)?2:0;return sd[j+1]===s?2:0};
+    const sub=(t,j)=>{const l=LET[tk[j]];if(!l)return 0;const d=/^\d$/.test(tk[j+1]||'')?tk[j+1]:CIFW[tk[j+1]];if(!d)return 0;
+      const s=(l+d).toLowerCase(),l2=tk[j+2]&&LET[tk[j+2]];if(l2&&t.subs.has(s+l2.toLowerCase()))return 3;return t.subs.has(s)?2:0};
+    const probarEn=(t,k)=>{const U=t.units;let j=k,m=0,sb=0,ladoV=null,fin=k;const us=new Set(),lim=k+U.length*2+4;
+      while(j<n&&j<lim){let hit=-1,len=0;
+        for(let q=0;q<U.length;q++){if(us.has(q))continue;const L=casa(U[q],j);if(L){hit=q;len=L;break}}
+        if(hit>=0){us.add(hit);m++;j+=len;fin=j;continue}
+        if(!m)return null;
+        const L=t.subs.size?sub(t,j):0;if(L){sb++;j+=L;fin=j;continue}
+        if(LADO[tk[j]]){ladoV=LADO[tk[j]];j++;continue}
+        if(NEXO.has(tk[j])&&!esNum(tk[j+1]||'')){j++;continue}
+        break}
+      if(!m)return null;
+      const nc=U.filter(u=>!u.cod).length||1,mnc=[...us].filter(q=>!U[q].cod).length;
+      const ok=m>=2||mnc===nc||[...us].some(q=>U[q].unico&&!ADJ.has(U[q].k[0])&&!U[q].cod);
+      return ok?{m,mnc,nc,sb,fin,ladoV,full:mnc===nc,orden:us.has(0)||us.has(1)&&/^\d$/.test(U[0].id)}:null};
+    const puntoN=k=>{const sec=(T.find(t=>t.pn)||{}).pn;if(!sec)return null;const s0=sec.split('.')[0];
+      for(let len=3;len>=1;len--){const ws=tk.slice(k+1,k+1+len);if(ws.length<len||!ws.every(w=>esNum(w)))continue;
+        const it=numeros(ws).items;let pn=null;
+        if(it.length===1){const s=String(it[0].s).replace(',','.');pn=s.includes('.')?s:s0+'.'+s}
+        else if(it.length===2)pn=it[0].s+'.'+it[1].s;
+        const t=pn&&T.find(x=>x.pn===pn);if(t)return {t,fin:k+1+len}}
+      return null};
+    let lado=null,ult=null;
+    for(let k=0;k<n;){const w=tk[k];
+      if(LADO[w]){if(!ult||!ult.t.ladoF||/^(perfil|lado|parte)$/.test(tk[k-1]||''))lado=LADO[w];k++;continue}
+      if(w==='punto'&&!(k>0&&esNum(tk[k-1])&&/^(metro|metros|tonelada|toneladas|kilo|kilos|grados)$/.test(tk[k+2]||''))){const r=puntoN(k);if(r){ult={k,fin:r.fin,t:r.t,dud:false};M.push(ult);k=r.fin;continue}}
+      let best=null,seg=null;
+      // una palabra de la medida del punto anterior («eje 1», «delantera», «homologación») no empieza otro punto
+      if(ult&&ult.t.facW.has(w)){k++;continue}
+      if(!VACIA.has(w)&&!esDig(w))for(const t of T){const r=probarEn(t,k);if(!r)continue;
+        const ld=r.ladoV||lado;
+        const sc=r.mnc/r.nc+0.25*r.m+(ult&&t.sep&&ult.t.sep===t.sep?0.3:0)+0.3*r.sb+(t.lado&&ld?(t.lado===ld?0.6:-0.6):0)+(r.full?0.05:0)+(r.orden?0.1:0)-(t.els().some(e=>norm(e.value))?0.02:0);
+        if(!best||sc>best.sc+1e-9){seg=best;best={t,sc,...r}}else if(!seg||sc>seg.sc)seg={t,sc,...r}}
+      if(best){let fin=best.fin;
+        // la última palabra que sirve para elegir casilla se deja para la medida («MMTA en cada EJE 1 7100»)
+        while(fin>k+1&&best.t.facW.has(tk[fin-1]))fin--;
+        ult={k,fin,t:best.t,dud:!!(seg&&seg.sc>=best.sc-0.05&&seg.t!==best.t),otro:seg&&seg.t};M.push(ult);k=fin;continue}
+      k++}
+    return M}
+  // pregunta (sin casillas): «sí», «no», «exento», «no procede», «europeo»…
+  function respuesta(t,seg){const g=t.cont.querySelector('.grp');if(!g)return null;
+    const s=' '+seg.join(' ')+' ',bs=[...g.querySelectorAll('button')],nom=b=>llano(norm(b.textContent)),pick=re=>bs.find(b=>re.test(nom(b)));
+    let b=null;
+    if(/ (no procede|np|n p) /.test(s))b=pick(/^np$/);
+    else if(/ (no aplica|na|n a) /.test(s))b=pick(/^na$/);
+    else if(/ exento /.test(s))b=pick(/^exento$/);
+    if(!b)for(const x of bs){const w=' '+tokens(x.textContent).join(' ')+' ';if(w.trim().length>2&&!/^(si|no)$/.test(w.trim())&&s.includes(w))b=x}
+    if(!b&&/ (si|vale|correcto|lleva|tiene|instala|cumple|bien|ok) /.test(s)&&!/ no /.test(s))b=pick(/^si$/);
+    if(!b&&/ no /.test(s))b=pick(/^no$/);
+    return b?{asig:[],accion:{tipo:'resp',b,txt:norm(b.textContent)},conf:true}:null}
+  const CORRIGE=new Set(['no','perdon','mejor','corrijo','digo','espera','rectifico']);
+  // todo lo dicho → [{t, asig, accion, dud…}] y lo que no es de ningún punto
+  function analizar(g,txt){
+    const raw=norm(txt);ACC={};for(const w of raw.split(/[^A-Za-zÀ-ÿ0-9ñÑ]+/))if(w)ACC[llano(w)]=w;
+    let tk=tokens(raw);const t2=[];for(let k=0;k<tk.length;k++){if(tk[k]==='ad'&&tk[k+1]==='blue'){t2.push('adblue');k++;continue}t2.push(tk[k])}tk=t2;
+    const T=g.T,M=menciones(T,tk),items=new Map(),sin=[];
+    const ante=tk.slice(0,M.length?M[0].k:tk.length).filter(w=>!RELLENO.has(w)&&!NEXO.has(w)&&!LADO[w]&&!/^(perfil|lado|parte|apartado|bloque)$/.test(w));
+    if(ante.length)sin.push(acentos(tk.slice(0,M.length?M[0].k:tk.length).join(' ')));
+    M.forEach((m,j)=>{const t=m.t,fin=j+1<M.length?M[j+1].k:tk.length;let seg=tk.slice(m.fin,fin);
+      if(!t.ladoF)seg=seg.filter(w=>!LADO[w]);
+      // «520… no, 530»: en una casilla sola vale lo último
+      const F=(t.ctx.campos||[]).filter(f=>f.kind!=='sel');
+      if(F.length===1&&F[0].kind==='num'){let c=-1;seg.forEach((w,q)=>{if(CORRIGE.has(w)&&seg.slice(0,q).some(esNum)&&seg.slice(q+1).some(esNum))c=q});if(c>=0)seg=seg.slice(c+1)}
+      let it=items.get(t);if(!it){it={t,asig:[],accion:null,dud:false,nada:true,oido:''};items.set(t,it)}
+      if(m.dud){it.dud=true;it.otro=m.otro}
+      it.oido=norm(it.oido+' '+seg.join(' '));
+      const util=seg.filter(w=>!RELLENO.has(w)&&!NEXO.has(w));
+      if(!util.length&&!seg.some(esNum))return;
+      let r=t.preg?respuesta(t,seg):null;
+      // «no procede» en un punto sin botón NP: «-» en la casilla, como hace Daniel
+      if(!t.preg&&ORDEN_NP.test(util.join(' '))&&!botonNP(t.ctx)){const f=t.ctx.campos.find(f=>f.kind!=='sel');if(f)r={asig:[{f,v:'-',np:true,info:'No tiene «NP»: pongo «-»'}],conf:true}}
+      if(!t.preg&&!r)r=entender(t.ctx,seg.join(' '));
+      if(!r){it.mal=true;return}
+      it.nada=false;it.mal=false;
+      if(r.accion){it.accion=r.accion;it.asig=[]}
+      else{it.accion=null;for(const a of r.asig){const i=it.asig.findIndex(x=>x.f.el===a.f.el);if(i>=0)it.asig[i]=a;else it.asig.push(a)}
+        it.asig.sort((a,b)=>t.ctx.campos.indexOf(a.f)-t.ctx.campos.indexOf(b.f))}
+      it.malas=r.asig.flatMap(a=>a.malas||[]).filter(w=>!t.facW.has(w)&&!VACIA.has(w));
+      it.revisa=r.asig.some(a=>a.mal||a.resto&&a.resto.length||a.np)||it.malas.length>0});
+    const lista=[...items.values()].sort((a,b)=>T.indexOf(a.t)-T.indexOf(b.t));
+    return {items:lista,sin,oido:raw}}
+  const valTxt=(it,largo)=>it.accion?it.accion.txt:it.asig.map(a=>(it.t.ctx.campos.length>1&&a.f.kind!=='sel'||largo?a.f.nom+' ':'')+(a.borrar?'(borrar)':a.v)).join(' · ');
+
+  // ---------- escuchar un apartado entero ----------
+  let G=null,HOJA=null;
+  const SRc=()=>window.SpeechRecognition||window.webkitSpeechRecognition;
+  // Chrome de Android manda cada trozo con la frase entera desde el principio: se quita lo repetido (4 nov)
   function juntar(l){const out=[];for(const t0 of l){const t=norm(t0);if(!t)continue;const u=out[out.length-1],U=u&&u.toLowerCase(),T=t.toLowerCase();
       if(u&&T.startsWith(U))out[out.length-1]=t;else if(u&&U.endsWith(T))continue;else{
-        // también si el trozo empieza por el final del anterior («…es W17» + «W17 963…»)
         let k=0;if(u)for(let n=Math.min(U.length,T.length);n>=6;n--)if(U.endsWith(T.slice(0,n))){k=n;break}
         out.push(k?t.slice(k):t)}}
     return norm(out.join(' '))}
-  // ---------- pantalla de abajo ----------
-  let S=null,rec=null;
-  function hoja(html){if(!S){S=document.createElement('div');S.id='dicS';S.setAttribute('role','dialog');document.body.appendChild(S)}S.innerHTML=html;return S}
-  function cerrar(){try{rec&&rec.abort()}catch(e){}rec=null;if(S){S.remove();S=null}}
-  function escuchar(previo){
-    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){hoja(`<h3>Este navegador no deja dictar</h3><p class="sub">Abre la app desde Chrome para usar el micrófono.</p><div class="fb"><button class="xx" data-x>✕</button></div>`).querySelector('[data-x]').onclick=cerrar;return}
-    let base=previo||'',fijo=base;
-    const s=hoja(`<div class="oye"><div class="pulso">${MIC}</div><div><h3>Te escucho…</h3><p class="sub">Di el nombre de la casilla y el dato, seguido: «voladizo trasero 1200, altura total 3850».</p></div></div>
-<div class="txt" data-t>${fijo?escH(fijo):'<i>Habla cuando quieras…</i>'}</div>
-<div class="fb"><button class="pr" data-ok>Terminar y repartir</button><button class="xx" data-x aria-label="Cancelar">✕</button></div>`);
-    rec=new SR();rec.lang='es-ES';rec.continuous=true;rec.interimResults=true;
-    // 4 nov (Daniel: «lo que decía salía muchas veces repetido»): en Android cada resultado trae la frase entera desde el principio,
-    // no solo lo nuevo; se juntan quitando lo repetido (juntar)
-    rec.onresult=e=>{const fin=[];let prov='';for(let k=0;k<e.results.length;k++){const t=e.results[k][0].transcript;if(e.results[k].isFinal)fin.push(t);else prov=t}
-      fijo=juntar([base,...fin]);const todo=juntar([fijo,prov]);prov=todo.toLowerCase().startsWith(fijo.toLowerCase())?todo.slice(fijo.length):(prov&&' '+prov);
-      const d=s.querySelector('[data-t]');if(d)d.innerHTML=escH(fijo)+(prov?'<i>'+escH(prov)+'</i>':'')};
-    rec.onerror=e=>{if(e.error==='not-allowed'){const d=s.querySelector('[data-t]');if(d)d.innerHTML='<b>Sin permiso para el micrófono.</b> Dáselo a la app en Ajustes.'}};
-    rec.onend=()=>{base=fijo;if(rec&&S)try{rec.start()}catch(e){}}; // Chrome corta a ratos: se sigue escuchando hasta «Terminar»
-    try{rec.start()}catch(e){}
-    s.querySelector('[data-x]').onclick=cerrar;
-    s.querySelector('[data-ok]').onclick=()=>{const r=rec;rec=null;try{r.stop()}catch(e){}setTimeout(()=>repartir(fijo),350)};
-  }
-  async function repartir(txt){
-    txt=norm(txt);if(!txt){cerrar();return}
-    const L=casillas(),conG=!!lsG('ia-clave');
-    const s=hoja(`<h3>${conG?'Repartiendo con Google…':'Repartiendo…'}</h3><div class="txt">${escH(txt)}</div><div class="bar"><i></i></div>`);
-    let pr=.05;const tm=setInterval(()=>{pr+=(.95-pr)*.08;const b=s.querySelector('.bar i');if(b)b.style.width=Math.round(pr*100)+'%'},300);
-    let R,err='';
-    try{R=conG?await google(txt,L):local(txt,L)}catch(e){err=e.message;R=local(txt,L)}finally{clearInterval(tm)}
-    if(!S)return;
-    hoja(`<h3>${R.datos.length?'Esto he entendido':'No he encontrado dónde ponerlo'}</h3>
-<p class="sub">${conG&&!err?'<span class="ia">Repartido con Google.</span> ':''}${err?'Google no ha contestado ('+escH(err)+'): repartido en el móvil. ':''}Revisa cada valor; se pone lo que dejes marcado.</p>
-<div class="dl">${R.datos.map((d,k)=>{const ya=norm(d.c.i.value);return `<div class="dr"><input type="checkbox" data-c="${k}"${ya?'':' checked'}><div class="n"><small>${escH(d.c.sec)}</small>${escH(nombre(d.c))}</div><input class="v" data-v="${k}" value="${escH(d.v)}" autocomplete="off" spellcheck="false">${ya?`<div class="ya">Ahora pone: ${escH(ya)}</div>`:''}${d.oido?`<div class="oi">«${escH(d.oido)}»</div>`:''}</div>`}).join('')}</div>
-${R.sin.length?`<div class="sin"><b>Sin casilla:</b> ${R.sin.map(escH).join(' · ')}</div>`:''}
-<div class="fb">${R.datos.length?`<button class="ok" data-ok>✓ Poner marcados</button>`:''}<button data-mas>${MIC.replace(/22/g,'18')} Seguir</button><button class="xx" data-x aria-label="Cerrar">✕</button></div>`);
-    S.querySelector('[data-x]').onclick=cerrar;S.querySelector('[data-mas]').onclick=()=>escuchar('');
-    const ok=S.querySelector('[data-ok]');if(ok)ok.onclick=()=>{let n=0,pri=null;
-      S.querySelectorAll('input[data-v]').forEach(f=>{const d=R.datos[+f.dataset.v],c=S.querySelector(`[data-c="${f.dataset.v}"]`),v=norm(f.value);
-        if(!c.checked||!v||!d.c.i.isConnected)return;const i=d.c.i;i.value=v;i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}));
-        const sec=i.closest('details');if(sec&&!sec.open)sec.open=true;i.classList.add('dic-hecho');setTimeout(()=>i.classList.remove('dic-hecho'),5000);pri=pri||i;n++});
-      cerrar();if(!n)return;
-      const t=document.createElement('div');t.id='dicT';t.textContent=`✓ Puesto desde el dictado (${n} casilla${n>1?'s':''})`;document.body.appendChild(t);setTimeout(()=>t.remove(),4000);
-      try{pri.scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}}}
-  // ---------- el botón ----------
-  const B=document.createElement('button');B.id='dicB';B.type='button';B.innerHTML=MIC+'Dictar';B.setAttribute('aria-label','Dictar datos con la voz');B.onclick=()=>escuchar('');
-  document.body.appendChild(B);
-  const ver=()=>document.documentElement.classList.toggle('dic-on',!S&&(vista()==='cop'||enMaq()));
-  new MutationObserver(ver).observe(document.documentElement,{attributes:true,attributeFilter:['data-vista']});
-  new MutationObserver(()=>requestAnimationFrame(ver)).observe(document.body,{childList:true});
-  setInterval(ver,800);ver();
-  return {casillas,local,repartir,escuchar};
+  function cerrarHoja(){if(HOJA){HOJA.remove();HOJA=null}}
+  function hoja(html){cerrarHoja();const h=document.createElement('div');h.className='micg-sh';h.setAttribute('role','dialog');h.innerHTML=html;document.body.appendChild(h);HOJA=h;return h}
+  function listaPuntos(g,res){
+    const por=new Map((res?res.items:[]).map(it=>[it.t,it]));let h='',blk;
+    const dosLados=new Set(g.T.map(t=>t.lado).filter(Boolean)).size>1;
+    for(const t of g.T){
+      if(t.sep!==blk){blk=t.sep;if(blk){const tl=t.sepT,sd=blk.dataset&&blk.dataset.side;h+=`<div class="gsep">${escH(tl)}${dosLados&&sd?` <em>· di «${sd==='d'?'derecho':'izquierdo'}» antes</em>`:''}</div>`}}
+      const it=por.get(t),v=it&&!it.nada?valTxt(it):'';
+      h+=`<div class="gi${v?(it.dud||it.revisa?' dud':' si'):''}" data-t="${g.T.indexOf(t)}"><span class="pn${t.pn?'':' nada'}">${escH(t.pn||'·')}</span><span class="gn"><b>${escH(t.pista)}</b>${norm(t.nombre+' '+(t.det||'')).toLowerCase()!==t.pista.toLowerCase()?`<small>${escH(norm(t.nombre+' '+(t.det||'')))}</small>`:''}</span><span class="gv">${v?escH(v):'—'}</span></div>`}
+    return h}
+  function ejemploG(g){const T=g.T.filter(t=>!t.preg),a=T[0],b=T[1];if(!a)return 'Di el nombre de cada punto y su respuesta: <b>«instala dispositivo sí»</b>.';
+    const ej=t=>t.ctx.campos.some(f=>f.kind==='num')?(t.ladoF?' derecha 450 izquierda 460':' 450'):' …';
+    return `Por ejemplo: <b>«${escH(a.pista)}${ej(a)}${b?', '+escH(b.pista)+ej(b):''}»</b>`}
+  function pintarEscuchaG(a){
+    const g=a.g,h=hoja(`<div class="gh"><span class="pulso">${MIC}</span><div class="mt"><b>Te escucho · ${escH(g.nombre)}</b>Di el punto y su dato. Puedes ir midiendo: escucho hasta que toques «Listo».</div><button type="button" class="x" data-gx aria-label="Cancelar">✕</button></div>
+<div class="ej">${ejemploG(g)}</div>
+<div class="txt"><i>…</i></div>
+<div class="gl">${listaPuntos(g,null)}</div>
+<div class="fb"><button type="button" class="lis" data-gl>Listo</button></div>`);
+    h.querySelector('[data-gl]').onclick=()=>listoG();h.querySelector('[data-gx]').onclick=()=>cancelarG();
+    a.txtEl=h.querySelector('.txt');a.glEl=h.querySelector('.gl');a.vistos=new Set()}
+  function verG(a){if(!a.txtEl||!a.txtEl.isConnected)return;const s=a.ses,fin=juntar([a.base,...(s?s.fin:[])]),prov=s?s.prov:'';
+    a.txtEl.innerHTML=(fin?escH(fin)+' ':'')+(prov?`<i>${escH(prov)}</i>`:(fin?'':'<i>…</i>'));a.txtEl.scrollTop=a.txtEl.scrollHeight;
+    const todo=norm(fin+' '+prov);if(!todo)return;
+    let res;try{res=analizar(a.g,todo)}catch(e){console.warn('Dictar',e);return}
+    a.glEl.innerHTML=listaPuntos(a.g,res);
+    const ult=res.items.filter(it=>!it.nada).map(it=>it.t).pop();
+    if(ult){const el=a.glEl.querySelector(`[data-t="${a.g.T.indexOf(ult)}"]`);if(el&&!a.vistos.has(ult)){a.vistos.add(ult);try{el.scrollIntoView({block:'nearest'})}catch(e){}}}}
+  function errorG(g,msg,otra=true){
+    const h=hoja(`<div class="gh"><span class="pulso quieto" style="background:var(--bad,#c81e1e)">${MIC}</span><div class="mt"><b>${escH(g.nombre)}</b></div><button type="button" class="x" data-gx aria-label="Cerrar">✕</button></div>
+<div class="err">${msg}</div><div class="fb">${otra?'<button type="button" class="sg" data-go>🎤 Repetir</button>':''}<button type="button" data-gx2>Cerrar</button></div>`);
+    const o=h.querySelector('[data-go]');if(o)o.onclick=()=>escucharG(g);h.querySelector('[data-gx]').onclick=h.querySelector('[data-gx2]').onclick=cerrarHoja}
+  function revisarG(g,txt){
+    const res=analizar(g,txt),its=res.items;
+    if(!its.length){errorG(g,`No he reconocido ningún punto en «${escH(txt)}». Di el nombre del punto como sale en la lista (o «punto 24») y después el dato.`);return}
+    let n=0;const filas=its.map((it,j)=>{const t=it.t;
+      const cab=`<div class="gt"><span class="pn${t.pn?'':' nada'}">${escH(t.pn||'·')}</span><span>${escH(t.nombre)}</span></div>`;
+      let cuerpo='';
+      if(it.accion){cuerpo=`<label class="fr chk"><input type="checkbox" data-ac="${j}" checked> Marcar «${escH(it.accion.txt)}»</label>`;n++}
+      else{const A=it.asig.length?it.asig:(t.ctx.campos.filter(f=>f.kind!=='sel').slice(0,1).map(f=>({f,v:''})));
+        cuerpo=A.map((a,k)=>{const ya=norm(a.f.el.value),uno=t.ctx.campos.length===1;if(a.v)n++;
+          return `<div class="fr${uno?' uno':''}">${uno?'':`<label for="mg${j}_${k}">${escH(a.f.nom)}</label>`}<input type="text" id="mg${j}_${k}" class="${/^(vin|contr|luz|ultfase|banda|tipo|variante|version|serie)$/.test(a.f.cls)?'mono':''}" data-j="${j}" data-k="${k}" value="${escH(a.borrar?'':a.v)}" autocomplete="off" spellcheck="false"${a.f.kind==='num'?' inputmode="decimal"':''}>
+${a.info?`<small class="${a.mal?'mal':''}">${escH(a.info)}</small>`:''}${ya&&ya!==a.v&&!a.borrar?`<small>Ahora pone: ${escH(ya)}</small>`:''}</div>`}).join('');
+        it._A=A}
+      const avisos=[];
+      if(it.dud&&it.otro)avisos.push(`¿Es este punto? También encaja el ${it.otro.pn||it.otro.nombre}${it.otro.lado?(it.otro.lado==='d'?' (derecho)':' (izquierdo)'):''}.`);
+      if(it.nada||it.mal)avisos.push(it.oido?`No he sacado el dato de «${acentos(it.oido)}». Escríbelo o repite.`:'Lo has nombrado pero no he oído el dato.');
+      else if(it.malas&&it.malas.length)avisos.push(`No sé qué es «${acentos(it.malas.join(' '))}»: revísalo.`);
+      return `<div class="gr${it.dud||it.revisa||it.nada||it.mal?' dud':''}">${cab}${cuerpo}${avisos.map(x=>`<small class="mal">${escH(x)}</small>`).join('')}</div>`}).join('');
+    const sin=res.sin.length?`<div class="gr sin"><div class="gt">Sin punto</div><div>«${escH(res.sin.join(' … '))}» no sé a qué punto va.</div></div>`:'';
+    const h=hoja(`<div class="gh"><span class="pulso quieto">${MIC}</span><div class="mt"><b>Esto he entendido · ${escH(g.nombre)}</b>Revisa y toca «Poner». Puedes cambiar cualquier dato.</div><button type="button" class="x" data-gx aria-label="Cancelar">✕</button></div>
+<div class="gl">${filas}${sin}</div>
+<div class="fb"><button type="button" class="ok" data-gp>✓ Poner (${n})</button><button type="button" class="sg" data-gs title="Seguir dictando y añadirlo">+ Seguir</button><button type="button" data-go>Repetir</button></div>`);
+    const cuenta=()=>{let c=0;h.querySelectorAll('input[data-j]').forEach(i=>{if(norm(i.value))c++});h.querySelectorAll('input[data-ac]').forEach(i=>{if(i.checked)c++});h.querySelector('[data-gp]').textContent=`✓ Poner (${c})`};
+    h.addEventListener('input',cuenta);h.addEventListener('change',cuenta);
+    h.querySelector('[data-gx]').onclick=cerrarHoja;
+    h.querySelector('[data-gs]').onclick=()=>escucharG(g,txt);
+    h.querySelector('[data-go]').onclick=()=>escucharG(g);
+    h.querySelector('[data-gp]').onclick=()=>{
+      const asig=[],acc=[];
+      its.forEach((it,j)=>{
+        if(it.accion){const c=h.querySelector(`[data-ac="${j}"]`);if(c&&c.checked)acc.push(it.accion);return}
+        (it._A||[]).forEach((a,k)=>{const i=h.querySelector(`[data-j="${j}"][data-k="${k}"]`);const v=i?norm(i.value):'';
+          if(v)asig.push({...a,v,borrar:false});else if(a.borrar)asig.push({...a,v:''})})});
+      if(!asig.length&&!acc.length){cerrarHoja();return}
+      const prev=aplicar(asig),pres=acc.map(pulsar);
+      cerrarHoja();hechoG(g,asig.length+acc.length,prev,pres)}}
+  function pulsar(ac){const b=ac.b,gr=b.closest('.grp,.seg')||b.parentElement,antes=gr?gr.querySelector('button[aria-pressed="true"]'):null;
+    if(b.getAttribute('aria-pressed')!=='true')b.click();return {b,antes}}
+  function despulsar(p){if(p.antes&&p.antes!==p.b){if(p.antes.getAttribute('aria-pressed')!=='true')p.antes.click()}else if(!p.antes&&p.b.getAttribute('aria-pressed')==='true')p.b.click()}
+  let TOAST=null;
+  function hechoG(g,n,prev,pres){if(TOAST)TOAST.remove();const d=document.createElement('div');d.className='micg-ok';TOAST=d;
+    d.innerHTML=`<span>🎤 Puesto en <b>${escH(g.nombre)}</b>: ${n} dato${n===1?'':'s'}</span><button type="button" data-gu>Deshacer</button>`;
+    document.body.appendChild(d);
+    d.querySelector('[data-gu]').onclick=()=>{deshacer(prev);pres.forEach(despulsar);d.remove()};
+    setTimeout(()=>{if(d.isConnected)d.remove()},15000)}
+  function escucharG(g,previo=''){
+    cancelarG(true);if(TOAST){TOAST.remove();TOAST=null}
+    g.T=objetivos(g.scope);
+    if(!g.T.length)return;
+    const SR=SRc();
+    if(!SR){errorG(g,'Este navegador no deja dictar. Abre la app en Chrome.',false);return}
+    const a=G={g,base:previo,ses:null,t0:Date.now(),ult:Date.now(),listo:false,fin:false,err:'',rapidos:0};
+    pintarEscuchaG(a);verG(a);
+    g.b.classList.add('on');g.b.setAttribute('aria-pressed','true');
+    const nueva=()=>{const rec=new SR();rec.lang='es-ES';rec.continuous=true;rec.interimResults=true;rec.maxAlternatives=1;
+      const s=a.ses={rec,fin:[],prov:'',t:Date.now()};
+      rec.onresult=e=>{if(G!==a)return;s.fin=[];s.prov='';
+        for(let k=0;k<e.results.length;k++){const r=e.results[k];if(r.isFinal)s.fin.push(r[0].transcript);else s.prov+=r[0].transcript}
+        a.ult=Date.now();verG(a)};
+      rec.onerror=e=>{if(G!==a)return;const er=e.error;
+        if(er==='not-allowed'||er==='service-not-allowed')a.err='Falta el permiso del micrófono: toca el candado de la barra de Chrome → Permisos → Micrófono → Permitir.';
+        else if(er==='network')a.err='Sin conexión: Chrome necesita internet para pasar la voz a texto.';
+        else if(er==='audio-capture')a.err='No encuentro el micrófono del móvil.'};
+      rec.onend=()=>{if(G!==a)return;
+        a.base=juntar([a.base,...s.fin]);s.fin=[];s.prov='';
+        if(a.err){terminarG(a);return}
+        if(Date.now()-s.t<1500)a.rapidos++;else a.rapidos=0;
+        // sigue escuchando hasta «Listo» (como mucho 6 min, o 2 min sin oír nada)
+        if(!a.listo&&a.rapidos<6&&Date.now()-a.t0<360000&&Date.now()-a.ult<120000){try{nueva()}catch(e){terminarG(a)}return}
+        terminarG(a)};
+      try{rec.start()}catch(e){a.err='No se ha podido abrir el micrófono.';terminarG(a)}};
+    nueva()}
+  function terminarG(a){if(a.fin)return;a.fin=true;if(G===a)G=null;
+    const g=a.g;g.b.classList.remove('on');g.b.setAttribute('aria-pressed','false');
+    if(a.cancel)return;
+    if(a.err){errorG(g,a.err);return}
+    const t=norm(a.base);
+    if(!t){errorG(g,'No te he oído. Toca «Repetir» y habla cerca del móvil.');return}
+    revisarG(g,t)}
+  function listoG(){if(!G)return;const a=G;a.listo=true;
+    try{a.ses.rec.stop()}catch(e){terminarG(a)}
+    setTimeout(()=>{if(!a.fin){a.base=juntar([a.base,...(a.ses?a.ses.fin:[])]);terminarG(a)}},2500)}
+  function cancelarG(quieto){if(!G)return;const a=G;a.cancel=true;try{a.ses.rec.abort()}catch(e){}terminarG(a);if(!quieto)cerrarHoja()}
+
+  // ---------- botones de micro ----------
+  function botonG(g,txt,sub){const b=document.createElement('button');b.type='button';b.className='micg';
+    b.innerHTML=MIC+`<span>${escH(txt)}${sub?` <small>${escH(sub)}</small>`:''}</span>`;
+    b.title='Dictar '+g.nombre;b.setAttribute('aria-label','Dictar: '+g.nombre);b.setAttribute('aria-pressed','false');
+    g.b=b;b._g=g;
+    b.onclick=e=>{e.preventDefault();e.stopPropagation();if(G&&G.g===g){listoG();return}escucharG(g)};
+    return b}
+  function cuantos(scope){try{return objetivos(scope).length}catch(e){return 0}}
+  function decorar(){
+    // COP general, Putzmeister y Palfinger: arriba de cada apartado
+    for(const s of document.querySelectorAll('details.sec:not([data-micg])')){
+      const body=s.querySelector('.secbody')||s;const tools=body.querySelector(':scope>.sectools');
+      if(!body.querySelector('.row'))continue;s.dataset.micg='';
+      const n=cuantos(s);if(n<2)continue;
+      const g={scope:s,nombre:nombreSec(s)},bar=document.createElement('div');bar.className='micg-bar';
+      bar.appendChild(botonG(g,'Dictar el apartado',`· ${n} puntos`));
+      if(tools)tools.after(bar);else body.prepend(bar)}
+    // cabecera de cada bloque con varios puntos (Perfil derecho, Perfil izquierdo, Parte trasera…)
+    for(const bk of document.querySelectorAll('details.sec .blk[data-title]:not([data-micg])')){
+      const h=bk.querySelector(':scope>h3.sub,:scope>.row.band1,:scope>.row.band2');if(!h)continue;bk.dataset.micg='';
+      if(cuantos(bk)<2)continue;
+      h.classList.add('mic-band');h.appendChild(botonG({scope:bk,nombre:bk.dataset.title},'Dictar'))}
+    // COP de máquinas: arriba de cada apartado
+    for(const s of document.querySelectorAll('#maquinas details.msec:not([data-micg])')){
+      if(!s.querySelector('.it'))continue;s.dataset.micg='';
+      const n=cuantos(s);if(n<2)continue;
+      const g={scope:s,nombre:nombreSec(s)},bar=document.createElement('div');bar.className='micg-bar';
+      bar.appendChild(botonG(g,'Dictar el apartado',`· ${n} puntos`));
+      const sm=s.querySelector(':scope>summary');if(sm)sm.after(bar);else s.prepend(bar)}}
+  let pend=false;
+  new MutationObserver(()=>{if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;try{decorar()}catch(e){console.warn('Dictar',e)}})}).observe(document.body,{childList:true,subtree:true});
+  try{decorar()}catch(e){}
+  // para las pruebas: qué entendería el micro de un apartado o bloque con un texto
+  function probar(scope,txt){const g={scope,nombre:'prueba'};g.T=objetivos(scope);const r=analizar(g,txt);
+    return {sin:r.sin,items:r.items.map(it=>({pn:it.t.pn||it.t.nombre,v:it.nada?'(nada)':valTxt(it,true),dud:!!it.dud,revisa:!!it.revisa,mal:!!(it.mal||it.nada)}))}}
+  function pistas(scope){return objetivos(scope).map(t=>(t.pn||'·')+' '+t.pista+'   ['+t.units.map(u=>u.id).join('|')+']'+(t.subs.size?' sub:'+[...t.subs].join(','):''))}
+  return {tokens,numeros,piezas,texto,entender,preparar,probar,pistas,decorar,escuchar:escucharG,juntar,analizar,objetivos}
 })();
 
 /* Fotos de la revisión (lo pidió Daniel, 14 oct): en el apartado Fotografías de los dos COP, un solo botón «Fotos revisión» para hacer
