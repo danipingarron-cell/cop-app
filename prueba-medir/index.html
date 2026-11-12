@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Prueba medir COP</title>
+<style>
+:root{--bg:#111;--fg:#fff;--am:#f5c400;--az:#2f7bff}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
+#inicio{padding:20px;max-width:520px;margin:auto}
+h1{font-size:22px;color:var(--am)}
+button{font-size:18px;padding:14px 18px;border:0;border-radius:12px;background:var(--am);color:#000;font-weight:700}
+button.sec{background:#333;color:#fff}
+#estado{margin:14px 0;padding:12px;border-radius:10px;background:#222;line-height:1.4}
+#ov{display:none;position:fixed;inset:0;pointer-events:none}
+#ov .barra{position:absolute;left:0;right:0;bottom:0;padding:12px 12px 24px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;pointer-events:auto;background:linear-gradient(transparent,#000c)}
+#ov .arriba{position:absolute;top:0;left:0;right:0;padding:12px;background:#000a;font-size:15px;pointer-events:auto}
+#medida{font-size:34px;font-weight:800;color:var(--am);text-align:center;margin-top:6px}
+#modo span{padding:6px 10px;border-radius:8px;background:#333;margin-right:6px}
+#modo span.on{background:var(--az)}
+#lista{font-size:14px;max-height:90px;overflow:auto;margin-top:6px}
+#mira{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #0008}
+</style>
+</head>
+<body>
+<div id="inicio">
+  <h1>Prueba: medir con la cámara</h1>
+  <p>Página de prueba, aparte de la app COP. Sirve para ver si tu móvil puede medir en realidad aumentada (como «Medidas» del iPhone).</p>
+  <div id="estado">Comprobando el móvil…</div>
+  <button id="empezar" disabled>Empezar a medir</button>
+  <p style="font-size:14px;opacity:.8">Cómo se usa: mueve el móvil despacio unos segundos para que reconozca el suelo y la superficie. Apunta la mira y pulsa «Marcar».<br>
+  <b>Distancia</b>: marca punto A y punto B.<br>
+  <b>Altura</b>: marca primero un punto del suelo; luego cada punto que marques te da su altura sobre el suelo (p. ej. borde inferior de un piloto).</p>
+</div>
+<div id="ov">
+  <div class="arriba">
+    <div id="modo"><span data-m="dist" class="on">Distancia</span><span data-m="alt">Altura</span></div>
+    <div id="aviso">Mueve el móvil despacio…</div>
+    <div id="medida">—</div>
+    <div id="lista"></div>
+  </div>
+  <div id="mira"></div>
+  <div class="barra">
+    <button id="marcar">Marcar</button>
+    <button id="borrar" class="sec">Borrar</button>
+    <button id="salir" class="sec">Salir</button>
+  </div>
+</div>
+<script type="module">
+import * as THREE from './three.module.js';
+const $=s=>document.querySelector(s);
+const estado=$('#estado'), btn=$('#empezar');
+let modo='dist', pts=[], suelo=null, hit=null, sesion=null, refSpace=null, hitSrc=null, n=0;
+async function comprobar(){
+  if(!window.isSecureContext){estado.textContent='Hay que abrirla con https.';return;}
+  if(!navigator.xr){estado.innerHTML='❌ Este navegador no tiene realidad aumentada (WebXR). Prueba con <b>Chrome</b> (no Edge ni Firefox).';return;}
+  let ok=false; try{ok=await navigator.xr.isSessionSupported('immersive-ar');}catch(e){}
+  if(!ok){estado.innerHTML='❌ El móvil no admite realidad aumentada en el navegador. Suele faltar <b>«Servicios de Google Play para RA»</b> (ARCore) o el modelo no es compatible. Si estás en el perfil de trabajo puede estar bloqueado: prueba en el lado personal.';return;}
+  estado.innerHTML='✅ Tu móvil admite realidad aumentada. Pulsa «Empezar a medir».';btn.disabled=false;
+}
+comprobar();
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+renderer.setPixelRatio(devicePixelRatio);renderer.setSize(innerWidth,innerHeight);renderer.xr.enabled=true;
+renderer.domElement.style.display='none';document.body.appendChild(renderer.domElement);
+const scene=new THREE.Scene(), cam=new THREE.PerspectiveCamera();
+scene.add(new THREE.HemisphereLight(0xffffff,0x444444,2));
+const ret=new THREE.Mesh(new THREE.RingGeometry(.02,.03,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xf5c400}));
+ret.matrixAutoUpdate=false;ret.visible=false;scene.add(ret);
+const bola=()=>new THREE.Mesh(new THREE.SphereGeometry(.012),new THREE.MeshBasicMaterial({color:0x2f7bff}));
+const objs=[];
+function linea(a,b,c=0xf5c400){const g=new THREE.BufferGeometry().setFromPoints([a,b]);const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:c}));scene.add(l);objs.push(l);}
+const mm=v=>Math.round(v*1000).toLocaleString('es-ES')+' mm';
+function anota(t){n++;$('#lista').insertAdjacentHTML('afterbegin',`<div>${n}. ${t}</div>`);}
+document.querySelectorAll('#modo span').forEach(s=>s.onclick=()=>{modo=s.dataset.m;document.querySelectorAll('#modo span').forEach(x=>x.classList.toggle('on',x===s));limpiar(false);
+  $('#aviso').textContent=modo==='alt'?'Marca primero un punto del SUELO':'Marca el punto A';});
+function limpiar(todo=true){objs.forEach(o=>scene.remove(o));objs.length=0;pts=[];suelo=null;$('#medida').textContent='—';if(todo){$('#lista').innerHTML='';n=0;}}
+$('#borrar').onclick=()=>limpiar(true);
+$('#salir').onclick=()=>sesion&&sesion.end();
+$('#marcar').onclick=()=>{
+  if(!hit){$('#aviso').textContent='Aún no encuentra superficie: mueve el móvil despacio';return;}
+  const p=hit.clone();const b=bola();b.position.copy(p);scene.add(b);objs.push(b);
+  if(modo==='dist'){pts.push(p);
+    if(pts.length===1){$('#aviso').textContent='Ahora marca el punto B';}
+    else{const d=pts[0].distanceTo(pts[1]);linea(pts[0],pts[1]);$('#medida').textContent=mm(d);anota('Distancia '+mm(d));pts=[];$('#aviso').textContent='Marca el punto A de otra medida';}
+  }else{
+    if(!suelo){suelo=p;$('#aviso').textContent='Suelo marcado. Ahora marca los puntos a medir';}
+    else{const h=p.y-suelo.y;linea(p,new THREE.Vector3(p.x,suelo.y,p.z),0x2f7bff);$('#medida').textContent=mm(h);anota('Altura '+mm(h));}
+  }
+};
+btn.onclick=async()=>{
+  try{
+    sesion=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['hit-test'],optionalFeatures:['dom-overlay','depth-sensing'],
+      domOverlay:{root:$('#ov')},depthSensing:{usagePreference:['cpu-optimized','gpu-optimized'],dataFormatPreference:['luminance-alpha','float32']}});
+  }catch(e){estado.textContent='No se pudo abrir la cámara en RA: '+e.message;return;}
+  renderer.domElement.style.display='block';$('#ov').style.display='block';$('#inicio').style.display='none';
+  await renderer.xr.setSession(sesion);
+  refSpace=await sesion.requestReferenceSpace('local');
+  const viewer=await sesion.requestReferenceSpace('viewer');
+  hitSrc=await sesion.requestHitTestSource({space:viewer});
+  const prof=sesion.depthUsage?' (con sensor de profundidad)':'';
+  $('#aviso').textContent='Mueve el móvil despacio…'+prof;
+  sesion.addEventListener('end',()=>{renderer.domElement.style.display='none';$('#ov').style.display='none';$('#inicio').style.display='block';hitSrc=null;limpiar(true);});
+  renderer.setAnimationLoop((t,frame)=>{
+    if(frame&&hitSrc){const r=frame.getHitTestResults(hitSrc);
+      if(r.length){const pose=r[0].getPose(refSpace);ret.visible=true;ret.matrix.fromArray(pose.transform.matrix);
+        hit=new THREE.Vector3().setFromMatrixPosition(ret.matrix);
+        if(modo==='dist'&&pts.length===1)$('#medida').textContent=mm(pts[0].distanceTo(hit));
+        if(modo==='alt'&&suelo)$('#medida').textContent=mm(hit.y-suelo.y);
+      }else{ret.visible=false;hit=null;}}
+    renderer.render(scene,cam);
+  });
+};
+</script>
+</body>
+</html>
