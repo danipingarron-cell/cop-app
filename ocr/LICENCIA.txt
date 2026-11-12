@@ -1,3 +1,6 @@
-Modelos de PaddleOCR (PP-OCRv3 detección y reconocimiento, orientación ch_ppocr_mobile_v2.0), en formato ONNX de RapidOCR.
+Modelos de PaddleOCR en formato ONNX de RapidOCR:
+- PP-OCRv6 «small», detección y reconocimiento (det6.onnx, rec6.onnx; keys6.txt es su lista de letras): los que usa el lector desde nov. 2026.
+- PP-OCRv3, detección y reconocimiento (det.onnx, rec.onnx, keys.txt): los de antes; se usan si los nuevos aún no se han podido descargar.
+- Orientación ch_ppocr_mobile_v2.0 (cls.onnx).
 Copyright (c) PaddlePaddle Authors. Licencia Apache 2.0: https://www.apache.org/licenses/LICENSE-2.0
 https://github.com/PaddlePaddle/PaddleOCR · https://github.com/RapidAI/RapidOCR
