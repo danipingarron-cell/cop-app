@@ -1857,6 +1857,8 @@ Extrae estos datos y responde SOLO con un objeto JSON con exactamente estas clav
  "bastidor": "número de identificación del vehículo / bastidor (VIN), 17 caracteres",
  "mmta_total": "masa máxima en carga técnicamente admisible del vehículo (punto 16.1), kg",
  "mmta_ejes": "array con la masa máxima técnicamente admisible de cada eje en orden (punto 16.2), kg",
+ "mma_total": "masa máxima en carga prevista para la matriculación/circulación (punto 17.1), kg; null si no viene",
+ "mma_ejes": "array con la masa máxima en carga prevista para la matriculación/circulación de cada eje en orden (punto 17.2), kg; null si no viene",
  "mmtc": "masa máxima técnicamente admisible del conjunto (punto 16.4), kg",
  "mmr_barra": "masa remolcable máxima, remolque con barra de tracción (punto 18.1), kg",
  "mmr_semirremolque": "masa remolcable máxima, semirremolque (punto 18.2), kg",
@@ -1907,11 +1909,14 @@ function showCoc(data,fname){
     const nv=cocValue(data,key);if(!nv||/^null$/i.test(nv))continue;
     const cur=(state.v['s'+slot.id]||'').trim();
     if(cur.toUpperCase()===nv.toUpperCase())continue;
-    rows.push({name,slot,nv,cur});
+    // marcada de entrada si la casilla está vacía, si lo que tiene no es un dato («(ES)» de la placa de Scania, 13 nov)
+    // o si el COC lo completa (e4*2018/858*00100 → e4*2018/858*00100*17)
+    const sp=x=>x.replace(/\s/g,'').toUpperCase(),on=!cur||/^\W*(\(\s*\p{L}{1,3}\s*\))?\W*$/u.test(cur)||(/[*\p{L}]/u.test(cur)&&sp(nv).length>sp(cur).length&&sp(nv).startsWith(sp(cur)));
+    rows.push({name,slot,nv,cur,on});
   }
   if(!rows.length){ask('COC leído',`<p>No he encontrado en «${esc(fname)}» datos nuevos para rellenar. Revisa que sea el COC del vehículo.</p>`,[['Cerrar','primary']]);return}
   const h=`<p>Datos encontrados en «${esc(fname)}». Revisa y desmarca lo que no quieras usar.</p>`+
-    rows.map((r,i)=>`<label style="display:flex;gap:8px;align-items:baseline;padding:4px 0"><input type="checkbox" id="coc${i}" ${r.cur?'':'checked'}><span><b>${esc(r.name)}:</b> <span style="font-family:var(--f-mono)">${esc(r.nv)}</span>${r.cur?` <span style="color:var(--warn)">(ahora: ${esc(r.cur)})</span>`:''}</span></label>`).join('');
+    rows.map((r,i)=>`<label style="display:flex;gap:8px;align-items:baseline;padding:4px 0"><input type="checkbox" id="coc${i}" ${r.on?'checked':''}><span><b>${esc(r.name)}:</b> <span style="font-family:var(--f-mono)">${esc(r.nv)}</span>${r.cur?` <span style="color:var(--warn)">(ahora: ${esc(r.cur)})</span>`:''}</span></label>`).join('');
   ask('Rellenar desde el COC',h,[['Cancelar'],['Rellenar','primary',()=>{
     const lt0=LT?String(state.v['s'+LT.out]||''):'',ids=[];
     let n=0;rows.forEach((r,i)=>{if(document.getElementById('coc'+i).checked){state.v['s'+r.slot.id]=r.nv;ids.push(r.slot.id);n++}});
@@ -2078,7 +2083,7 @@ fillUI=function(){
   if(TPL_ACT==='pal'){palCalc();refresh()}
 };
 // aspecto «como el PDF de Palfinger» (Daniel lo eligió el 12 oct): pal-tema.css, que build.sh mete aquí; solo afecta a los COP de Palfinger
-const PAL_CSS="/* Aspecto \u00abcomo el PDF de Palfinger\u00bb (solo en los COP de Palfinger): papel blanco, tablas con raya negra, casillas verdes,\n   cabeceras azul claro, t\u00edtulos de apartado en rojo y S\u00ed/No como cuadraditos. La plantilla general no cambia. */\nhtml[data-tpl=\"pal\"]{--py:#ffd400;--pred:#d90012;--pgreen:#ccffcc;--pgline:#8cc98c;--pblue:#ddebf7;--pline:#1a1a1a;--ppaper:#ffffff;--pink:#111;--pmut:#555;\n  --pfont:Calibri,Carlito,\"Segoe UI\",Arial,sans-serif}\n@media (prefers-color-scheme:dark){html[data-tpl=\"pal\"]:not([data-theme=\"light\"]){--pred:#ff6b6b;--pgreen:#1f3d24;--pgline:#3f7a4a;--pblue:#1f3347;--pline:#8a8a8a;--ppaper:#161616;--pink:#eee;--pmut:#aaa}}\nhtml[data-tpl=\"pal\"][data-theme=\"dark\"]{--pred:#ff6b6b;--pgreen:#1f3d24;--pgline:#3f7a4a;--pblue:#1f3347;--pline:#8a8a8a;--ppaper:#161616;--pink:#eee;--pmut:#aaa}\nhtml[data-tpl=\"pal\"] #form{font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] #form::before{content:\"PALFINGER\";display:block;margin-top:12px;padding:10px 14px;background:var(--py);color:#000;font:800 20px/1 var(--pfont);letter-spacing:.04em;\n  border:2px solid #000;border-bottom:3px solid var(--pred)}\nhtml[data-tpl=\"pal\"] details.sec{border-radius:0;border:1px solid var(--pline);box-shadow:none;background:var(--ppaper);margin-top:10px;--secr:0}\nhtml[data-tpl=\"pal\"] details.sec>summary{background:var(--ppaper)!important;color:var(--pink)!important;border-radius:0!important;padding:12px 12px}\nhtml[data-tpl=\"pal\"] details.sec>summary .snum{background:none!important;color:var(--pred)!important;border:0;font:800 18px/1 var(--pfont);min-width:0;width:auto;height:auto;padding:0 2px 0 0}\nhtml[data-tpl=\"pal\"] details.sec>summary .snum::after{content:\".\"}\nhtml[data-tpl=\"pal\"] details.sec>summary h2{color:var(--pred)!important;font:800 15px/1.25 var(--pfont);text-decoration:underline;text-underline-offset:3px;letter-spacing:0}\nhtml[data-tpl=\"pal\"] details.sec>summary .count{color:var(--pmut)!important;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] details.sec[open]>summary{border-bottom:1px solid var(--pline)}\nhtml[data-tpl=\"pal\"] .secbody{padding:8px 10px 12px}\nhtml[data-tpl=\"pal\"] h3.sub.band1,html[data-tpl=\"pal\"] .row.band1{background:var(--pblue)!important;color:var(--pink)!important;border:1px solid var(--pline);border-radius:0!important;\n  font:italic 700 14px/1.25 var(--pfont);text-transform:none;letter-spacing:0;text-align:center;padding:7px 8px;margin:12px 0 0}\nhtml[data-tpl=\"pal\"] .blk1{border-radius:0}\nhtml[data-tpl=\"pal\"] .row,html[data-tpl=\"pal\"] .row.pt{background:var(--ppaper)!important;border:1px solid var(--pline)!important;border-top-width:0!important;border-radius:0!important;\n  box-shadow:none!important;margin:0!important;padding:8px 9px}\nhtml[data-tpl=\"pal\"] h3.sub.band1+.row,html[data-tpl=\"pal\"] .blk1>.row:first-child{border-top-width:1px!important}\nhtml[data-tpl=\"pal\"] .pnum{background:none!important;color:var(--pmut)!important;border:1px solid var(--pline);border-radius:0;font:600 11px/1.4 var(--pfont);padding:0 4px}\nhtml[data-tpl=\"pal\"] .lbl.first,html[data-tpl=\"pal\"] .ptxt{font:700 14.5px/1.3 var(--pfont);color:var(--pink)}\nhtml[data-tpl=\"pal\"] .fld label{font:600 11px/1.2 var(--pfont);color:var(--pmut);text-transform:uppercase;letter-spacing:.02em}\nhtml[data-tpl=\"pal\"] input.t,html[data-tpl=\"pal\"] textarea.notes,html[data-tpl=\"pal\"] select{background:var(--pgreen)!important;border:1px solid var(--pgline)!important;border-radius:0!important;\n  color:var(--pink);font-family:Arial,Helvetica,sans-serif;font-size:15px;box-shadow:none}\nhtml[data-tpl=\"pal\"] input.t::placeholder,html[data-tpl=\"pal\"] textarea.notes::placeholder{color:color-mix(in srgb,var(--pink) 40%,transparent)}\nhtml[data-tpl=\"pal\"] .lbl.lim{background:var(--ppaper)!important;color:var(--pink)!important;border:1px solid var(--pline)!important;border-radius:0!important;font:600 13px var(--pfont)}\n/* S\u00ed / No como las casillas del PDF: \u25a0 S\u00cd  \u2610 NO */\nhtml[data-tpl=\"pal\"] .grp{background:none!important;border:0!important;border-radius:0!important;padding:0;gap:4px;display:inline-flex}\nhtml[data-tpl=\"pal\"] .grp button{background:none!important;color:var(--pink)!important;border:0!important;border-radius:0!important;box-shadow:none!important;\n  padding:6px 8px;font:700 14px var(--pfont);text-transform:uppercase;display:inline-flex;align-items:center;gap:6px}\nhtml[data-tpl=\"pal\"] .grp button::before{content:\"\";flex:none;width:16px;height:16px;border:1.5px solid var(--pink);background:var(--pgreen)}\nhtml[data-tpl=\"pal\"] .grp button[aria-pressed=\"true\"]::before{background:var(--pink);box-shadow:inset 0 0 0 3px var(--pgreen)}\nhtml[data-tpl=\"pal\"] .row.isbad{outline:2px solid var(--pred);outline-offset:-2px}\nhtml[data-tpl=\"pal\"] .calc,html[data-tpl=\"pal\"] .pics img,html[data-tpl=\"pal\"] .ltdif{border-radius:0!important}\nhtml[data-tpl=\"pal\"] .pics img{border:1px solid var(--pline)}\nhtml[data-tpl=\"pal\"] .sectools button{border-radius:0;border:1px solid var(--pline);box-shadow:none;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] .grp.palmisma{flex-basis:100%}\nhtml[data-tpl=\"pal\"] .grp.palmisma button{text-transform:none;font-weight:600}\nhtml[data-tpl=\"pal\"] input.t.copiado{opacity:.75;background:repeating-linear-gradient(135deg,var(--pgreen),var(--pgreen) 6px,color-mix(in srgb,var(--pgreen) 70%,var(--ppaper)) 6px,color-mix(in srgb,var(--pgreen) 70%,var(--ppaper)) 12px)!important}\nhtml[data-tpl=\"pal\"] .row.pt.apcu{display:grid!important;grid-template-columns:4.6em auto 1fr;align-items:center;column-gap:10px;row-gap:6px}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.lbl.first{grid-column:1/-1}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.lbl:not(.first){grid-column:1;margin:0!important;padding:0!important}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.grp{grid-column:2;margin:0!important;flex-wrap:nowrap;gap:18px}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.ltnota{grid-column:1/-1;margin:2px 0 0}\nhtml[data-tpl=\"pal\"] .row.pt.apcu.luz3{grid-template-columns:5.6em auto 1fr}\nhtml[data-tpl=\"pal\"] .fld.sd label,html[data-tpl=\"pal\"] .fld.si label{color:#fff!important;font-size:12px;letter-spacing:.06em}\nhtml[data-tpl=\"pal\"] .fld.sd,html[data-tpl=\"pal\"] .fld.si{border-width:3px}\nhtml[data-tpl=\"pal\"] .fld.sd input.t,html[data-tpl=\"pal\"] .fld.si input.t{background:color-mix(in srgb,var(--sidec) 22%,var(--ppaper))!important;border:2px solid var(--sidec)!important}\nhtml[data-tpl=\"pal\"] .palpes{border:1px solid var(--pline);border-bottom:0;padding:10px;background:var(--ppaper)}\nhtml[data-tpl=\"pal\"] .palpesbtn{display:flex;gap:8px;flex-wrap:wrap}\nhtml[data-tpl=\"pal\"] .palpes button{border-radius:0;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] .palpeslista{display:flex;flex-direction:column;gap:6px;margin-top:8px}\nhtml[data-tpl=\"pal\"] .palpeslista button{text-align:left}\n";
+const PAL_CSS="/* Aspecto \u00abcomo el PDF de Palfinger\u00bb (solo en los COP de Palfinger): papel blanco, tablas con raya negra, casillas verdes,\n   cabeceras azul claro, t\u00edtulos de apartado en rojo y S\u00ed/No como cuadraditos. La plantilla general no cambia. */\nhtml[data-tpl=\"pal\"]{--py:#ffd400;--pred:#d90012;--pgreen:#ccffcc;--pgline:#8cc98c;--pblue:#ddebf7;--pline:#1a1a1a;--ppaper:#ffffff;--pink:#111;--pmut:#555;\n  --pfont:Calibri,Carlito,\"Segoe UI\",Arial,sans-serif}\n@media (prefers-color-scheme:dark){html[data-tpl=\"pal\"]:not([data-theme=\"light\"]){--pred:#ff6b6b;--pgreen:#1f3d24;--pgline:#3f7a4a;--pblue:#1f3347;--pline:#8a8a8a;--ppaper:#161616;--pink:#eee;--pmut:#aaa}}\nhtml[data-tpl=\"pal\"][data-theme=\"dark\"]{--pred:#ff6b6b;--pgreen:#1f3d24;--pgline:#3f7a4a;--pblue:#1f3347;--pline:#8a8a8a;--ppaper:#161616;--pink:#eee;--pmut:#aaa}\nhtml[data-tpl=\"pal\"] #form{font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] #form::before{content:\"PALFINGER\";display:block;margin-top:12px;padding:10px 14px;background:var(--py);color:#000;font:800 20px/1 var(--pfont);letter-spacing:.04em;\n  border:2px solid #000;border-bottom:3px solid var(--pred)}\nhtml[data-tpl=\"pal\"] details.sec{border-radius:0;border:1px solid var(--pline);box-shadow:none;background:var(--ppaper);margin-top:10px;--secr:0}\nhtml[data-tpl=\"pal\"] details.sec>summary{background:var(--ppaper)!important;color:var(--pink)!important;border-radius:0!important;padding:12px 12px}\nhtml[data-tpl=\"pal\"] details.sec>summary .snum{background:none!important;color:var(--pred)!important;border:0;font:800 18px/1 var(--pfont);min-width:0;width:auto;height:auto;padding:0 2px 0 0}\nhtml[data-tpl=\"pal\"] details.sec>summary .snum::after{content:\".\"}\nhtml[data-tpl=\"pal\"] details.sec>summary h2{color:var(--pred)!important;font:800 15px/1.25 var(--pfont);text-decoration:underline;text-underline-offset:3px;letter-spacing:0}\nhtml[data-tpl=\"pal\"] details.sec>summary .count{color:var(--pmut)!important;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] details.sec[open]>summary{border-bottom:1px solid var(--pline)}\nhtml[data-tpl=\"pal\"] .secbody{padding:8px 10px 12px}\nhtml[data-tpl=\"pal\"] h3.sub.band1,html[data-tpl=\"pal\"] .row.band1{background:var(--pblue)!important;color:var(--pink)!important;border:1px solid var(--pline);border-radius:0!important;\n  font:italic 700 14px/1.25 var(--pfont);text-transform:none;letter-spacing:0;text-align:center;padding:7px 8px;margin:12px 0 0}\nhtml[data-tpl=\"pal\"] .blk1{border-radius:0}\nhtml[data-tpl=\"pal\"] .row,html[data-tpl=\"pal\"] .row.pt{background:var(--ppaper)!important;border:1px solid var(--pline)!important;border-top-width:0!important;border-radius:0!important;\n  box-shadow:none!important;margin:0!important;padding:8px 9px}\nhtml[data-tpl=\"pal\"] h3.sub.band1+.row,html[data-tpl=\"pal\"] .blk1>.row:first-child{border-top-width:1px!important}\nhtml[data-tpl=\"pal\"] .pnum{background:none!important;color:var(--pmut)!important;border:1px solid var(--pline);border-radius:0;font:600 11px/1.4 var(--pfont);padding:0 4px}\nhtml[data-tpl=\"pal\"] .lbl.first,html[data-tpl=\"pal\"] .ptxt{font:700 14.5px/1.3 var(--pfont);color:var(--pink)}\nhtml[data-tpl=\"pal\"] .fld label{font:600 11px/1.2 var(--pfont);color:var(--pmut);text-transform:uppercase;letter-spacing:.02em}\nhtml[data-tpl=\"pal\"] input.t,html[data-tpl=\"pal\"] textarea.notes,html[data-tpl=\"pal\"] select{background:var(--pgreen)!important;border:1px solid var(--pgline)!important;border-radius:0!important;\n  color:var(--pink);font-family:Arial,Helvetica,sans-serif;font-size:15px;box-shadow:none}\nhtml[data-tpl=\"pal\"] input.t::placeholder,html[data-tpl=\"pal\"] textarea.notes::placeholder{color:color-mix(in srgb,var(--pink) 40%,transparent)}\nhtml[data-tpl=\"pal\"] .lbl.lim{background:var(--ppaper)!important;color:var(--pink)!important;border:1px solid var(--pline)!important;border-radius:0!important;font:600 13px var(--pfont)}\n/* S\u00ed / No como las casillas del PDF: \u25a0 S\u00cd  \u2610 NO */\nhtml[data-tpl=\"pal\"] .grp{background:none!important;border:0!important;border-radius:0!important;padding:0;gap:4px;display:inline-flex}\nhtml[data-tpl=\"pal\"] .grp button{background:none!important;color:var(--pink)!important;border:0!important;border-radius:0!important;box-shadow:none!important;\n  padding:6px 8px;font:700 14px var(--pfont);text-transform:uppercase;display:inline-flex;align-items:center;gap:6px}\nhtml[data-tpl=\"pal\"] .grp button::before{content:\"\";flex:none;width:16px;height:16px;border:1.5px solid var(--pink);background:var(--pgreen)}\nhtml[data-tpl=\"pal\"] .grp button[aria-pressed=\"true\"]::before{background:var(--pink);box-shadow:inset 0 0 0 3px var(--pgreen)}\nhtml[data-tpl=\"pal\"] .row.isbad{outline:2px solid var(--pred);outline-offset:-2px}\nhtml[data-tpl=\"pal\"] .calc,html[data-tpl=\"pal\"] .pics img,html[data-tpl=\"pal\"] .ltdif{border-radius:0!important}\nhtml[data-tpl=\"pal\"] .pics img{border:1px solid var(--pline)}\nhtml[data-tpl=\"pal\"] .sectools button{border-radius:0;border:1px solid var(--pline);box-shadow:none;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] .grp.palmisma{flex-basis:100%}\nhtml[data-tpl=\"pal\"] .grp.palmisma button{text-transform:none;font-weight:600}\nhtml[data-tpl=\"pal\"] input.t.copiado{opacity:.75;background:repeating-linear-gradient(135deg,var(--pgreen),var(--pgreen) 6px,color-mix(in srgb,var(--pgreen) 70%,var(--ppaper)) 6px,color-mix(in srgb,var(--pgreen) 70%,var(--ppaper)) 12px)!important}\nhtml[data-tpl=\"pal\"] .row.pt.apcu{display:grid!important;grid-template-columns:4.6em auto 1fr;align-items:center;column-gap:10px;row-gap:6px}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.lbl.first{grid-column:1/-1}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.lbl:not(.first){grid-column:1;margin:0!important;padding:0!important}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.grp{grid-column:2;margin:0!important;flex-wrap:nowrap;gap:18px}\nhtml[data-tpl=\"pal\"] .row.pt.apcu>.ltnota{grid-column:1/-1;margin:2px 0 0}\nhtml[data-tpl=\"pal\"] .row.pt.apcu.luz3{grid-template-columns:5.6em auto 1fr}\n/* lados derecho e izquierdo (Daniel, 13 nov: \u00abque no sea tan intrusivo\u00bb): sin recuadro ni fondo de color; el nombre del lado en su color\n   y una raya fina a la izquierda de la casilla, que sigue verde como las dem\u00e1s */\nhtml[data-tpl=\"pal\"] .fld.sd,html[data-tpl=\"pal\"] .fld.si{border:0!important;background:none!important;padding:0!important;border-radius:0!important}\nhtml[data-tpl=\"pal\"] .fld.sd label,html[data-tpl=\"pal\"] .fld.si label{background:none!important;color:var(--sidec)!important;padding:0!important;border-radius:0!important;font:700 11px/1.2 var(--pfont);letter-spacing:.04em}\nhtml[data-tpl=\"pal\"] .fld.sd input.t,html[data-tpl=\"pal\"] .fld.si input.t,html[data-tpl=\"pal\"] .fld.sd select,html[data-tpl=\"pal\"] .fld.si select{background:var(--pgreen)!important;border:1px solid var(--pgline)!important;border-left:3px solid var(--sidec)!important}\nhtml[data-tpl=\"pal\"] .blk1[data-side]{border-left-width:2px}\nhtml[data-tpl=\"pal\"] .palpes{border:1px solid var(--pline);border-bottom:0;padding:10px;background:var(--ppaper)}\nhtml[data-tpl=\"pal\"] .palpesbtn{display:flex;gap:8px;flex-wrap:wrap}\nhtml[data-tpl=\"pal\"] .palpes button{border-radius:0;font-family:var(--pfont)}\nhtml[data-tpl=\"pal\"] .palpeslista{display:flex;flex-direction:column;gap:6px;margin-top:8px}\nhtml[data-tpl=\"pal\"] .palpeslista button{text-align:left}\n/* 10.3.2 calculadora de la resta del marcado lateral (13 nov) */\nhtml[data-tpl=\"pal\"] .resbox .altmas{flex-basis:44px;border-radius:0}\nhtml[data-tpl=\"pal\"] .resbox .altmas.resmas{background:var(--ppaper);color:var(--accent)}\nhtml[data-tpl=\"pal\"] .resnota{flex-basis:100%;margin:2px 0 0}\nhtml[data-tpl=\"pal\"] .resbox{flex:1 1 100%;max-width:100%}\nhtml[data-tpl=\"pal\"] .resbox input.t{font-size:17px;letter-spacing:.02em}\n";
 document.head.insertAdjacentHTML('beforeend','<style>'+PAL_CSS+'</style>');
 // opciones largas (p. ej. 8.1 tipología): que bajen de línea en vez de salirse de la pantalla
 document.head.insertAdjacentHTML('beforeend','<style>html[data-tpl="pal"] .grp{flex-wrap:wrap;max-width:100%}html[data-tpl="pal"] .grp:has(> :nth-child(3)){border-radius:18px}html[data-tpl="pal"] .grp:has(> :nth-child(3)) button{border-radius:16px}</style>');
@@ -2087,6 +2092,7 @@ render=function(){
   palRender0();
   altPrep();
   if(TPL_ACT!=='pal')return;
+  resPrep();
   document.querySelectorAll('img[data-rid^="pal:"]').forEach(i=>{i.src=PAL.esq[i.dataset.rid.slice(4)]||''});
   // los puntos se numeran dentro de su parte del PDF (8.2 → 8.2.1, 8.2.2…), para que no choquen con los números de la plantilla
   document.querySelectorAll('.blk1').forEach(bk=>{const m=/^(\d+(?:\.\d+)+)\b/.exec(bk.dataset.title||'');if(!m)return;let k=0;
@@ -2236,7 +2242,11 @@ const palCoc0=cocTargets;
 cocTargets=function(){return TPL_ACT==='pal'?palCocTargets(model):palCoc0()};
 // Daniel (27 oct): rueda de índice 150 en el COC → siempre «156/150K» (sencillo/gemelo)
 const palCocVal0=cocValue;
-cocValue=function(data,key){const v=palCocVal0(data,key);return Array.isArray(key)&&key[0]==='indices_carga'&&/^150\s*[A-Z]?$/i.test(v)?'156/150K':v};
+cocValue=function(data,key){
+  // Daniel (13 nov): en el COP de Palfinger, las masas de matriculación del COC (17.1 y 17.2, «las de menor valor», como en la placa)
+  // si las trae; si no, las técnicas (16.1 y 16.2)
+  if(TPL_ACT==='pal'&&data){if(key==='mmta_total'&&data.mma_total)key='mma_total';else if(Array.isArray(key)&&key[0]==='mmta_ejes'&&Array.isArray(data.mma_ejes))key=['mma_ejes',key[1]]}
+  const v=palCocVal0(data,key);return Array.isArray(key)&&key[0]==='indices_carga'&&/^150\s*[A-Z]?$/i.test(v)?'156/150K':v};
 /* ---------- PDF ---------- */
 const PDF_MIME='application/pdf';
 function palNombres(){
@@ -2399,6 +2409,36 @@ document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest
   i.dispatchEvent(new Event('input',{bubbles:true}))});
 document.addEventListener('input',e=>{const t=e.target;if(t.dataset&&t.dataset.altsuma!==undefined){state.alt={...(state.alt||{}),suma:t.value};altCalc();save();refreshSoon()}
   else{const s=altSlot();if(s&&t.dataset&&t.dataset.slot===String(s.id))altCalc()}});
+
+// 10.3.2 marcado lateral (Daniel, 13 nov: «poner calculadora para la resta de marcados lateral»): bajo «Longitud lámina (LA)»,
+// «Calculadora (resta)»: el largo y lo que no lleva lámina (6200-350-400) o los tramos (2500+2700); la app pone el resultado en LA
+// mientras no escriba la exacta, y si están las dos se comparan (como la altura por partes). Sin signo, los números de después restan.
+const resVal=t=>{const s=String(t||'').replace(/[−–—]/g,'-').replace(/\s+/g,' ').trim();if(!s)return NaN;let tot=null,ok=true;
+  s.replace(/([+\-])?\s*([\d.,]+)/g,(m,sg,n)=>{const x=num(n.replace(/\.(?=\d{3}\b)/g,''));if(isNaN(x)){ok=false;return m}
+    if(tot===null)tot=sg==='-'?-x:x;else tot+=sg==='+'?x:-x;return m});
+  return ok&&tot!==null&&!/[^\d.,+\-\s]/.test(s)?tot:NaN};
+function resPrep(){const s=PAL_MODEL&&PAL_MODEL.key.mlLA;if(!s)return;const i=document.querySelector(`[data-slot="${s.id}"]`);if(!i)return;const f=i.closest('.fld')||i;
+  if(!f.parentNode.querySelector('.resbox')){
+    if(!f.querySelector('label'))f.insertAdjacentHTML('afterbegin',`<label for="${i.id}">Medición exacta</label>`);f.classList.add('stk');
+    f.insertAdjacentHTML('afterend',`<span class="fld stk resbox"><label for="resCalc">Calculadora (resta)</label><span class="altw"><input class="t" id="resCalc" data-rescalc inputmode="decimal" autocomplete="off" placeholder="p. ej. 6200-350-400"><button type="button" class="altmas" data-resop="-" aria-label="Restar (−)">−</button><button type="button" class="altmas resmas" data-resop="+" aria-label="Sumar (+)">+</button></span></span><div class="resres ltdif" hidden></div><p class="ltnota resnota">Escribe el largo y resta lo que no lleva lámina. El resultado va a LA y sale el % de marcado.</p>`)}
+  const a=document.querySelector('[data-rescalc]');if(a){a.value=(state.res&&state.res.ml)||'';const lc=palV(PAL_MODEL.key.mlLc);a.placeholder=`p. ej. ${/^\d+$/.test(lc)?lc:'6200'}-350-400`}resCalc()}
+function resCalc(){const s=PAL_MODEL&&PAL_MODEL.key.mlLA,box=document.querySelector('.resres');if(!s||!box)return;
+  const t=(state.res&&state.res.ml)||'',x=resVal(t);
+  if(isNaN(x)||x<0){box.hidden=!String(t).trim();box.className='resres ltdif mal';box.textContent=x<0?'⚠ Sale negativo: revisa los números':'⚠ Solo números, «−» y «+»';return}
+  const val=altFmt(x),cur=String(state.v['s'+s.id]||'').trim();state.auto=state.auto||{};const prev=state.auto.resml||'';
+  if(!cur||cur===prev){state.auto.resml=val;state.v['s'+s.id]=val;const i=document.querySelector(`[data-slot="${s.id}"]`);if(i)i.value=val}
+  const c=num(String(state.v['s'+s.id]||'').replace(/[^\d.,]/g,'')),d=Math.round((c-x)*10)/10,suya=state.v['s'+s.id]!==state.auto.resml;
+  box.hidden=false;box.className='resres ltdif '+(!suya||d===0?'ok':'mal');
+  box.textContent=!suya?`= ${val} mm en LA (mientras no escribas la exacta)`:d===0?`= ${val} mm · ✓ Coincide con la exacta`:`= ${val} mm · ⚠ No coincide con la exacta: ${d>0?'+':''}${altFmt(d)} mm`}
+document.addEventListener('pointerdown',e=>{if(e.target.closest&&e.target.closest('[data-resop]'))e.preventDefault()}); // el teclado no se cierra
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-resop]');if(!b)return;const i=document.querySelector('[data-rescalc]');if(!i)return;
+  const op=b.dataset.resop,v=i.value,a=i.selectionStart??v.length,z=i.selectionEnd??v.length,pre=v.slice(0,a).replace(/\s+$/,'');
+  if(!pre||/[+\-]$/.test(pre)){if(pre&&/[+\-]$/.test(pre)){i.value=pre.slice(0,-1)+op+v.slice(z);const c=pre.length;i.focus();try{i.setSelectionRange(c,c)}catch(_){}i.dispatchEvent(new Event('input',{bubbles:true}))}else i.focus();return}
+  i.value=pre+op+v.slice(z).replace(/^\s+/,'');const c=pre.length+1;i.focus();try{i.setSelectionRange(c,c)}catch(_){}
+  i.dispatchEvent(new Event('input',{bubbles:true}))});
+document.addEventListener('input',e=>{if(TPL_ACT!=='pal')return;const t=e.target;
+  if(t.dataset&&t.dataset.rescalc!==undefined){state.res={...(state.res||{}),ml:t.value};resCalc();palCalc();save();refreshSoon();return}
+  const s=PAL_MODEL&&PAL_MODEL.key.mlLA;if(s&&t.dataset&&t.dataset.slot===String(s.id))resCalc()});
 
 // documento de masas en el 7.1 (Daniel, 27 oct): el de ELESA (Palfinger), el informe de pesada SGS/GMR, el de la ITV (escaneado)
 // o uno de «Tus pesajes» de la app. Pone la tara de cada eje y el nivel de combustible; el pedido de venta, la marca y el bastidor
@@ -3228,7 +3268,7 @@ const CocLector=(()=>{
   // etiquetas del COC en inglés (van sin «:»); el OCR cambia alguna letra, por eso son flexibles
   // y en alemán (Mercedes, MAN): «0.1 Fabrikmarke (Firmenname des Herstellers) Mercedes-Benz»
   const EN={'0.1':/^\W*(Make|Fabrikmarke|Marca)\b[^)]*\)?/i,'0.2.1':/^\W*(Commercial\s+name|Handelsbezeichnung|\S?enominaci[oó]n(es)?\s+comercial)\S*/i,'0.4':/^(Vehicle\s+cat|Fahrzeugklasse)\S*/i,'0.10':/^.*?(number|nummer)\b/i};
-  const NUMERICO=/^1[68]\./;
+  const NUMERICO=/^1[678]\./;
   function sinDosPuntos(n,t){ // dato de una línea sin «:»: «0.1 Make (trade name of manufacturer) Fuso» → «Fuso»
     if(t.includes(':'))return '';
     let r=t.replace(/^\d{1,2}(?:[.,]\d{1,2}){0,3}\.?\s*[-—–.]*\s*/,'');
@@ -3238,10 +3278,12 @@ const CocLector=(()=>{
   }
   const HOMOL=/\be\s?\d{1,2}\s?\*\s?\d{2,4}\/\d{1,4}(?:\*\d{2,4}\/\d{1,4})?\s?\*\s?\d{2,6}\s?\*\s?\d{1,3}\b/i;
   // si el número del campo no se lee (pasa en fotos con tablas), se busca por el texto de la etiqueta (COC en español)
-  const ETIQ={'0.1':[/\bMarca\b|raz[oó]n\s+social\s+del\s+fabricante/i],'0.2':[/(^|\s)Tipo\s*:/i],'0.2.1':[/\S?enominaci[oó]n(es)?\s+comercial/i],'0.4':[/Categor[ií]a\s+del\s+veh/i],
+  const ETIQ={'0.1':[/\bMarca\b|raz[oó]n\s+social\s+del\s+fabricante/i],'0.2':[/(^|\s)Tipo\s*:/i],'0.2.1':[/\S?enominaci[oó]n(es)?\s+comercial|Commercial\s+name|Handelsbezeichnung/i],'0.4':[/Categor[ií]a\s+del\s+veh/i],
     '0.10':[/identificaci[oó]n\s+del\s+veh[ií]culo\s*:/i,/Localizaci/i],
     '16.1':[/m[aá]xima\s+en\s+carga\s+t[eé]cnicamente/i,/prevista/i],'16.2':[/admisible\s+en\s+cada\s+eje/i,/prevista|grupo/i],
-    '16.4':[/admisible\s+del\s+conjunto/i,/prevista/i],'18.1':[/barra\s*de\s*tracci[oó]n/i,/r[ií]gida/i],'18.2':[/(^|\s)Semirremolque\s*:/i],
+    '16.4':[/admisible\s+del\s+conjunto/i,/prevista/i],
+    '17.1':[/m[aá]xima\s+en\s+carga\s+prevista|Intended\s+registration\S*\s+(?:in\s+service\s+)?maximum\s+permissible\s+laden\s+mass\s*:/i,/cada\s+eje|each\s+axle|grupo|group|conjunto|combination/i],
+    '17.2':[/(?:prevista|Intended\s+registration).*(?:cada\s+eje|each\s+axle)/i,/grupo|group/i],'18.1':[/barra\s*de\s*tracci[oó]n/i,/r[ií]gida/i],'18.2':[/(^|\s)Semirremolque\s*:/i],
     '18.3':[/eje\s*central/i],'18.4':[/sin\s*frenos/i],'4.1':[/(Espacio|Separaci[oó]n)\s+entre\s+(los\s+)?ejes/i],'35':[/Combinaci[oó]n\s+de\s+neum/i]};
   function campos(T){
     // fuera las marcas de agua del COC de MAN («FOR INFORMATION PURPOSES ONLY», «COPY»)
@@ -3290,7 +3332,6 @@ const CocLector=(()=>{
     r.homologacion=h?h.replace(/\s/g,'').replace(/\*2018\/85\d\*/,'*2018/858*').replace(/\*2007\/4\d\*/,'*2007/46*'):null; // el OCR cambia a veces la última cifra del reglamento
     const kg=(v,max)=>{const n=num(v);return n!==null&&n<=max?n:null}; // fuera de rango = mal leído: mejor vacío
     r.mmta_total=kg(valor('16.1'),60000);
-    const i162=pos('16.2');
     const ejesDe=b=>{const ejes=[];
       for(const m of b.matchAll(/(?:^|\s)(\d{1,2})\s*[:.)\-]\s*(\d{1,2}[ .]\d{3}|\d{3,6})(?!\d)/g)){const e=+m[1],v=num(m[2]);if(e>=1&&e<=6&&v>=1000&&v<=30000&&!ejes[e-1])ejes[e-1]=v}
       if(!ejes.length||ejes.includes(undefined)){ // «1 9000 kg 2 11500 kg 3 7500 kg 4 - kg» (Mercedes): cada masa con su «kg», en orden;
@@ -3300,17 +3341,25 @@ const CocLector=(()=>{
       if(!ejes.length||ejes.includes(undefined)){ // sin el número de eje: los pesos en orden
         const ns=[...b.matchAll(/(\d{1,2}[ .]\d{3}|\d{3,6})(?!\d)/g)].map(m=>{const v=num(m[1]);return v>30000&&/^\d{4,5}49$/.test(m[1])?Math.floor(v/100):v}).filter(v=>v>=1000&&v<=30000);ejes.length=0;ejes.push(...ns.slice(0,6))} // «800049»: el OCR lee así «8000 kg»
       return ejes};
-    if(i162>=0){const b=[resto(T[i162]),...bloque(i162).slice(1)];let ejes=ejesDe(b.join(' '));const pv=previa(i162);
+    const masasEje=(n,total)=>{const i162=pos(n);if(i162<0)return null;
+      const b=[resto(T[i162]),...bloque(i162).slice(1)];let ejes=ejesDe(b.join(' '));const pv=previa(i162);
       if(pv&&(ejes.length<2||ejes.includes(undefined)))ejes=ejesDe([pv,...b].join(' '));
       // la mal leída se saca del total si sale y sus cifras están en lo leído («92000» → 28000 − 11500 − 7500 = 9000)
       const mal=ejes.filter(v=>v&&typeof v==='object');
-      if(mal.length===1&&r.mmta_total){const k=ejes.indexOf(mal[0]),f=r.mmta_total-ejes.reduce((a,v)=>a+(typeof v==='number'?v:0),0);
+      if(mal.length===1&&total){const k=ejes.indexOf(mal[0]),f=total-ejes.reduce((a,v)=>a+(typeof v==='number'?v:0),0);
         let j=0;for(const c of mal[0].mal)if(j<String(f).length&&c===String(f)[j])j++;
         ejes[k]=f>=1000&&f<=30000&&j===String(f).length?f:null}
       for(let k=0;k<ejes.length;k++)if(ejes[k]&&typeof ejes[k]==='object')ejes[k]=null;
       while(ejes.length&&ejes[ejes.length-1]==null)ejes.pop();
-      r.mmta_ejes=ejes.filter(v=>v!=null).length>=2?Array.from(ejes,v=>v==null?null:v):null}
-    else r.mmta_ejes=null;
+      return ejes.filter(v=>v!=null).length>=2?Array.from(ejes,v=>v==null?null:v):null};
+    r.mmta_ejes=masasEje('16.2',r.mmta_total);
+    // las de matriculación/circulación (17.1 y 17.2), más bajas a veces que las técnicas: en el COP de Palfinger van estas
+    // (Daniel, 13 nov: «las de menor valor», como en la placa; Scania 26000 / 10000-9500-9500 frente a 31000 / 10000-10500-10500)
+    r.mma_total=kg(valor('17.1'),60000);r.mma_ejes=masasEje('17.2',r.mma_total);
+    // solo si cuadran con las técnicas: nunca más que ellas y los mismos ejes (si no, es otra cosa mal leída: «17.1 … N/A» cogía
+    // el 172 de la línea de abajo; en el MAN alemán salen juntas las columnas «96/53/EC» y «ES»)
+    if(r.mma_total!==null&&(r.mma_total<1000||(r.mmta_total&&r.mma_total>r.mmta_total)))r.mma_total=null;
+    if(r.mma_ejes&&(!r.mma_total||(r.mmta_ejes&&(r.mma_ejes.length!==r.mmta_ejes.length||r.mma_ejes.some((v,k)=>v!==null&&r.mmta_ejes[k]&&v>r.mmta_ejes[k])))))r.mma_ejes=null;
     r.mmtc=kg(valor('16.4'),60000);
     // tablas con varios puntos en una fila y sus datos al final, en el mismo orden (DAF):
     // «18.3 Remolque de eje 18.3.1 Remolque con 18.4 Remolque sin 24403 kg 24403 kg 750 kg»
@@ -3334,7 +3383,12 @@ const CocLector=(()=>{
       if(!dist.length)[...b.replace(/(^|\s)A?\d\s*[-–]\s*A?\d(?=\s|$)/g,' ').matchAll(/(\d[ .]\d{3}|\d{3,5})(?!\d)/g)].map(m=>num(m[1])).filter(enRango).slice(0,3).forEach((v,k)=>dist[k]=v);
       return dist};
     if(i41>=0){const b=[resto(T[i41]),...bloque(i41).slice(1)];dist=distDe(b.join(' '));const pv=previa(i41);
-      if(pv&&(!dist[0]||Array.from(dist).includes(undefined)))dist=distDe([pv,...b].join(' '))}
+      if(pv&&(!dist[0]||Array.from(dist).includes(undefined)))dist=distDe([pv,...b].join(' '));
+      if(!dist[0]){const d=[];for(let k=i41+1;k<T.length&&k<=i41+5;k++){
+        const m=T[k].match(/^A?([1-5])\s*[-–]?\s*A?([2-6])\s*:?\s*(?:\(\s*mm\s*\)\s*:?\s*)?(\d[ .]\d{3}|\d{3,5})(?!\d)\s*(?:mm)?\s*$/i);
+        if(!m){if(/^A?[1-5]\s*[-–]?\s*A?[2-6]\s*:?\s*(?:\(\s*mm\s*\)\s*:?\s*)?(N\.?\s?A\.?|-+)?\s*$/i.test(T[k]))continue;break}
+        const a=+m[1],v=num(m[3]);if(+m[2]===a+1&&enRango(v)&&!d[a-1])d[a-1]=v}
+        if(d[0])dist=d}}
     if(!dist[0]){let i4=T.findIndex(t=>/^4\.?\s/.test(t)&&/ejes|wheel|axle|radstand|achsabst|empattement/i.test(t));
       if(i4<0)i4=T.findIndex(t=>/Distancia\s+entre\s+ejes|(^|\s)Wheelbase\b/i.test(t)&&!/^4\.1/.test(t));
       for(const t of T)if(/^4\.?\s/.test(t)&&/ejes|wheel|axle|radstand|achsabst|empattement/i.test(t)){const d=distDe(resto(t));if(d.filter(Boolean).length>1){dist=d;break}} // varios ejes en el punto 4: «4 Achsabstände 1-2 1750 mm 2-3 4000 mm 3-4 1350 mm» (Mercedes; encima va «4 Radstand 7100 mm», la suma)
@@ -3798,7 +3852,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 13 nov, 00:58';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 16 nov, 09:53';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4196,7 +4250,7 @@ Lee las marcas exactamente como están, aunque estén en relieve, troqueladas co
 Hay que rellenar estas casillas, en este orden:
 ${ins.map((x,k)=>{const n=nombreDe(x),t=info(x).pt;return `${k+1}. ${n}${t&&!n.includes(t)?' ('+t+')':''}: ${QUE[clase(x)]||QUE.texto}`}).join('\n')}
 Contraseñas: la E (o e) con el número del círculo o rectángulo, un espacio y el código tal cual, conservando * y - (ej.: "E11 73R-011025*3", "E2 58R-0319194", "E9 30003"); en pilotos y bandas, como diga su casilla. Si hay varias, en la casilla va la que corresponde a lo que pide la casilla y las demás en "textos".
-Si la foto es la placa del fabricante del vehículo (la que lleva bastidor, contraseña y masas en kg), rellena también "placa"; si no, "placa": null. En esas placas la 1.ª masa es la del vehículo, la 2.ª la del conjunto y las que empiezan por "1-", "2-"… son las de cada eje. Masas solo con el número de kg.
+Si la foto es la placa del fabricante del vehículo (la que lleva bastidor, contraseña y masas en kg), rellena también "placa"; si no, "placa": null. En esas placas la 1.ª masa es la del vehículo, la 2.ª la del conjunto y las que empiezan por "1-", "2-"… son las de cada eje. Si la placa tiene dos columnas de masas (por ejemplo la permitida y la "technically permissible"), usa SIEMPRE la columna de la IZQUIERDA (la de menor valor) para todas: vehículo, conjunto y ejes. Masas solo con el número de kg.
 Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":["los demás textos que se lean en la foto, cortos"],"dudas":"","placa":{"marca":"","bastidor":"","contrasena":"","mma":"","mmtc":"","ejes":[""]}}`;
   // foto + instrucciones → el JSON que devuelve Google (también lo usan el pesaje, el plano de Putzmeister y el COC escaneado).
   // blob puede ser una lista de fotos o lienzos, o de {img, max}: la hoja entera y trozos ampliados de ella (25 oct: así le llega
@@ -4337,8 +4391,19 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
       if(bn>=4)return best} // un bastidor acaba en 4 cifras como poco (si no, es texto: «GELASTDERACHSGRUP»)
     return ''}
   const VALOR=t=>/^[A-Z0-9][A-Z0-9\-\/]{5,}$/i.test(t)&&/\d{4}/.test(t);
+  // marca del vehículo (Daniel, 13 nov: en la placa de un Scania salía «(ES)», la cabecera de la columna de España, porque el
+  // logotipo no se lee): primero una marca conocida escrita en la foto; si no, la del bastidor (sus 3 primeras letras, el WMI)
+  const MARCAS=[[/\bSCANIA\b/i,'SCANIA'],[/\bVOLVO\b/i,'VOLVO'],[/\bMERCEDES(?:[-\s]?BENZ)?\b/i,'MERCEDES-BENZ'],[/\bRENAULT\b/i,'RENAULT'],
+    [/\bIVECO\b/i,'IVECO'],[/\bDAF\b/,'DAF'],[/\bMAN\b/,'MAN'],[/\bMITSUBISHI\b/i,'MITSUBISHI'],[/\bFUSO\b/i,'FUSO'],[/\bISUZU\b/i,'ISUZU'],
+    [/\bNISSAN\b/i,'NISSAN'],[/\bTOYOTA\b/i,'TOYOTA'],[/\bFORD\b/i,'FORD'],[/\bVOLKSWAGEN\b/i,'VOLKSWAGEN']];
+  const WMI={YS2:'SCANIA',VLU:'SCANIA',YV2:'VOLVO',WMA:'MAN',WDB:'MERCEDES-BENZ',WDF:'MERCEDES-BENZ',W1T:'MERCEDES-BENZ',W1V:'MERCEDES-BENZ',
+    XLR:'DAF',ZCF:'IVECO',VF6:'RENAULT',VF1:'RENAULT',TYB:'MITSUBISHI',JAL:'ISUZU',VWA:'NISSAN',WF0:'FORD',WV1:'VOLKSWAGEN',WV2:'VOLKSWAGEN'};
+  function marcaVeh(lin){
+    for(const [re,n] of MARCAS)if(lin.some(l=>re.test(l.t)))return n;
+    const b=bastidorDe(lin);return b&&WMI[b.slice(0,3)]||''}
   function proponer(cl,lin){
     const all=lin.map(l=>l.t).join('\n'),una=all.replace(/\n/g,' ');let m;
+    if(cl==='marca'){const v=marcaVeh(lin);if(v)return v}
     switch(cl){
       case 'contr':return contrasena(lin,true);
       case 'luz':case 'ultfase':return contrasena(lin);
@@ -4375,7 +4440,7 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
           if(/[A-Za-z0-9]/.test(m[1]))return norm(m[1]).toUpperCase();
           const j=junto(lin,l,t=>/[A-Za-z0-9]{3}/.test(t));if(j)return norm(j).toUpperCase()}} // «TYPE:» y el tipo en la línea de al lado
       // sigue: la línea más grande
-      default:{const c=lin.filter(l=>/[A-Za-z]{2}/.test(l.t)&&!CONTR.test(l.t)&&!(cl==='marca'&&/\d{3}/.test(l.t))&&!/[A-HJ-NPR-Z0-9]{17}/.test(l.t.replace(/[\s.\-]/g,'').toUpperCase())).sort((a,b)=>b.h-a.h)[0];return c?c.t.toUpperCase():''}
+      default:{const c=lin.filter(l=>/[A-Za-z]{2}/.test(l.t)&&!/^\W*\(\s*\p{L}{1,3}\s*\)\W*$/u.test(l.t)&&!CONTR.test(l.t)&&!(cl==='marca'&&/\d{3}/.test(l.t))&&!/[A-HJ-NPR-Z0-9]{17}/.test(l.t.replace(/[\s.\-]/g,'').toUpperCase())).sort((a,b)=>b.h-a.h)[0];return c?c.t.toUpperCase():''}
     }
   }
   // placa del fabricante leída en el móvil (sin Google): bastidor, contraseña y masas → lo mismo que «placa» de Google
@@ -4384,7 +4449,7 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
     if(m=s.match(/(?:achse|ax[il]e|eje),?(\d)/i))return 'eje'+m[1];if(/gesamtgewicht|totalweight|m\.?m\.?a|^total\W*$/i.test(s))return 'mma';return ''}
   function placaLocal(lin){
     const L=lin.map(l=>({...l,t:limpia(l.t)})),bastidor=bastidorDe(lin);
-    const pl={bastidor,contrasena:'',mma:'',mmtc:'',ejes:[]};
+    const pl={bastidor,marca:marcaVeh(lin),contrasena:'',mma:'',mmtc:'',ejes:[]};
     for(const l of L){const w=wvta(l.t);if(w){pl.contrasena=w;break}}
     // lo que está a la misma altura que l: su etiqueta a la izquierda, su «kg» a la derecha (lo más cercano primero)
     const fila=(l,ok)=>l.y==null?[]:L.filter(e=>e!==l&&ok(e)&&Math.abs(e.y-l.y)<1.2*Math.max(l.h,e.h)).sort((a,b)=>Math.abs(a.y-l.y)-Math.abs(b.y-l.y));
@@ -4404,11 +4469,12 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
       if(!pl.mma)pl.mma=sueltas.shift()||'';if(!pl.mmtc)pl.mmtc=sueltas.shift()||'';
       for(let k=0;k<pl.ejes.length;k++)if(!pl.ejes[k])pl.ejes[k]=sueltas.shift()||''}
     else{
-      // 2) por filas: en las placas de dos columnas (Scania, MAN) vale la de la derecha, la técnicamente admisible
+      // 2) por filas: en las placas de dos columnas (Scania, MAN) vale la de la IZQUIERDA, la de menor valor (Daniel, 13 nov:
+      //    «ponga siempre las masas las de la izquierda, que suelen ser las de menor valor»; antes se cogía la de la derecha)
       const filas=[];for(const x of [...ms].sort((a,b)=>a.l.y-b.l.y)){
         const f=filas.find(f=>f.every(q=>Math.abs(q.l.y-x.l.y)<0.6*Math.max(q.l.h,x.l.h)&&Math.abs(q.l.x-x.l.x)>0.5*Math.min(q.l.w||q.l.h,x.l.w||x.l.h)));
         if(f)f.push(x);else filas.push([x])}
-      const R=filas.map(f=>{const d=f.sort((a,b)=>b.l.x-a.l.x)[0],e=f.map(q=>suEtiqueta(q.l)).find(Boolean);
+      const R=filas.map(f=>{const d=f.sort((a,b)=>a.l.x-b.l.x)[0],e=f.map(q=>suEtiqueta(q.l)).find(Boolean);
         return {v:d.v,y:d.l.y,h:d.l.h,et:e?etiqueta(e.t):'',t:d.t||f.some(q=>fila(q.l,e=>e.x<q.l.x&&/^T\d$/i.test(e.t.trim())).length>0)}});
       if(R.some(r=>r.et)){ // placa con etiquetas (Mercedes, Scania): cada masa va a lo que dice la de su fila; las que no la tienen, a los huecos
         const sueltas=[];for(const r of R){const ej=/^eje\d$/.test(r.et)&&+r.et.slice(3)-1;
@@ -4786,6 +4852,20 @@ const Dictar=(()=>{
     4:['4','cuatro','cuarto','cuarta'],5:['5','cinco','quinto','quinta'],6:['6','seis','sexto','sexta'],7:['7','siete'],8:['8','ocho']};
   const NOMBRE_LETRA=Object.entries(LET).reduce((o,[w,l])=>{(o[l]=o[l]||[]).push(w);return o},{});
   const PALABRA_VACIA=new Set('el la los las lo de del en al con por para que una uno mas medida medicion cada total vehiculo dispositivo respecto'.split(' '));
+  // fila de luces laterales de Palfinger: d1, d1-2, d2-3, d3-4, d4-5, df, h3, h1
+  const filaLuces=campos=>{const l=new Set(campos.map(f=>llano(f.lab).replace(/[^a-z0-9]/g,'')));return l.has('d1')&&l.has('df')&&l.has('h3')&&l.has('h1')};
+  const codDe=f=>llano(f.lab).replace(/[^a-z0-9]/g,'');
+  // medidas sin decir de qué casilla en una fila de luces: se dicen en el orden de la fila, saltando las luces que no hay
+  // («450, 2800, 2900, 600, 900, 1200» con tres luces = d1, d1-2, d2-3, df, h3, h1); la altura menor es h3 (borde de abajo)
+  function repartoLuces(F,usados,its){
+    const libre=f=>!usados.has(f),by=c=>F.find(f=>codDe(f)===c),pars=F.filter(f=>/^d\d\d$/.test(codDe(f))&&libre(f));
+    const head=[by('d1')].filter(f=>f&&libre(f)),tail=['df','h3','h1'].map(by).filter(f=>f&&libre(f)),n=its.length;
+    if(n<head.length+tail.length||n>head.length+tail.length+pars.length)return null;
+    const out=[];head.forEach((f,j)=>out.push([f,its[j]]));
+    pars.slice(0,n-head.length-tail.length).forEach((f,j)=>out.push([f,its[head.length+j]]));
+    const t=its.slice(n-tail.length),h=tail.map((f,j)=>[f,t[j]]),hh=h.filter(([f])=>/^h[13]$/.test(codDe(f)));
+    if(hh.length===2&&hh[0][1].n!=null&&hh[1][1].n!=null&&hh[0][1].n>hh[1][1].n){const x=hh[0][1];hh[0][1]=hh[1][1];hh[1][1]=x}
+    return out.concat(h)}
   function facetas(f,campos,t){
     const lab=llano(f.lab).replace(/\(.*?\)/g,' ').trim(),F=[],add=(k,v,fr,need)=>F.push({k,v,fr,need});
     const fld=f.el.closest('.fld');
@@ -4815,6 +4895,16 @@ const Dictar=(()=>{
       const pzs=cod.match(/[a-z]|\d/g).map(c=>/\d/.test(c)?S(...NUMDE[c].slice(0,2)):S(...(NOMBRE_LETRA[c.toUpperCase()]||[c])));
       const fr=[pzs];if(cod.length>1)fr.push([S(cod)]);if(/^[a-z]\d$/.test(cod))fr.push([S(cod[0]),S(cod[1])]);
       add('cod',cod,fr,cod.length<=2?'num':null)}
+    // Palfinger, luces laterales (13 nov, Daniel: «distancias luces las coge mal»): d1 = «primera», df = «final», h3/h1 = «altura»
+    // («altura inferior/superior»), y «entre luces» con varias medidas = d1-2, d2-3…
+    if(pal()&&filaLuces(campos)){
+      if(cod==='d1')add('luz','d1',[[S('primera','primer','delantera','delantero','frontal','delante','principio','inicio')]],'num');
+      if(cod==='df')add('luz','df',[[S('final','ultima','ultimo','fin','trasera','trasero','detras','atras')]],'num');
+      const inf=S('inferior','abajo','baja','bajo','minima','minimo'),sup=S('superior','arriba','alta','alto','maxima','maximo'),alt=S('altura','alturas');
+      if(cod==='h3')add('luz','h3',[[alt,inf],[S('borde'),inf],[alt,S('del','de'),S('borde'),inf],[inf]],'num');
+      if(cod==='h1')add('luz','h1',[[alt,sup],[S('borde'),sup],[alt,S('del','de'),S('borde'),sup],[sup]],'num');
+      if(cod==='h3'||cod==='h1')add('alts','',[[alt]],'num');
+      if(m)add('serie','',[[S('entre'),S('luces','luz','ellas','pilotos','las')],[S('separacion','separaciones')],[S('entre')]],'num')}
     // palabras propias de la casilla («MMTA», «tara», «neumático», «capacidad», «marca», «contraseña»…)
     for(const w of lab.split(/[^a-z0-9ñ]+/))if(w.length>=4&&!PALABRA_VACIA.has(w)&&!/^(derech|izquierd|homolog|medici|maxim|minim|anterior|posterior|superior|inferior)/.test(w))
       add('w',w,[[S(w,w+'s',w.replace(/o$/,'a'))]]);
@@ -4896,6 +4986,15 @@ const Dictar=(()=>{
       if(!cand.length)cand=F.filter(f=>fs.some(fc=>tiene(f,fc)));
       if(!cand.length){libres.push(s);res.conf=false;continue}
       if(todas){const g=cand.filter(f=>f.kind===cand[0].kind),r=valorPara(g[0],s.toks,raw,ctx);if(r)for(const f of g){pon(f,{...r,resto:null});usados.add(f)}continue}
+      // Palfinger, luces laterales: «entre luces 2800 2900» van a d1-2, d2-3… ; «altura 900 1200»: la menor a h3 y la mayor a h1
+      const ser=fs.find(fc=>fc.k==='serie'||fc.k==='alts');
+      if(ser&&fs.length===1){const its=numeros(s.toks).items.filter(x=>x.n!=null);
+        if(its.length){
+          if(ser.k==='serie'){const lib=cand.filter(f=>!usados.has(f));its.forEach((x,j)=>{const f=lib[j];if(f){pon(f,{v:valorNum(x,ctx)});usados.add(f)}else res.conf=false})}
+          else{const h3=F.find(f=>codDe(f)==='h3'),h1=F.find(f=>codDe(f)==='h1');
+            if(its.length>=2){const a=its.slice(0,2).sort((x,y)=>x.n-y.n);pon(h3,{v:valorNum(a[0],ctx)});pon(h1,{v:valorNum(a[1],ctx)});usados.add(h3);usados.add(h1);if(its.length>2)res.conf=false}
+            else{const f=[h3,h1].find(f=>!usados.has(f)&&!norm(f.el.value))||h3;pon(f,{v:valorNum(its[0],ctx),dud:true});usados.add(f)}}
+          continue}}
       cand=preferir(cand);const f=cand.find(f=>!usados.has(f))||cand[0];
       const r=valorPara(f,s.toks,raw,ctx);if(!r){res.conf=false;continue}
       pon(f,r);usados.add(f);
@@ -4906,6 +5005,7 @@ const Dictar=(()=>{
       const numF=quedan.filter(f=>f.kind==='num'),txtF=quedan.filter(f=>f.kind!=='num');
       if(nr.items.length&&numF.length&&(!malas.length||!txtF.length)){
         let its=nr.items,dest;
+        if(pal()&&filaLuces(F)){const r=repartoLuces(F,usados,its);if(r){for(const [f,x] of r){pon(f,{v:valorNum(x,ctx)});usados.add(f)}if(malas.length)res.conf=false;continue}}
         if(its.length===numF.length)dest=numF;
         else if(its.length<numF.length){const vac=numF.filter(f=>!norm(f.el.value));dest=(vac.length>=its.length?vac:numF).slice(0,its.length);if(vac.length<its.length)res.conf=false}
         else{if(numF.length===1&&its.every(x=>x.dig&&/^\d$/.test(x.s)))its=[{s:its.map(x=>x.s).join('')}];else res.conf=false;dest=numF}
@@ -5032,7 +5132,8 @@ const Dictar=(()=>{
       const bl=t.cont.closest('.blk[data-side]');t.lado=bl&&scope.contains(bl)||bl&&bl.contains(scope)?bl.dataset.side:null;
       if(!enMaq(scope)){t.blk=bloqueDe(t.cont,scope);t.sep=t.blk;t.sepT=t.blk?t.blk.dataset.title:''}else t.blk=null;t.ctx=t.preg?{...t,campos:[],titW:new Set()}:preparar(t);
       t.ladoF=!!(t.ctx.campos||[]).some(f=>f.fac.some(x=>x.k==='lado'));
-      t.facW=new Set();for(const f of t.ctx.campos||[])for(const fc of f.fac)for(const fr of fc.fr)for(const s of fr)for(const w of s)t.facW.add(w)}
+      t.facW=new Set();if((t.ctx.campos||[]).length>1)for(const f of t.ctx.campos||[])for(const fc of f.fac)for(const fr of fc.fr)for(const s of fr)for(const w of s)t.facW.add(w)}
+    if(pal())for(const t of T){t.alias=aliasPal(t);t.fueraCat=fueraCat(t)}
     // palabras que solo tiene un punto (bastan para nombrarlo)
     const cuenta={};for(const t of T)for(const id of new Set(t.units.map(u=>u.id)))cuenta[id]=(cuenta[id]||0)+1;
     for(const t of T)for(const u of t.units)u.unico=cuenta[u.id]===1&&u.id.length>=3;
@@ -5043,6 +5144,29 @@ const Dictar=(()=>{
       const s=[...t.subs].find(s=>!igual.some(x=>x.subs.has(s)));if(s)t.pista2=t.pista+' '+s.toUpperCase()}
     for(const t of T)if(t.pista2)t.pista=t.pista2;
     return T}
+  // Palfinger (13 nov): otras formas de nombrar un punto. «Entre ejes» o «batalla» = D12 (y si siguen más medidas, D23, D34…);
+  // y el código de la plantilla (Vd, D12, Vt, Lt, Im, Ic, Lc, Hc, Pv, Dg) seguido de su medida
+  const ALIAS_PAL=[[/^D12:/,['entre ejes','distancia entre ejes','distancia entre los ejes','batalla']]];
+  function aliasPal(t){const A=[];
+    for(const [re,l] of ALIAS_PAL)if(re.test(t.nombre))for(const f of l)A.push(f.split(' ').map(w=>S(w,w.replace(/s$/,''))));
+    const m=String(t.nombre).match(/^([A-Za-z]{1,2})(\d{0,2}):\s/);
+    if(m&&(m[1]+m[2]).length>=2){const L=m[1].toLowerCase(),d=m[2],lt=[...L].map(c=>S(c,...(NOMBRE_LETRA[c.toUpperCase()]||[]))),dg=[...d].map(c=>S(c,...NUMDE[c].slice(0,2)));
+      A.push([S(L+d)]);if(d){A.push([S(L),S(d)]);A.push([...lt,S(d)]);A.push([...lt,...dg]);A.push([S(L),...dg])}else A.push(lt)}
+    return A}
+  // bloques de otras categorías («8.3 Vehículos N1, O1 y O2» en un camión N3): solo si no hay otro punto que encaje
+  // (o del punto: «Profundidad … N2 ≤ 8 t»). Sin categoría puesta, Palfinger = camión N3
+  function fueraCat(t){const ti=String(t.sepT||''),bc=(ti.match(/\b[nmo]\d\b/gi)||[]).map(x=>x.toUpperCase()),pc=String(t.nombre).match(/\b[NMO]\d\b/g)||[];
+    const cs=pc.length?pc:bc.length>=2?bc:[];if(!cs.length)return false;
+    let c='';try{const k=PAL_MODEL.key.cat;c=String(state.v['s'+k.id]||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,2)}catch(e){}
+    return !cs.includes(c||'N3')}
+  // el mismo punto del otro lado («… izquierda 450 2800… derecha 460 2810…»)
+  const sinLado=t=>t.units.map(u=>/^(izquierd|derech)$/.test(u.k[0])?'#':u.id).join('|');
+  function gemelo(T,t,ld){const su=t.units.find(u=>/^(izquierd|derech)$/.test(u.k[0]));
+    if(su){if(su.k[0]===(ld==='i'?'izquierd':'derech'))return null;const k=sinLado(t);return T.find(x=>x!==t&&sinLado(x)===k&&x.units.some(u=>u.k[0]===(ld==='i'?'izquierd':'derech')))||null}
+    if(t.lado&&t.lado!==ld){const k=t.units.map(u=>u.id).join('|');return T.find(x=>x!==t&&x.lado===ld&&x.units.map(u=>u.id).join('|')===k&&llano(x.nombre)===llano(t.nombre))||null}
+    return null}
+  // los que se llaman igual con otro número, detrás de él en su bloque (D12 → D23, D34, D45)
+  const hermanos=(T,t)=>{const k=String(t.nombre).replace(/\d/g,'#');return T.filter((x,i)=>i>T.indexOf(t)&&x.blk===t.blk&&String(x.nombre).replace(/\d/g,'#')===k&&!x.preg&&(x.ctx.campos||[]).length===1)};
   function pista(t,ambito){
     const ws=t.units[0]?t.units[0].ws:[];if(!t.units.length)return norm(t.nombre);
     const U=t.units.filter(u=>!u.cod);
@@ -5070,19 +5194,24 @@ const Dictar=(()=>{
       if(s[0]==='#')return LET[w]&&LET[w].toLowerCase()===s.slice(1)?2:0;return sd[j+1]===s?2:0};
     const sub=(t,j)=>{const l=LET[tk[j]];if(!l)return 0;const d=/^\d$/.test(tk[j+1]||'')?tk[j+1]:CIFW[tk[j+1]];if(!d)return 0;
       const s=(l+d).toLowerCase(),l2=tk[j+2]&&LET[tk[j+2]];if(l2&&t.subs.has(s+l2.toLowerCase()))return 3;return t.subs.has(s)?2:0};
-    const probarEn=(t,k)=>{const U=t.units;let j=k,m=0,sb=0,ladoV=null,fin=k;const us=new Set(),lim=k+U.length*2+4;
+    const probarEn=(t,k,debil)=>{const U=t.units;let j=k,m=0,sb=0,ladoV=null,fin=k;const us=new Set(),lim=k+U.length*2+4;
       while(j<n&&j<lim){let hit=-1,len=0;
         for(let q=0;q<U.length;q++){if(us.has(q))continue;const L=casa(U[q],j);if(L){hit=q;len=L;break}}
         if(hit>=0){us.add(hit);m++;j+=len;fin=j;continue}
         if(!m)return null;
+        if(pal()&&/^(-|a|y)$/.test(tk[j])&&U.some((u,q)=>!us.has(q)&&casa(u,j+1))){j++;continue} // «distancia eje 1-2», «eje 1 a 2»
         const L=t.subs.size?sub(t,j):0;if(L){sb++;j+=L;fin=j;continue}
         if(LADO[tk[j]]){ladoV=LADO[tk[j]];j++;continue}
         if(NEXO.has(tk[j])&&!esNum(tk[j+1]||'')){j++;continue}
         break}
       if(!m)return null;
+      // el lado ya dicho cuenta como dicho («lado izquierdo: posición 450…» = «posición laterales izquierda»)
+      const lc=ladoV||lado;if(lc&&!U.some((u,q)=>us.has(q)&&/^(izquierd|derech)$/.test(u.k[0]))){const q=U.findIndex(u=>u.k[0]===(lc==='i'?'izquierd':'derech'));if(q>=0){us.add(q);m++}}
       const nc=U.filter(u=>!u.cod).length||1,mnc=[...us].filter(q=>!U[q].cod).length;
       const ok=m>=2||mnc===nc||[...us].some(q=>U[q].unico&&!ADJ.has(U[q].k[0])&&!U[q].cod);
-      return ok?{m,mnc,nc,sb,fin,ladoV,full:mnc===nc,orden:us.has(0)||us.has(1)&&/^\d$/.test(U[0].id)}:null};
+      return ok||debil?{m,mnc,nc,sb,fin,ladoV,full:mnc===nc,orden:us.has(0)||us.has(1)&&/^\d$/.test(U[0].id),ids:[...us].map(q=>U[q].id)}:null};
+    const aliasEn=k=>{let mejor=null;for(const t of T)for(const fr of t.alias||[]){const L=fr.length;if(k+L>n||!esNum(tk[k+L]||''))continue;
+      if(fr.every((st,j)=>st.has(tk[k+j]))&&(!mejor||L>mejor.L))mejor={t,L}}return mejor?{t:mejor.t,fin:k+mejor.L}:null};
     const puntoN=k=>{const sec=(T.find(t=>t.pn)||{}).pn;if(!sec)return null;const s0=sec.split('.')[0];
       for(let len=3;len>=1;len--){const ws=tk.slice(k+1,k+1+len);if(ws.length<len||!ws.every(w=>esNum(w)))continue;
         const it=numeros(ws).items;let pn=null;
@@ -5092,19 +5221,31 @@ const Dictar=(()=>{
       return null};
     let lado=null,ult=null;
     for(let k=0;k<n;){const w=tk[k];
-      if(LADO[w]){if(!ult||!ult.t.ladoF||/^(perfil|lado|parte)$/.test(tk[k-1]||''))lado=LADO[w];k++;continue}
+      if(LADO[w]){
+        if(ult&&!ult.t.ladoF&&esNum(tk[k+1]||'')){const g=gemelo(T,ult.t,LADO[w]);if(g){lado=LADO[w];ult={k,fin:k+1,t:g,dud:false};M.push(ult);k++;continue}}
+        if(!ult||!ult.t.ladoF||/^(perfil|lado|parte)$/.test(tk[k-1]||''))lado=LADO[w];k++;continue}
+      {const a=aliasEn(k);if(a){ult={k,fin:a.fin,t:a.t,dud:false};M.push(ult);k=a.fin;continue}}
       if(w==='punto'&&!(k>0&&esNum(tk[k-1])&&/^(metro|metros|tonelada|toneladas|kilo|kilos|grados)$/.test(tk[k+2]||''))){const r=puntoN(k);if(r){ult={k,fin:r.fin,t:r.t,dud:false};M.push(ult);k=r.fin;continue}}
       let best=null,seg=null;
       // una palabra de la medida del punto anterior («eje 1», «delantera», «homologación») no empieza otro punto
-      if(ult&&ult.t.facW.has(w)){k++;continue}
+      // (salvo que ahí empiece otro punto dicho entero: «voladizo delantero 1450, voladizo trasero 2300»)
+      if(ult&&ult.t.facW.has(w)&&!T.some(t=>{if(t===ult.t)return false;const r=probarEn(t,k);return r&&r.full&&r.m>=2})){k++;continue}
+      const C=[];
       if(!VACIA.has(w)&&!esDig(w))for(const t of T){const r=probarEn(t,k);if(!r)continue;
         const ld=r.ladoV||lado;
-        const sc=r.mnc/r.nc+0.25*r.m+(ult&&t.sep&&ult.t.sep===t.sep?0.3:0)+0.3*r.sb+(t.lado&&ld?(t.lado===ld?0.6:-0.6):0)+(r.full?0.05:0)+(r.orden?0.1:0)-(t.els().some(e=>norm(e.value))?0.02:0);
+        const sc=r.mnc/r.nc+0.25*r.m+(ult&&t.sep&&ult.t.sep===t.sep?0.3:0)+0.3*r.sb+(t.lado&&ld?(t.lado===ld?0.6:-0.6):0)+(r.full?0.05:0)+(r.orden?0.1:0)-(t.els().some(e=>norm(e.value))?0.02:0)-(t.fueraCat?0.5:0);
+        C.push({t,sc,ld,...r});
         if(!best||sc>best.sc+1e-9){seg=best;best={t,sc,...r}}else if(!seg||sc>seg.sc)seg={t,sc,...r}}
+      // si otro punto lleva todo lo dicho del elegido y algo más, es ese («altura de laterales» = Hc, no H: altura)
+      if(best&&pal()){const sup=C.filter(c=>c.t!==best.t&&c.ids.length>best.ids.length&&best.ids.every(id=>c.ids.includes(id))&&c.mnc/c.nc>=0.5&&!(c.t.lado&&c.ld&&c.t.lado!==c.ld)&&!(c.t.fueraCat&&!best.t.fueraCat))
+          .sort((a,b)=>b.ids.length-a.ids.length||b.sc-a.sc)[0];if(sup){seg=best;best={...sup,seguro:true}}
+        // el elegido es de otra categoría («Anchura» de 8.3, N1/O1/O2): otro del vehículo que lleve lo dicho, aunque se diga menos de su nombre
+        if(best.t.fueraCat){const o=T.filter(t=>t!==best.t&&!t.fueraCat&&!t.preg).map(t=>({t,r:probarEn(t,k,true)})).filter(x=>x.r&&best.ids.every(id=>x.r.ids.includes(id)))
+          .sort((a,b)=>b.r.m-a.r.m||b.r.mnc/b.r.nc-a.r.mnc/a.r.nc)[0];if(o){seg=best;best={t:o.t,sc:best.sc,...o.r}}}}
       if(best){let fin=best.fin;
         // la última palabra que sirve para elegir casilla se deja para la medida («MMTA en cada EJE 1 7100»)
         while(fin>k+1&&best.t.facW.has(tk[fin-1]))fin--;
-        ult={k,fin,t:best.t,dud:!!(seg&&seg.sc>=best.sc-0.05&&seg.t!==best.t),otro:seg&&seg.t};M.push(ult);k=fin;continue}
+        ult={k,fin,t:best.t,dud:!best.seguro&&!!(seg&&seg.sc>=best.sc-0.05&&seg.t!==best.t),otro:seg&&seg.t};M.push(ult);k=fin;continue}
       k++}
     return M}
   // pregunta (sin casillas): «sí», «no», «exento», «no procede», «europeo»…
@@ -5131,6 +5272,12 @@ const Dictar=(()=>{
       // «520… no, 530»: en una casilla sola vale lo último
       const F=(t.ctx.campos||[]).filter(f=>f.kind!=='sel');
       if(F.length===1&&F[0].kind==='num'){let c=-1;seg.forEach((w,q)=>{if(CORRIGE.has(w)&&seg.slice(0,q).some(esNum)&&seg.slice(q+1).some(esNum))c=q});if(c>=0)seg=seg.slice(c+1)}
+      if(pal()&&!t.preg&&F.length===1&&F[0].kind==='num'&&(t.ctx.campos||[]).length===1&&!seg.some(w=>CORRIGE.has(w))){
+        const its=numeros(seg).items.filter(x=>x.n!=null&&x.toks&&x.toks.length),hs=its.length>1?hermanos(T,t):[];
+        if(hs.length>=its.length-1&&its.length>1&&its.every(x=>Math.abs(x.n)>=100)){
+          its.slice(1).forEach((x,q)=>{const h=hs[q];let ih=items.get(h);if(!ih){ih={t:h,asig:[],accion:null,dud:false,nada:true,oido:''};items.set(h,ih)}
+            ih.nada=false;ih.mal=false;ih.oido=x.toks.join(' ');ih.asig=[{f:h.ctx.campos[0],v:x.s}]});
+          seg=its[0].toks.slice()}}
       let it=items.get(t);if(!it){it={t,asig:[],accion:null,dud:false,nada:true,oido:''};items.set(t,it)}
       if(m.dud){it.dud=true;it.otro=m.otro}
       it.oido=norm(it.oido+' '+seg.join(' '));
@@ -7282,7 +7429,7 @@ const fase=que=>({q:`«Sí» si ${que} venía montado de fábrica (1ª fase); «
 const marca=(que,donde)=>({q:`La marca ${que}.`,con:donde,pasos:[`Léela en ${donde.toLowerCase()} y cópiala tal cual.`]});
 const contr=(que,donde,ojo)=>({q:`La contraseña de homologación ${que}: empieza por «E» y un número de país.`,con:donde,pasos:[`Cópiala de ${donde.toLowerCase()}, entera.`],ojo});
 const LUZTRAS={q:'Las medidas de esta luz, vista desde atrás.',con:'Cinta métrica',pasos:['A: del suelo al borde de arriba de la luz.','B: del suelo al borde de abajo.','C: separación entre las dos luces.','D: de la luz al lateral del camión.','E, F y G: los ángulos en que tiene que verse; comprueba que nada la tapa.'],...vid('tras-luz')};
-const pres=(que,ojo)=>({q:`Si el camión lleva ${que} detrás y cuántas hay.`,con:VISTA,pasos:['«Presente» si la lleva.','Nº dispositivos: cuántas hay. Al marcarla se pone 2 (si son otras, cámbialo).'],ojo});
+const pres=(que,ojo,esc)=>({q:`Si el camión lleva ${que} detrás y cuántas hay.`,con:VISTA,pasos:['«Presente» si la lleva.',esc?'Nº dispositivos: escribe cuántas hay (1 o 2); en esta no se pone solo.':'Nº dispositivos: cuántas hay. Al marcarla se pone 2 (si son otras, cámbialo).'],ojo});
 const grp=(q,pasos,ojo)=>({...LUZTRAS,q,pasos:[...pasos,'Con la calculadora de arriba (tipo de piloto, altura y distancia entre ellos) se pone sola.'],ojo});
 const luz3=ojo=>({q:'Si esta luz cumple la altura, la distancia y el ángulo de la tabla de la plantilla.',con:'La calculadora y la vista',pasos:['Altura y distancia: se marcan solas con la calculadora; debajo salen las medidas de esta luz y sus límites.','Ángulo: comprueba que nada tapa la luz en los ángulos de la tabla (E-F a los lados, G-H arriba y abajo).'],ojo,...vid('tras-luz')});
 const lat=(que,lado,k,lim)=>({q:`Distancias de ${que} del lado ${lado}.`,con:PLOMT,pasos:['d1: de lo más delantero del camión a la 1ª.','d1-2, d2-3…: de cada una a la siguiente.','df: de la última a lo más trasero.','h3 y h1: del suelo al borde de abajo y al de arriba.'],ojo:lim,...vid(k)});
@@ -7419,13 +7566,13 @@ const AYN={
 '10.4.1':{q:'El grupo de luces traseras: si es de fábrica, su marca, su contraseña y cuántos hay.',con:'El piloto',pasos:['«Sí» si es el de fábrica; «No» si lo ha puesto Palfinger.','Lee la marca y la contraseña en el piloto.','Nº: cuántos hay.']},
 '10.4.2':{q:'Otro tipo de piloto trasero, si lo hay.',con:'El piloto',pasos:['Igual que el 10.4.1.'],ojo:'Déjalo vacío si solo hay un tipo.'},
 '10.4.3':pres('luz de freno','Obligatoria, 2.'),
-'10.4.4':pres('luz de marcha atrás','Obligatoria en camiones; 1 o 2.'),
+'10.4.4':pres('luz de marcha atrás','Obligatoria en camiones; 1 o 2.',1),
 '10.4.5':pres('luz indicadora de dirección (intermitente)','Obligatoria, 2.'),
 '10.4.6':pres('luz de gálibo','Obligatoria si el camión mide más de 2.100 mm de ancho; puede llevarla entre 1.800 y 2.100 mm.'),
 '10.4.7':pres('luz de posición','Obligatoria, 2.'),
 '10.4.8':pres('catadióptrico no triangular','Obligatorio en camiones, 2.'),
 '10.4.9':pres('catadióptrico triangular','Solo en remolques: en camiones está prohibido.'),
-'10.4.10':pres('luz antiniebla','Obligatoria; 1 o 2. Si solo hay una, en el lado izquierdo (el del conductor).'),
+'10.4.10':pres('luz antiniebla','Obligatoria; 1 o 2. Si solo hay una, en el lado izquierdo (el del conductor).',1),
 '10.4.11':grp('La altura del borde de abajo del grupo de luces: el de la luz más baja.',['Mide del suelo al borde de abajo de la luz más baja del piloto.'],'La plantilla pone (A) en esta fila, pero en el dibujo la A es el borde de arriba.'),
 '10.4.12':grp('La altura del borde de arriba del grupo de luces: el de la luz más alta.',['Mide del suelo al borde de arriba de la luz más alta del piloto.'],'Máximo 1.500 mm (2.100 si la carrocería no deja).'),
 '10.4.13':grp('La separación entre los dos grupos de luces (derecho e izquierdo).',['Mide de borde a borde por dentro, entre las luces de un lado y las del otro.'],'Mínimo 600 mm (400 si el camión mide menos de 1.300 mm de ancho).'),
@@ -7524,6 +7671,11 @@ for(const [a,b] of [['14.8','14.11'],['14.9','14.12'],['14.10','14.13']]){
  const d=a=='14.8'?sn('Que los estabilizadores no tapen los faros ni las luces de delante.',['Enciende las luces y mira que nada las tape.']):a=='14.9'?sn('Lo que los estabilizadores alargan el camión por delante.',['Es la cota 3 del 14.2.1: escríbela en «Valor».'],'Máximo 350 mm.'):sn('Que todo lo montado delante tenga los cantos redondeados.',['Mira los bordes de los estabilizadores y de sus soportes.'],'Radio de más de 5 mm.');
  AYN[a]={...d,ojo:(d.ojo?d.ojo+' ':'')+'Con 1 estabilizador.'};AYN[b]={...d,ojo:(d.ojo?d.ojo+' ':'')+'Con 2 estabilizadores.'}}
 AY['Observaciones:']=obs(); // 7.4.9 (número repetido) y 14.14
+// 13 nov: vídeo también en los puntos que no se miden (copiar, elegir, foto, mirar, lo calcula la app).
+const MIDE=new Set(['placa','estab','pi-voladizo','es1-vol','es2-vol','bola-espacio','bola-10','gancho-10','ang-a','ang-b','ang-c','pl-huecos']);
+const pon=(o,n,k)=>{if(o[n]&&!o[n].src)o[n]={...o[n],...vid(k,MIDE.has(k)?'Cómo se mide · 10 s':'Cómo se rellena · 10 s')}};
+for(const [n,k] of Object.entries({'1.1':'m-marca','1.2':'m-denom','1.3':'m-vin','1.4':'m-cat','1.5':'m-homol','1.6':'m-carroz','1.7':'m-cabina','1.8':'m-maq1','1.9':'m-maq2','1.10':'m-pv','1.11':'m-estab','1.12':'m-otros','2.1':'ap-masas','2.2':'ap-pt','2.3':'ap-luces','2.4':'ap-mat','2.5':'ap-anti','2.6':'ap-pl','2.7':'ap-placa','2.8':'ap-sal','2.9':'ap-acop','2.10':'ap-n1','3.1':'f-vin','3.2':'f-placa1','3.3':'f-placa2','3.4':'f-34','3.5':'f-neum','3.6':'f-maq','3.7':'f-pt','3.8':'f-pl','3.9':'f-anti','3.10':'f-luces','3.11':'f-gancho','3.12':'f-quinta','4.1':'nc-hay','4.2':'nc-det','4.3':'nc-res','4.4':'obs','4.5':'fecha','7.5.1':'dim-max','7.5.2':'preestudio','7.5.3':'suma-mmta','7.5.4':'eje-del','7.5.5':'eje-del-acop','7.5.6':'acop-n1','8.1.1':'pt-sist','8.2.1':'pt-fase','8.2.2':'pt-marca','8.2.3':'pt-contr','8.2.4':'pt-def','8.2.6':'pt-mtma','8.2.7':'pt-anclaje','8.2.8':'obs','8.3.1':'pt-anchura','8.5.3':'pt-susp','8.5.9':'obs','9.1.1':'mat-fase','9.1.2':'mat-dim','9.1.3':'mat-orif','9.1.4':'mat-prot','9.2.1':'mat-pos','10.1.1':'lat-luz-dat','10.1.2':'lat-cata-dat','10.1.3':'lat-mat-dat','10.1.4':'lat-int-dat','10.1.5':'obs','10.2.1':'lados-igual','10.11':'vis-cata','10.12':'vis-luz','10.3.1.1':'mp-aplica','10.3.1.2':'mp-marca','10.3.1.3':'mp-contr','10.3.1.4':'mp-color','10.3.1.5':'mp-ancho','10.3.1.7':'mp-pct','10.3.2.1':'ml-aplica','10.3.2.2':'ml-marca','10.3.2.3':'ml-contr','10.3.2.4':'ml-color','10.3.2.5':'ml-lc','10.3.2.7':'ml-pct','10.4.1':'grupo1','10.4.2':'grupo2','10.4.3':'t-freno','10.4.4':'t-marcha','10.4.5':'t-int','10.4.6':'t-galibo','10.4.7':'t-pos','10.4.8':'t-cata','10.4.9':'t-tri','10.4.10':'t-antin','10.4.16':'t-fijacion','11.1.1':'pl-tipo','11.1.2':'obs','11.1.3':'pl-fase-d','11.1.4':'pl-fase-i','11.1.5':'pl-contr','11.1.9':'pl-anclaje','11.2.5':'pl-huecos','11.2.6':'pl-radios','11.2.7':'pl-homol','12.1.1':'anti-fase','12.1.2':'anti-marca','12.1.3':'anti-contr','12.2.1':'anti-sist','12.2.2':'obs','12.3.1.1':'gb-cubre','12.3.1.6':'gb-aber','12.3.2.4':'fe-aber','12.3.3.4':'fp-aber','13.1.1':'bola-fase','13.1.2':'gancho-fase','13.1.3':'quinta-fase','13.2.1':'bola-marca','13.2.2':'bola-contr','13.2.3':'bola-clase','13.2.4':'bola-tipo','13.2.5':'bola-val','13.2.6':'bola-trav-fase','13.2.7':'bola-trav-marca','13.2.8':'bola-trav-contr','13.2.9':'obs','13.3.1':'bola-espacio','13.3.2':'bola-10','13.3.3':'bola-aber','13.3.4':'bola-mat','13.3.5':'bola-desm','13.4.1':'gancho-marca','13.4.2':'gancho-contr','13.4.3':'gancho-clase','13.4.4':'gancho-tipo','13.4.5':'gancho-val','13.4.6':'gancho-trav-fase','13.4.7':'gancho-trav-marca','13.4.8':'gancho-trav-contr','13.4.9':'obs','13.5.1':'gancho-10','13.5.2':'gancho-aber','13.5.3':'gancho-mando','13.5.4':'ang-a','13.5.5':'ang-b','13.5.6':'ang-c','13.8.1':'quinta-fase2','13.8.2':'soporte-fase','13.8.3':'quinta-datos','13.8.4':'soporte-datos','13.8.6':'obs','14.1.1':'placa','14.1.2':'pi-luces','14.1.3':'pi-voladizo','14.1.4':'pi-radios','14.1.5':'pi-radar','14.1.6':'obs','14.2.1':'estab','14.8':'es1-luces','14.9':'es1-vol','14.10':'es1-radios','14.11':'es2-luces','14.12':'es2-vol','14.13':'es2-radios'}))pon(AYN,n,k);
+for(const [n,k] of Object.entries({'Total':'m-total','Tipo de caja de cambios':'caja-cambios','Tipo de combustible':'combustible','Nivel de combustible':'nivel','Check1: Vd+D12+D23+Vt=Lt':'check1','Check2: Vd+Ic+Lc=Lt':'check2','Observaciones:':'obs'}))pon(AY,n,k);
 window.AY_PAL_N=AYN;
 const css=`
 .ay-q{margin-left:auto;flex:none;width:26px;height:26px;border-radius:50%;border:1.5px solid #b8bcc6;background:transparent;color:#8a8f9c;font:600 14px/1 system-ui,-apple-system,sans-serif;display:inline-flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
