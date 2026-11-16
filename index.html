@@ -2265,8 +2265,10 @@ async function palPdf(){
     if(v===null&&!/^fill_18$/.test(s.f[0]))continue; // sin tocar: como venga la plantilla
     for(const n of s.f){const f=form.getTextField(n);if(/\n/.test(v||''))f.enableMultiline();f.setText(v||'')}
   }
-  // responsable de la homologación de Palfinger: Francisco González Nogueira (como trae la plantilla, sin el espacio delante)
-  try{form.getTextField('Nombre del responsable de la Homologación PALFINGER').setText('Francisco González Nogueira')}catch(e){}
+  // registro de firmas (apartado 5), como lo quiere Daniel (16 nov): responsable del montaje Francisco González Nogueira,
+  // de la homologación de Palfinger Juan Luis Chacón Ferreira, y planta de montaje Vicálvaro
+  for(const [n,t] of [['Nombre del responsable del montaje','Francisco González Nogueira'],['Nombre del responsable de la Homologación PALFINGER','Juan Luis Chacón Ferreira'],['Planta de Montaje','Vicálvaro']])
+    try{form.getTextField(n).setText(t)}catch(e){}
   for(const c of model.cbs){if(!c.f)continue;const on=!!state.v['c'+c.id];
     if(c.tx){const f=form.getTextField(c.f);f.setAlignment(PDFLib.TextAlignment.Center);f.setFontSize(7);f.setText(on?'X':'')} // opciones de una sola elección: en la de 2026 son de texto
     else{const f=form.getCheckBox(c.f);if(on)f.check();else f.uncheck()}}
@@ -3852,7 +3854,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 16 nov, 09:53';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 16 nov, 16:45';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
