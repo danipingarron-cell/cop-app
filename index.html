@@ -3854,7 +3854,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 16 nov, 16:45';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 18 nov, 16:00';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -3982,11 +3982,11 @@ const LectorLocal=(()=>{
   // «58 R-0312092», «73R-011025»…: junto a estos números va la E del círculo, que el detector casi nunca ve
   const NUM_HOMOL=/^\W{0,2}\d{2,3}\s?R\s?[-=:. ]\s?\d{2}/,LA_E=/^\(?E(\d{1,2}|[mn])\)?$/;
   // hi: la misma foto con más puntos (opcional): dónde hay texto se busca en img y cada texto se lee recortado de hi, con más detalle
-  async function leer(img,aviso,hi){
+  async function leer(img,aviso,hi,op){ // op.pct (pesaje, 18 nov): quedarse también con «0%» escrito a mano, aunque tenga una sola cifra
     const O=Object.assign({o:1,h:1,e:1,g2:1,pad:0},window.__LL||{}); // pruebas: quitar mejoras de una en una
     const M=await iniciar(aviso);if(aviso)aviso('Leyendo la foto…',0.2);
     if(!hi||!O.h||hi.width<=img.width)hi=img;
-    let cs=await zonas(M,img);const lin=[];
+    let cs=await zonas(M,img);const lin=[];let giro=0;
     // foto de lado (la mayoría del texto en vertical, como la placa de Mercedes en el marco de la puerta o una contraseña fotografiada
     // de lado): se pone derecha la foto entera, para que cada fila salga junta y en orden y la E del círculo quede derecha.
     // Hacia qué lado: lo dice el modelo de orientación con los textos verticales más grandes, tumbados
@@ -3996,7 +3996,7 @@ const LectorLocal=(()=>{
       const g=rv>mues.length/2?90:-90;
       // …y solo si es texto de verdad (12 nov: los arañazos de un piloto salían como «texto vertical» y la foto se giraba): se leen los tres más grandes
       let ok=0;const tres=mues.slice(0,3);for(const t of tres){const r=await texto(M,g===90?gira(t,180):t);if(r.sc>0.6&&r.t.replace(/[^A-Za-z0-9]/g,'').length>=2)ok++}
-      if(ok*2>=tres.length){const W0=img.width,H0=img.height,im2=gira(img,g);hi=hi===img?im2:gira(hi,g);img=im2;
+      if(ok*2>=tres.length){giro=g;const W0=img.width,H0=img.height,im2=gira(img,g);hi=hi===img?im2:gira(hi,g);img=im2;
         // con pocos textos (una contraseña de lado) las zonas ya encontradas se giran con la foto; en una placa se buscan otra vez
         // con la foto derecha, que así salen todas las filas (lo que más tarda es buscar)
         if(O.g2&&cs.length<=8)cs=cs.map(c=>g===90?{cx:H0-c.cy,cy:c.cx,w:c.h,h:c.w,ang:c.ang}:{cx:c.cy,cy:W0-c.cx,w:c.h,h:c.w,ang:c.ang});else cs=await zonas(M,img)}}
@@ -4014,7 +4014,7 @@ const LectorLocal=(()=>{
       let t=await texto(M,del?gira(r.cr,180):r.cr);if(aviso)aviso('Leyendo la foto…',0.2+0.75*(k+1)/cs.length);
       // la foto no deja claro si va del revés y este texto sale flojo: se lee también al otro lado y vale el que salga mejor (pilotos montados boca abajo)
       if(O.o&&todo===null&&t.sc<0.8&&r.cr.width>=2*r.cr.height){const t2=await texto(M,del?r.cr:gira(r.cr,180));if(t2.sc>t.sc+0.1&&t2.t.replace(/[^A-Za-z0-9]/g,'').length>=2){t=t2;del=!del}}
-      if(t.t&&t.sc>0.5&&(t.t.replace(/[^A-Za-z0-9]/g,'').length>=2||/^\(?E\)?$/.test(t.t)))
+      if(t.t&&t.sc>0.5&&(t.t.replace(/[^A-Za-z0-9]/g,'').length>=2||/^\(?E\)?$/.test(t.t)||op&&op.pct&&/^\d\s*%/.test(t.t)))
         lin.push({t:t.t,h:Math.min(c.w,c.h),w:Math.max(c.w,c.h),x:c.cx,y:c.cy,sc:t.sc,a:c.ang+(r.tumb?Math.PI/2:0)+(del?Math.PI:0)})}
     if(O.e){ // la E del círculo (12 nov): el detector casi nunca la ve; se busca junto a cada número que la lleva
       const sinEsp=t=>t.replace(/\s/g,''),ux=l=>Math.cos(l.a),uy=l=>Math.sin(l.a),dbg=O.dbg?(...a)=>console.log('DBG',...a):()=>{};
@@ -4059,6 +4059,7 @@ const LectorLocal=(()=>{
         for(const l of [...lin]){const t=sinEsp(l.t);if(!/^\d{4,6}$/.test(t)||/^(19|20)\d\d$/.test(t)||n>=2)continue;n++;const e=await busca(l,true,2);if(e){pon(l,e);break}}}
       for(let k=lin.length-1;k>=0;k--)if(/^\(?E\)?$/.test(lin[k].t))lin.splice(k,1)} // una «E» sola no dice nada
     if(aviso)aviso('Leyendo la foto…',1);
+    lin.giro=(giro+360)%360; // 18 nov (pesaje): cuánto se giró la foto (a la derecha) para leerla; x, y y «a» van en la foto girada
     return lin;
   }
   return {leer,iniciar,precargar,_:{zonas,texto,reves,recorte,gira,escala,tensor,cual:()=>carga?carga.then(M=>M.n05?'nuevo':'antes'):null}}; // «_»: para las pruebas
@@ -5645,10 +5646,10 @@ const FotosRev=(()=>{
 
 /* Pesajes (lo pidió Daniel, 25 oct): el «Informe de pesada» de SGS / GMR Homologaciones, aparte de los COP.
    Daniel hace dos fotos, la del bastidor y la del ticket de la báscula (un papel por eje, con RUEDA 1, RUEDA 2, BRUTO, TARA y NETO,
-   y a mano «S/C» = sin conductor y el combustible), la app las lee con el lector de Google de la cámara (la misma clave) y
+   y a mano «S/C» = sin conductor y el combustible), la app las lee en el móvil (PaddleOCR; Google solo con ia-fotos=google) y
    rellena marca, bastidor, la tara de cada eje (el NETO de su ticket), conductor, depósito y la fecha del pesaje. Él lo repasa
-   y sale el PDF como su plantilla (pdf-lib y el logo van en pesaje-datos.js), con la foto del ticket en medio.
-   El sello (lleva firma) no va en la app, que está en internet: Daniel lo saca una vez de un PDF de pesaje anterior y queda solo en su móvil.
+   y sale el PDF como su plantilla (pdf-lib y el logo van en pesaje-datos.js), con la foto del ticket en medio y la de la placa al lado.
+   El sello (lleva firma) va cifrado: Daniel escribe una vez su código y queda solo en su móvil (o lo saca de un PDF anterior).
    Lo fijo (básculas, técnico, responsable, Madrid) es siempre igual; la fecha es la del ticket.
    Los pesajes se guardan en el móvil (IndexedDB, con sus fotos) y no se borran solos. Va después de foto-punto.js. */
 const Pesaje=(()=>{
@@ -5721,8 +5722,30 @@ const Pesaje=(()=>{
       catch(e){showMsg('No se ha podido sacar el sello: '+(e&&e.message||e),true)}};
     i.click();
   }
+  // 18 nov (Daniel: «quiero que salga el sello de GMR, que no sale»): el sello va dentro de la app, cifrado (la app está en internet y
+  // el sello lleva firma). Daniel escribe una vez el código que le dio Claude y queda descifrado solo en su móvil. El código no está en
+  // ningún archivo: si se pierde, se vuelve a cifrar con otro (pesaje/sello-cifrado.json, que mete build.sh).
+  const SELLO_CIFRADO={"s":"wZytuCjtDK8yvVC9TxOQuQ==","iv":"laIwHnYHdtdnatmR","d":"1Y9OlKIoS5kgPUByLjWTYRnMCg5St2nbXeTG7wND1BLMPTkTIa0pHlnu0z+HETUgC0Lwrmawy2q9oiovaIJX8GYU4nVoMO/k5+QBpBuZz3YHy6fHf3QvYJ0YMq5Sh5X3mqZ8SY/Ayac2O/GAOfjK9lSTr0qqIp6qpisvo5X+OZVWHUsWAVZM7oLStwIzEIhlyhY7dkHK9zPmVI1ovRcoXGZWmjQdxk/I6aGMnbRGaFXdlcYyS7iwewrEMLO/a3lFmxWaHW406zBkWIZ9u6apBEy+9d8Z0cPCTOKR6QHExb/AGss+7kJpda5Y/VKzj+JO487Ig5OyQlyG/LyMXEIh/jOnCOC2fy1Pjlle56T9fQwZuhLKnIXZQgc0MR6nmHhfmWGDEVkKFPqLP5pS/pYQbu+GTevbn2DWEDuydsEodGDNjjbqTjpgjJwQmanSUFxFD2Vq0F+Io33kYmSy5iHV37H9t3MmbAnW5pTwyfcBNVJ8WYY6wbPjuwecTJHuirc85NgUZ0Nufy/YaU9EjY48X3NyXFrhbwy5AIOO9DDD5c9SzlL/yPgCtVUVIs9OOKMlKwvvp3mhYxohvM1OnHqSWdUfc7qhxxYKV+TXgvWIEv6O3xELPfTQhQXfUNZKEJFHuNi0dwec8oheGT+FD1rHjT6fiFaljRxgL/1YdSjxR9ZBIxUlm3pvxJfRU+NKqU1F30hRBAJVY/pDconpLgxorjVqNykrMt4piVHy+hby+k2YGxYKnXGnkV+8hKYFVRHok9HWWmOq1VuAjGeqFUirjIKnwhGrnEihWBzHGs/0irc+brmuzoufeMnkaHTckbVdFIPATZcsuPmBjiv0hDc0bVSf6KRrYN/m4yk0dCILV6oRXWgjVUmlDmqfx2/43MQTJjCNEFa210Fd3M7XEdwbCto1cBb+g5L3ljboDMeZPrKXjWfz3GVeEgThdafNobRktLNR3CQ4AoxBt0nxXd7/8RVHWOpgM0ypa3QL+cv+dxLeAeN5m9m9RDgvny1UuecTwrJ3G5aLG8Q18lfKQtYAIuj4YbzGuWyotU2Q/lrLrlTz8WNEObSvVnKqDOCEbN7wxrF3n2wjO607XqQ5QOfipOSqln77cGa++H7GjnNXO3FO3SQAwm+MWFnjOCabTq9w9wEHn/6SdO75PoBJUX18SdoGascjtt9PX8gcXnLsUFpcoo7YOJchXVgb6QFUiFLsr7XXEY7fbd80eVxWi+K6ob6PTSQUsOmH/9J4atYPCwQAYY+kE5646UKPgaX6jCTi7Sg9lJdyS2HWlTRWZhktBfrh/kttGmBS90yWCg+twEXQ0ozn94czCLaD5+H0l+dqgfs3WOrNomHVOY3WkPoku2vNoYeuGjpkDahj8dbExZQ0/s/2P8th7AzRBdyZIADgEtUgKNsIvHEIA1pDTdtHIoBDEY8BFq6kSUKioYHiMYP4updA3sKPyT2hdF3Lp6JSWi3CraSMSYuUH+k5tcyAEguJ3d0NO9b3DxuQqqBcihOb/ZMDHv/EMdO1kKmmJNly2cJOcSAtMDkk+F3/b4kJ8KygOb69YMO1cFLEzhtB81wTQXY8yOh3WdzF7NCz3u+REKBwllhEqzgsMCYNPGnIBJevDqUsf9HRR9yLvDJLCzTeeYXfvuGf6QyhTKn/AYy08zbDsA4iX766W+JB5yNZwBGI9L6EjzX96nU3tfKdlqPrJnLUGs2Q0ut/FygHjnecJYM3i86+Hf+JS20sY2jasZxxfPXQbD42E+Em3Ei7gqIueupdMfgL8EhCZ/bX5J9fSQu78pU2e0itoMIfSGeUFGehcNfJCDi1PfFoGhUxQC3RW10ZOMbNIatNztU1hRbowxBb0410rWS1gqoAtDet42tLUMVZkcIQ2UMi/ZvZ9p09NOJDKYAqZaVf/jqjgXZpKa1sDX2CBY4rf9RiTKX8UCIrGTCjOdRkpvkgIsxqYCfkKXF9NX+JLST5nTu6jL5qMA7LHgNRqWkaCRnzNDk/HKzYqbPmCQ/uHfaIT3jFk2aSVy0R3NDeOb2kdo2DNcjE/9Hp1B97ix3Jz3AbWj/HcPkEl6oiC81a1NzommsyRFt8ztBZ1rWcS7z1gZGs6fwQ2yH6eaRNSpiKA+AAILzy04yGobfKLU81F/ohTbc8cbz2OlYTWyBOqhrfMiUGqmSuCBF1kBgJShGRp3Pt9s4xSKd3CeB5+Dmq+eBJgfUkcHlPSsA2sjoXdPRICyT6uM7uw+Z/jUiOVKgj0TFu/8KjEBM07V8oxJZhRKbt2hcvk1p3W6AM4FJrbrxqymVBYrj8bnYn90j1OUj3xpJ10sDKTA+dEB2KVUklDYYlmsp1NEyXJzDxhkIH+wZ8+/h8NC2O3bprxf1cnZr2NzL7+MQZPj1sDbXqUgAbvp6kgb5eW4OPMdTDc7XiWWGgMoQf1cK2C8Q3xeCrfxrLH+eAM56zHI3OTGhQ0XOwEcih926hTxM/vyA44GQJjE/uDNmrsGJE2BSf0SFMDWrfA9cpeDoXvPydGRgtrkZ2TZ1AXUdUHr/Y2rIB1qn/1MbvO6i5WNDtWOeKZ0EgrInbYojuHArT9oKdvhixGS+mPMfjbRBXNN3c4xzbw3UWNjp/AuwoAxjrzPGfuyQyWVYdIKnJTb0gL3rT+8ZR7kxejznLbgNliP+da8mhX2XnVKLwIn2CEANw1LdADL0xvXEgMn3np2+pj6KbARewl0PHuVTs0yc7r4VGtuSgQDV6b+P0t3qPefgEEYZMS2r9prOvoGFdAf+WcbeoLucO3Cj34ToY8NT2Ps0a3KgLtLu97KammLaCsFaUOLypzGeTN6DlIQ69bn1/4j2AQmxXJseQ5+eohx/FsxPXqaHbUd6y3MKSekCN5G+aWv/Id3vuJ/2yALHDKz/7WUHZ2yvwNz9P/cPvmCmmxMAgc/26zwW0TmaGodnJ6dCCcTHrFgKiWvBmYAwwMEkocx4KuJqJqiCvuKO5Iu9wBqEbmyokEG0D7xc3jbvE45e2Vez+MGmkaCpTQ+WRxF35VhxClAJufbgxdgNilo5M6x8Lo+/fHv7Nft1qUGWLuZy0cSimyL/1hueH8FvfdV1DipnZgVwGBfjJYg6RG6lIG5KtU/q3DduIaOFHT3oX+qQxygG3mxxcwr+mJQR+IPa51GpNQ9GPYdpN4vp1Y4j337xm89Uiap7MYt2teSdnH12FVZro8JF8Jyjbw4NZBIJQnsgGRvtffbjfdR/W78g1/KZxqcwD1mLStIXSfKsvWfqGMw2m0hEbtjaLnhiMxZTb3g8jyqUQ1qynik/Q5VGXVXUsxF+7rOz76VW2TiIblNC+RxcPCLM6KZn/f+gUiytdYd2DK+AVrIxWPAKIjpwaWBEa1iUIo4couKCVmIKzzSwKeaak+brU+5+QwLphphttbeOzTM6+GR2slGwOudMJmjgiu/U1+mRsX71nQ3ftY4u56/mXAMbdyOBOTARB0Z002XOabaQUThmvIbDmDDuHJOQ70sqQqh6lg69dTdmyCYvhabHShx/oqnbGu/bn/DoqHUsibE+yEfyM1/lqx8ccWGxddOQX43UPgggt5ceBLZa6qQS7W8mK4LwJshVhSIs/uj/K+49QwQdWhowd/vRqwDuJo5JDKNZ+CQiq/KXJe635M6/4cxCBg0TYKPyucpucmH2ZYI8b3lZV5EF3LlJKLVsyeyIIy4d4hPX1Rb6Jcd9Ekis8jjbSeIMXoLiUcIe423SKx4QbUZ4Uy+odHBKvlXSMnPy3VS02YY4nV/k0SP/YfcC8DZVaRTKPemuP4vfpuDuEB0dFy3ovfm/8Ay9OWfqjVgSWW+kLECxOANZai/70VyRV1dlBSqm624ZIe+it2KPOl/Pmbs/5JG1lPGtH/6BDBFYGJtssgoNIGJlw6Pm2sIKTMkCBszYCl+UX49EQYHQJiL1Sy5moaWVwhXt/b9JJ+BxfKv77To+yZ9CjYsWUerURb9eK1P4zjKBalZYdNsvil7xxFQWppjXP5k4sd8CL6C0hJOaEUZDadeWPsnfsQFPzw+EOc/pkR+zuxTmQJNaRGzLfLdhLwv81AGtvrua0f687l4iGiOa2l3GJ9ZR/PEJI00ZQm4rvZdDT2Iv8TYEAS3jI+TYzU3W0Z6ZQHs9TQa44D5EPFTOsF7FXFRI4CZ6oXu21Ji9EkXVfV7iDXykalTVl0CxPSDG++rDSQF9ftQrVCaCxYyOMFou1Ejny/hImLdzOJ0+V8V87zR7Z8ivUkYBqfdEI1ZDDuCVG8PQr4aBxYZqqV3qNJcs30tbDLlQwnyiEoZQVXcKrpbfciaY8F0JjjJlkm36rc7V8ANB2RRIeD6ILaJN0HOsazlaxo6L+KLMevJvL138p5sKuUADcmZf6ngJk44u66DbG3h1AD38wQiIbx4JnRUGcJ3KN1NdpV9SKum5kz6Y6D6qzRGAzIs6m4syMt1FB4gHt6Hii0mypD7TKy5gAP/adqlEaIO6y1XGgodQYGyatJGqfqksOZMeM5YXKW69Dc3Ehjqj+2m07trvs7N+ZH9g0+5T63aU2lXF3EoaVvqnbie74Ll7PVKDMzo2LDykz2HQvAgEBoEe6kGVhd+gca/cJ/BP8OKzyRIodIqbja3u2ld8CX5CR9Tj6TRdvkA5Dok8QF1igOonCEnQegdNG+mHKDNJDyUrEFT6grrVu+ySWh3OfUNJNDE05ICtTAeW2sdPyiMzQvMK3EDYylvgQfRWxUYgGrujEwxJ6MnZf9mclUAbZasOWf5WtFUavhHFRVUM1gnThEmsxZUOpbv2A/Nslfh61e5L5McRYgXCf6d2nSBvtDxjUsqDFEGw9+5gr2jFdDhSjvG8zb6gfuEV55p5WjELx16LqwJgREmwOcpfrQVDk3lG9aeq5GpsB6OvHHDuloZh5I8fUmeE4rgIOtboxs9bQAq9jPd/JQppvtlzKK4zwhzCsf6Zz5VvJth+NpiHHRv3CH5u9wXjtmw/CdBFjrp8BfG8VqTPEMKxKP+mMpRKPEHNsOIWP29l4vg5uWInF6xpmEg4io+R5/XFChc0Ri02iIMrfEzn8iZZiFz3vvJ8Y2vgIJ3JRcH6foDLECEWNJeA1B8qbXwTjCIbFpGI8Pp2k7BjqBoH42NWqKEBQpPGRpC8fHOZxdCAvhc1LQO4kgURDmrmMkAy7NIMxnrSnwsZmLlcjM409MEYiKfuGX0+E0iAe2jnCK8Z9MRMVMalR/lq2E8PhreW4wz+/skso9y+ZrvhsHNSGfKGP1NsFracXr7U0+6eE9Kg8jsmHJ6WkZcXYQhTIYmFvX7ACjTfpBxh44v15YTQJ7bNV2rFF5tQDXDeWvU4kuBvyDjFfCO+kAg/RYfPL8z9exFANa63csGe9kimawZyeeMbIxoRP1v7JCCbqHc6Cuu9wGWTUJtnH4lXsbAau4CvdBLx0LVQiJEM45vQAxI9ESRygWM9It1uKWGCAZ4Mdfbc1IMQWhqura5J77d1P7idV+/RNPKi7Ya63NTqKYtrwYBinNIDINudhn4BmHCo+wXNDhu+lRwXaGyNmf2tQGd8sDSSGTqzbgEA2ICSbmBqnNjyDxWFTeYGh15dkce8ZYINq5FaUrrySBzjwOaNObySRohoV597XKP/sMU3LYXm5Syzsq7Meyfcjc5RTDwVnC6cGYiOAwnzgy8+OqEWbQRr5GwjI0i3kLFSXvFu0oSDnuWc6BfxZIzhM+cP6YQHQZ31nhIa+/GKYQnXJNH5cQ7LI5Bq+W5/iu6pU8Cq7tg/bI9jr0eoSwIWIxSC5B+SeApjDIGFdiqscu9J1+EUd3XReWaOTBs/ND27B9zerq3EGdR26KuZmE6X47MjjbW5Sjx84xRj5lDNpEy0PJ1I+Yfn1Ay9mjiGZFExTerICL+9sf6iet7zlcaFPxk9PVdM4/nl5hmaBp0AmdAe57iQ+k2oAbfCDRL7PRczxXA0zFrTqU3pJRioYRmHL3nPNnn4f1mzlroG+XrYAUeC9Jn+p0FYViPU2iqsPdleBvogYky7x5YWJzSNBiuEQiuRP8R9rokbttKaUqlL/H9bm4czU6169n2/M1aGhFuGqZmqosfZ/NyDOyqV57oB2tFaujpYF7iPK/YY3c0AB0cak2eJw54B8ZZEus1BUGXO2jUU/b2syhSwQ0/1F1h0JJJH66d5yAEtpYd3Crzo0PqNTnhB1mUPjxRpZDVg6cpFqVYacAQWBPAbTSpC5ZqzUQBtSa3fGU53y2qNA09KFTt36tbbylR3pxptqCIc5IncOQvrMGk1QhM81jf6NFv1zIyySLfPkQTsajcX4YCIEWgeNRiW2r/YjXwtSQ9IUHIq50A3Pjz37UUZGO3LeeRdDCY9uY8pRVs77Nwmso8agjmltMf4pBsADIsIybF49Vm1ZS9epe2hIqiO9MfcVkDxZK3XmJHTEwx+jAugRBGi04ebFbpg2fi+bhCzpFxNR8lHj/mbP8Xi2A2I/msTl3VQ+yhBQZvgChyBWrULXzCD4aaD2YbCMZhGykaD+arqjV5rjo1OvMfGTw5Hwqsf5HG8HI3AnD4ewatU6UrGcrVGPfY5NwZkeWkj14aoyNlNVdXYFk9IWoJ6ppSp14LAIfWZ+hzn1AnXN4m1SAvaJFgf88J0wm7odFKGd0p4ycRUOusqvQFktIcEvO7gQbTTTbGMys2IMJGTKs47qh68JRlW9Mp28V2YXzPMd3pY+o6a32D9LYvOeHPBz9G6e9bCWqHRLaofncBwjLmkXGLKkhrcrGqMW476LVz6RyhWlxeTb0/kQyQY+3qbNKeUW3iCWC9QCxrbE5r6ZD+nVqj1PwZ2Bzx6zyD9x7m+6kKwEtYMT7+Z0o/oBU06BQLiKESXbYxPOXv8ziiEsflXlfssO6g/4LREC1TJPR2KvnFDFe2o6wWuZ6i0AWNwu4O1Qc+e8D5Go47jHdM0Mw584yUIwVVCxFBcoBJ4ftrGvaP8BCfHB1qKvRE1lJ/Kov+DFGpM0C7VLQO6yqZdIoOnG5z8cij1DSFhDPs7SVeReIyOc4tdfCIZTT55OuW9HRZCI+HwKDqNk77Xfr5MEuahhh0nJqqMN8GFiS7kYVjtSe9zpnWjoFLbbICnIJOJQdcDLq2+7o5hJTnAsy8i9eZfK1HPnFmH5N1WHkYUyxO1fF+zPJu3aE303zRk9xyZq7P7L5onUxnZna/EYHbPC1gWbyZkybDc2tm93mQDO8hd3CcE9YcO9lUCB8mM0PZG7/mAltJNRdn7AP3m3nzBc98gJKnXigCS+hHSrl5jygP8Om8xH17lOO3TpyWuQQ/HtDFuVfT5TkgPvBmG/Vs7mCD5aWAC231ADKmobM0rrsbgoaXRfwy3C1ZDYLCUPRhoW4RECz1zeNgKfPHPbhahQ3HHPP8wRU6r1KcytDQpWfx6UNeFHAg7AUOg07VIDZBUum2VUc2pk3Cf6Cftid7oVzNbVmSOofh51xRJFSHCwasm4hWavKfnzL9sbaTxArDfa8vWoj/Q/qmNhkgqStBQw6WWVIRTa25NI00yo/IFImq+W9soivwgv+r+rRLcqdJ4NaQChMbjrhFYXrw6rI3K73Ik9tLPs99YuBwhBJbbI/cJ3wBrHGtiG5cfk9aUMvfMTwjxSkxGsYSumZJERQSwkAmIZk6dkypin5XO2fja41dIBYWw73wvMj21q4o+R6A6PtH6diUON24HwkQy8I7i8qfOdltgOJQUKASLFluIXxqKk1/j7KWoJY32gC0p/O440VU6nh2PVR0s29J+A9Dr3Y92hmNL3vkMsI/bjd2FgnJ8s6FUIJ8t/JwI1BLhfIv2tYfp7tbEOdPHYJyXRhDkN0yjr65Um2vPi+BO5G21bjeOXA/rYkaWHNbDswxLCKbXw+7GsILNdusSd/GH9Eh8r/RZnVK3JZnuN+CPVJ7ypdJJ672WZ/wmEXVtOqI58WPcYR4Cp4qPX1vCBhG0xPm8gi9+75Byu2bmGT4CDqNOV6Uup1P/lBDTa212KhfbSoFN+VnLy85tuGPQSM+D1STaqRBz9V6rQnPvkOvDxnDRq3xkmtKpifP0ci3rWYsoyrur15EPBAWyH8e1jM1oczxZitfm4PKIcxDnVeS7vLmh4ttdx/Ut61cWuX02nc3J0793+gTSLoApMJ0IRFvsKOGAVsR4RpIfBaR7KfzXXMjl6EHRBkCpkoHZtD6CAN4byQo9hMihc22Mhl/gcc/qemtnEH4kDX3Atrob4gw7SXfE3gbDB6Zw08/17RkgfkMA9QxGHAWNw5hMvNa8rVAQD2SjdCdVlhPoTe1p0IzrUcp/TR/1bix9bvSb6L8T021g8zEooMQq2saJd/nME7ZsHDOcsphEQUWbIryZWqeF27OLiNEsJmT4uWrz4ygecAV0/XnoTRcO68ZaD33al0L6F4JtVGweKckVEanf80K54JX41Xgi0xcZq3Mb9NjW//Z54FgcAF1h0y9lmClswpp5ky5Q9M3JoVwNcGxC9zfe0RMIbHvntqt72S0kw0LQ3a6ZTdNDm593E2BegvOl/qD734+zpsBZu/iqDZyXkf3GbXvdx6kdcKEWk99TztF+IM22qUhePvx6KqjAou2UhmztFSSFlxAsjh3Tkb4bZiXV9SX0WrKwh1POJ5kYccuXgHAzhvUrpEXyxZA8xrOibKzB40m/UqqLEu7NVM4vK0V4ENRimFV2l/WiXghgxX9Mtp1TJaW3iP4HVrTkkS4v/Ju9GQiNf4+o84EMiJflydEy11m+8jCmB8KsmumR0ahpoSJCt0p08nwQ5W86Bj/w3FDTW+CygaKaZ+PcB8wVkbmz1GxV4cI+tsa+384YtqrT/E3lXD9jxHLl/DXaXpoao64Ijin2d7sxpcgyDnxji76LlHh2ZSt02a68BPhOWXh79tKb7LXm8oU9vdEsyw6vwC30eH4a6+njycRqTFhJpxoXf0SE+GnzEKAIUI+7wkpLWyu6gC2icWefjZTiaDuNly5n+/YLI468i04+wiU15ssfV96cB4OkFBxOmGknIUc3T4w+9norvSprGFu8JZ6XBgI1jznTg/TerR/wTWkB9TFHdXX1+Pw7CpXD9t9SCBL/k/3Jxbc5BtSsF4zVYphxPQv3wUUi5ZAyv27C9kRcXb8+os6yMeg36O74Zrv90h6MoxQpTokKfcaAQ2hJ2QpEAj6pZh1Dj0groPs0Zshfs1zUkWjEqLJVM3RnomJoiNS35tC3hLb2At0TWRKznxunj4jWirdO/KxcHw6r5zvN/ubOObtxZMC0mhOmwPAJAQoMT7sQz+7Kbv9Lek5YPsLRfN9hI4K5HIPfeQRi2n+XHIX5Xmxl99wyEnE0ytAk0W4zaGgYLAm6aUb4LXaAoQ6PdTY4JR9PBoKYZomCpPcvDRjScnNkHipliTDqjOiD/l+/BGjR50ba+eCIwbF/8FIsw7Q5XNJ/0bvTeJ2pZ7kbPpuLpwHpW6GlaZeyhrJjuWaVvAOc62ocN0ocEbuuFA6ONbiBam9EoSVofdP7lnDW2424qiQkuM1HQd1PBf0YNfvjPzmEbTCifcNvnLxF13wWtxHurH98+gayXDfbOL34unh6O6+VPkkIzaqmlYfigyN9I1GnOO7MqeEaOGOoNus+A0AfzLy7zFFWwrRH0TjMPluZo75q7z/5ZTQvsT/fPQjgyjocQ886lSl7OeapjZ3gil2XHccXTDay+POl7IWMozE/Fyt73zg/xRnq06Yyy8/70SJY8hiIKxbmqEwg6xQ/8g0AbvUEEt0gqOL/2Q3cSIyoqeR36L/APItMluLbcxPLuCS8pVwdiZ1++r1ZQb5wGX+arrYvhV4aCQkAKlgRbv8IpJpmXgjkOEn8HRTzfMny8WVdiUG504O0m8hZFdGcDGx4xxTlySyPmS+W4dfJDheAxez4tVowVCVbYQHPc2xNhJDhHKnDEllSW2dHnBuHmTq4sM0780FrzOJjAQamjGtwkRlEUMMjvyN0HipyI4jO1z+BGvmYSoz8M4QzesHROMM3n26+0yCffD5KzRzwY+7Hltcg/qakUs/0T0sIf2M0k2TX/nEl+3Ez3dSHYaD7o2LyxgwGqDQcr6NRSafh17wIV1CY8U709h9+YIAbUdriWLov2Pe/ADrA8slZLvFzWF+aBVlZqBX32YJAPnmNJGHDifVHsWyg0uljB81inj8DI3xI7bkeNkerPcfR22pjMk2NUJJip8e2C9sVSyMh3Y3j7zwv9PXX6+hpe2EcyIo7KqAqcG7MjWJPOAPK94AKvRcpiOP+pMdQYULiy/K/SjRgdPihR/PbhN0OAHmfJoOjWhKVXSD5FpKp6p97+4rjy1u0E0YJNQx7vibCW4NsPpjs21m1QhEwAbjSPo0f6mulIdrldcAbDYzFcl/dNiykTmH/dy6QGg9Vqs+4gbpL5cUlD3MB3asYv51OTaVzcQufWd+duJkqb/js5qlphZPwrknSi3xjbnH2p/+BXnaG1BK/g5COLKXSs9oP/TYJPutL4amVEWDCRZZ8cuzlBokaBja1sS/mPAIwFORMwL37LmrSktOmJNT8e0TGTuD+z4GYhN4ePAcnkj4bAwdk3fdNViw1mu5TrOXk0P0TKeIg0jgopMxnMRK4e2GMXzqlj+t5tiRQXjGrKV7N2wfx1qt51IrAVTCbceENlfYakvY120kmBRtKpJAiXYxtb9eUuQ9vi+UhpEfUY52x3Yt+GfOkT2nqI2Bk8wQp2kGj6x516c1tD/cLJhNphlqL3+KnECdEIkSp6y1yBCDMejMDp3ezKpg/5DGTb0ZEL/BJ1bjylQW1+7BXd86lnqDxPzwq9bB7T/af6LWw+m/8k8cs/nwLQ6MRB+HYP9xrKlzJ7ZFduZ9TJ/284rC5UjH8AOANwRib8krf0HHCuASqAIh/MbmfO4/vgtCtrjX+Ja+UVg+wiJKxB1z9eXOiMYanKsy8eezcOq7898WCA6k60X7BYkpxDBuiTNoKXvkN0+5SRZn2k00AP76X4i1ckv9mtzJCxxILlp1IXVWrZ9uox7MtMlpqjN+6INKvWzugWRnwRCDCzwXY5lbQKFJyc61Yo7K6aMAgGoXX0MNuWREZ5S+FyR7C96Ebzl2QiIj2z/WJnnTal1hFp3A3krD4aHdFOuuP4PbgDC6wAJ8++6PVYT2aDc8RvZfqI5TmwuZ9KgEfTGVFJE7Bkeub5nnpNu2ybOayF977Tqo+jhXZhd6kLoD4UbIiLp+/Sr99wpRh5HpHsrA4RiviNyHyWW669WzweYQinElGb35NJZnhHx6km0TUh//w8lOR3N/spdwHbTUCy0u5biKGwNeHLoS/Jdp56sab0nbEEi49DZzrt48iHxVJHxQWUxPfDQTqRdFsW4fdNRpdcPU2Vq37WqOP/Y7D/JjcPue0nuCSZI6BL1q/nGTHAVtpWvNwHMjveDpdozPVEZZn8B1cT3Lou9MQgH6MJVnhiEfw38o4z7I6/bCNKCt5aDQXFvKpGFxHQbLpa+v2yJKft+LWnDkZRRunuP8d59oFcLBL03g1E7J1fp1fVgtPbVrsw5lpX4VYaCd+fCvaEYwQei52t2Q8K7hOuxWLxXV8TC4RVxgoko1nWbURTt6JRQrSPbV8qU6+DZ1qdk6su5XI9quwLBF1eiVZuvMOo4P+OahFVMtI683yg82Ak1TL1GHQT+dBF1U4ReX46UUTKklqrt7/P2jha9kF4ZbIMrlbbH4CPxMBNf82oVZjTZGzqWJaQwaxF57TRavnwOHkzx9MM/JPobf7lMt/V/Ri9M2dsRQ9x6VJHQ7P5JZgeCo2XW5eeQi2NwhY9Ve3boovlwmADCulP4pnBRMLpFaxVXksD+/SefzzsicMPWpTQkY4QBHluyG31eu6s75oR39/ORDv1u3ag2lY5i8PDBOrCF9a2OYnY0vY+z5LQvr7AcCF/z8ouI8JnZwIjXcKEjSwjRj3tW3waZg8namlgZjmL9Rmu2Ha4BfLpL59qckMvyRgB6jA83kBhbEU23X26lolPTOxygOmczXTXqSAA3V9vxHDizv5ART3/+i/kl789GU1Kh0N7MYqibsJqKEuIUE0AFBpOAdz3STC/ykcBWV3QW2zCfIjxWWckMGbL/enNR3FNmKoWNxPVKzTvwPoArNIjuZ4wNYLmGJ+qr0UUlRzPnkPiL/KhbL5l9U8yIZKqWKRPaVaYchBR639xdaOSuf5pWwYppFM2QMt58Q1+NDJmeXlGkFFE4/R1ucsymQFoYqK0YyVikQEwXPRnoPV8aCzcIFq/JDLAzjbf8akxom05WQlf045S2cQJkkcmpxAsRjU4s5ZQUcMtiusbQ9O6VZ0YSmelXTf33/iyqsgHOB90xOzr8kd++/W9L7l+Q1SzcZbPb42OAWjerkh1Ejg4hzvRgJfNO9RhPJXuZQ6gHGFVPZ+BZtSSUOUEQ031K8HJvJOhoqqnnta1+3/VslRuBIxkMRfMl7AMJLK/N1MrzfiuadBgcLaGSo9As6vHxYADdl+6++SGpEJqJrxThyUWwIOD9Xcx0zwqoFCzYkKtVwPlsZgmfHkvAJWo1dYyED9cY1vEZuNLzHnS1IUrJpMAZd2Gzu/SgMuzAjpQ+KDFGdxWXqacwnUbjkOigAOJ3P5yAeiSdtECXjXsSJrWYj64/f8aVg/fqhC6i8Ae6BS4QLtt2b3p5WiXq5crvQ8qSY6BVjFk1Rv8OLytRtvg1pmBDp5CwbsVBEpOWqXd4IyLFRgUnnjj0cV6SYU65Ul4mLp9OJhGAUiN9rzwt65OYUnOFAtC0P6TYMLos8sz7mQ8RjsuWD34Z9pINtRV10iF+dHIPhoJ/Ze7A7ZLascLtCO8c3aygHefMnBGGlr/ERYO3Alcc+G86Zofrsf/6iHtARHywJ1DNUSCePX1eo7zy+fCRXHDKiCp7GAHX3MRFtw+KmJpmIVDxXZxevJL3IDnrO3so/dJv10S2x7kkSCPV1y1yqKP7PJTko1M+cD0k58CsgU37N7qf5Wp/DQQ7IvQ+6Xs7GLR6/glrxmV3OfjUpac2PI+CTpKuMpIEgx28z8EZYSqL71MGwyV5/zY9FWx0HoJ9TR3DpdlAXNkW93jCxK2enhi/O3aTjcMpzg2NtUQhSkoUNI1R3K5ee/txM7kpSms/VcgeBnx1fdSlMLDpRKxuhBTBWAJF1l9DPYUax2pp0Mfb18tBVoxvlNea3SlIwkvIhtOxHQ6UX9iBoTpzSzPMeJtX811iG1x4oYmt5HFPfWBKJBZsooFHqcPvx/z+SuLspODynVa6OaXVjfk0r9OjgoRZcikrKWV1ipHfVizCYvb6GFppcK/BhLtoyHPaUW+AF94HcIyO1ymAIcLEQ6M6uL7p8PMFvn+3CCUzEa8jJvUyEw1qDGFVfCIFLMUK2WKTQFkm+KdPEJC7egNe7uiH8jhDJ/tDrUYYZNXqpioEReoOOEYwZZQiCZmPNQB8C3zv6JEGf16mcS0Tj0IJyiyY33han3Bh4dl3peQ/BGW4kolIGp/RuandNozUSZO9su3wUVoC4WWfoeRK+g1Sb9LJDwkZyyC5ymykEI+eQnw3RguVDu4Od8IwB26HRJqHFk3znEWs4vml2vbq60tflZvDS4hWTyb5Z4MFTET4uRhuW8pCiSm5Uv4mE8Y1pfXkM/iGy5yVtrQS2eR26oAj/f3ilr4m9NPlgEeW8W2FMHaaBwmfXHpSn8DLfGAbsS6FFbd/LjH6MiGL+1mhJcEZnx/F+3027ermxYsQ5TWtPtN7uFaAa3gqtfcqhr9FIPT4TbpUf8HcJ2gWeJvs5Ci8CTgkzc1iOyZTfuvzcojbpmuVHmM0bGOqwvVzVFiuJdyyF3hWEbUrtWhD7PRZa1in8MBIclb5F6qWE6K0JxC7ISKEwk17+0rMYi5NYwIavVkCqg6xo23u97HZvvKJM9daGjkB4NQEnp+TVsyAFFeFnsKiP7H8so0tSfKzHSuY84HiMp+RXy7+9Lft6j5Z7g8FyttEvbikWzrFgGFMBJKHQ6zvjFxzECFMDyqX8Z1t/pqeQbmOzzJivArB3s8mOv8GXk0CD+MgIV9I+HeENoNFVNhoGPcISQxPuv3vLLre1BOEB8d4v+MoIhxwRH9yA4aFRrg6V5fVc0bKhaB8NAeS9JBimP6wgRL0rr2KPVhgTufaEnVa4av4zX6iN7S12sevawsqEXQ+jskL3nkXjFUFAD3Gr/YmCoJSt2K6d7H8NxNkKL94woj2bzXe4SB0NSbvNh14hIq4TfIovFv7kqOIIWJ4bODBi+BSeofL7aInibIVfVHJ8J2GoMaW1C0zCGzrq5RU7RPOOJHT2DX5qxMJ2BGTOnB53eJBiBmCaxCP0KLb7sF2Dc62Z3/RAovTv6kgFjzEE0RnGl5S5HiKpy2oDA3WhwTf2l90nc4awDihJa6WVC3ZNSmOhmY/YcoFl8534KN8C0jNP0pEOeJdWpjglnUG1kAFtwhhIP8SZCDieDxBdcYeGYt80AImvvgKCd9tfoq0okGddQxDJD8ZcmqIX2OuYDx0gEvwqEKR1njjZy/87QtS2knAEDKdrQuDbuWP9twv+YcT00pnycesCXA5jLcXLD+OLCUYIkFWS1L6Dvh+Tb1dkJcmoE8U27fukpkeYmQDNrDup5uXmCR6EiryMi14VnybtGLvYtoGXzVe4Rf2sVKhgUc/x6F2RXxfZefov+ATB3rGEfqLYJcY0jzcx/Kz0nVQcnD8SkDGUeCzCNB69/EbBPRaT/g4mU4reHWRntlNe2tsllDEoCWF6gpddtCJn9vqrDviiVgcLJieeQ7f35MHT908wDmHa3Jz0PTdZyMRYs3q8y6nK9yH3VAZu8IxdnOFnrx8D8IFOJ+fF7bwJru2DBHL1JFHFCnFmFVP+w5RPRONmc3SXWjJ5gjPTAq6INoaPOBUGTEuK4WByA3gMZyk/44822MCfgAqFQAJmlPCMnVfKgp6i4FBhKKuCAC8h2+ufIjyYjEi0wxSE0E7hGG8qzVG6K0PW7LlaZMt6VW6Dw0sa+xWS96DrkTJYrcfAIhUfKHG+5UNmRqkEhrAKKlEWQey3LSbypuBwznG8N3yUSh5NJ1ziVU+wPKz7yXwq8FrtVjiJFaqLEkZ7+fFu3De8aFl89VKTsNi88A5Bbif4+FljClKBwKHLMAw9CH/zKCkt8yKSLs65iMQ8gaxCvI0LNYqAMBRG9htl3IaSA8v5y/c+Z37xMXSAJbnOwJ1SLpoY1TfTo8AT27VVWlQIUY2paWyy7S7ZtJElOEU+rR6rrLIv8+toHxvnTLuLe9K0I32hSy6vWb646vJuWEodPz+gAqw4LdV7iha2/fMh9kYp4Kbmf0hFc5xmqiPzotVCGrbTlvQXxmegxGZzh0VlgO7h+wnFgDksJnb40vnRgFwP70h1kzDqQLnm1DjrvKOHAXNW65hfL8CXt/XMeBWHr1YiJRMf61V3wFkLGNjY0lvQ9ocJ8efJsLhxb8mngt6aL1ZW4P6uIAmvdE+nJ/HiC7mBM2woFFE2umPvR5HVgrM1Rf+J7zuNzyJDw6TKR78EbRBKrQsfUqtxIGYdCmAI+18GHm+AGY2bAXyMbtO3vs7jLVML0pD1aygubDl6aL/nuIRwhQLdhIx+w5a1/dISke8ZIRKYLXi5xuW4Y4iYQ1YacFjTUfZny5JAeRCKLub7ZyBTkBOhf+ZH6ykOzhRCPC2fOSmrKPxM1yXEvyPHmh9GdmIi3T/BsQ8yXpFhWg6Pc05/JtaturD/pY7HJN88eIDOZtNJJaQO+t4CKdUtwV8M4Ubw8z7YUDkY9LyLM1FhJmq2/yUaFNAmfoF6fJMSAH2f+KRYbKi9dEZ65rCoffKA2dhhj5v7g60LrGsfZehnzZemSXs5SskYxJh/sNtGZAZXoYpD7G9J9yD9aXqZDgI9oe9d3q0xDXc2dIErOeulbg/ANS5mX1YxN9CDUIptksybRsjAA7tOkqmT8PSFeOeveEHkot9jyjfVtVWmwexzTu7mRmGQTxrW1oD93uAC20T/tPd7TDQi+6qtycZc9Jqd5M8YtGfgvTFxUE95QxsPF7HnoDp4ImChzEwr1+rfxnthZQ9PExcKGa0l7FCpaO2ThZoRfbX+rPXdhMIzFkdepEPJivu6LpDUTKy0Oe0J10abpGcMtbet52j2gizVU7evJFCWPqiOlDms7fnlhpMDUDDPo2eXOdbSJB+Xqk+AeUT9WZ2rgPIEqJsrFEGimh9RbB47jCVyJol64ZHiDoRY5U5VhCG5sp5bQbuW9cLJxWGq965nyPop0TJcdEy2tHR1xTfOnlpR+ReqCgUbFrw4I/rHJv2iysDWVUjCs2ZVX/pAuQvGbnJU7eDChpGs2RorUXjZCgFq+4vfcioODDU6Iv8tP8VjKAdTZrjPUhuRyt4srszRT9OtziQkM1TbBYPFRa5PhHZ93C+SoLt9XGXduXttEsuybyi0KkXWDB5wrbQEcXOFfrIVSQTf2eMnYO909BmYnoafD5KfGd4TcoXf/82CidqRzxDsAr6yScvBriKS2JrVao9nRJNIQq1T8/2uclQgi66qKaOojUVRqL5XS1k5bNr3h4mAsWz7Eg/M3Py0eIBODSqhSd4JkD5MdkGHDuGLMLhTfNvX5GGfdZQVebpJ8nb4DWRQr+IWGh4De0O9kep0l/rNe2dnho9BYWLwwSAJUiIDtnNkgIBTY4bHuvqfKCnqUeCvrBrb690OI/TL358lxVohBX24ibwUNQ1+2E2HW14PJaXpjWmTVO+rvSlHIMesTCU2LNbgM+UQj8a1YdBZRwEK1bYeqB23tTNXRgFhxsCnqzYmBDgGrLlfwr0X0ON+Jp881tmZegkMhNTrEDXNcfzj0G1OpIotIhbDf2cL069arNhMGQCU1WokUd17ckKZ8sHKc2m8vhvUDKl4vTLZ03hFnQVMgpOk6Z1jGjsIr40I0zuLXt/URBndh6Y0I6gxONTcQ4PrSl9ygfgnw5Aoa5sM6aRkVHG8LvQXpWzR/s7flwtMdxbMVSVf7n4/RT90faruvo1k+pQW9UKkgbMwpfyzcSzz2vej7/DIJtvTYVsUx9oz/FNFkm2dGfYlyvN9OWuvzP34k2Rb+0qZycxxHgOtZ8yUel6YxR4nkLOd0mVQnToocNQzKUBTFoO43ZKKN1kQgWAb2T0OMLT1zIQlJ7iNPuBKHdZ5I36TnWtQDG3lZ6aYBzSeyJoHlh/4XuCnCNdkZHPvHfP8HanzTEz5MqQ+IA3zfDu6IhMfkBmbRAA+wVgQ2MlOzyUbOA5b0pR7gdLcZuHmbQ2RcezWqt4GodvePviZGGwPjy//mfUJveN5i0a7cfT2JJP61f1tKf25Tv8zUALTHwJwO9z+WbnO9MPstz4vuN3ap3ACN0OUEblp+QE9Xttme+8GTNULvIzIF/kt9hJdPr1OVe3dr+9inobEMmJ/+6eetkVJMGp/X9nEnrtCT53pPTuye8U5+WrhVzWEVZnrxfgnrPdjfm6gQWQHUU6uBVLtOFJFN52DP/sfpwR/6utidbqYXk5zeXa7iJkYXDMod27kVZcGJGzGZShP0pMehTu1Iy23VzU2vI8/FE6tb0bfJVUIau+EIOShMAf0zVLZ987tD4gOfg37GBj/93msigbsjHxH2DdxS7E92elJAirlij3I0VmEouT39kosxlMKiyqw4RUM5vSzSo054r3WEa9FOeAyWvrOyihDZMFArKg9ztSBAdJ42FeVXAGtQKuOv25fv30UYmFEtb5X7Vis9lfnRiRI0SEEhxqO41wVtlQ1fDsDVIYKYw325w3FkjZpndCffCdEDQkwIA4fXdDtyVLuPQhALzhNhDFoOGw4t5UXP4gqnWLMJPSPufnSSZ5cn6YPzHFszr+Ti6A6CuQ3/Z21XN8E4ntOatldkHKuGK4SpK1s0nG4G8d2vjeav+H1I6GDHf38HlwutJCfo2C/x5WqDSKxKcal1RApCe/W5Gb1G8UGw0W8d13K1u5UsBumQ9vOKOzp01Ht+4OSjCNyg5JAAG1QXH6hiohkGlpFP/0+qXEGMo4FfAUF04ZXT9yHL47WAfv9qw/9PSELDhyWZnqcpJOfqtcM9iNlnBjsHiUnzG8vyvtqt9lTg0W4NWHRuez6Ia3SG/EF2uazepF7KB+Qt5X/7+XQHjuaMhjMWfqOXt94IuNwR52F9MYUH3EcZRN3g1FV4QToFuhV1tMb6pw78J0OwarmNVW3Lp4BYFrXdl6TXY62eorez4QSEcnRh3vfOM+om1qF9cwgRRcyyZD8VZaYkc7qs+MTuL6WQyX/FIwNtw3ymZca4oTDBK6YpaYaS8IDWMc1nyXg3s1Qs+qCC9zXeRBwAcMYZC6G4T3yMyLpGMWYHyLIQkEXHf9mS3OwJ7WL1/NK1IWdcacZzCa1+/UHZg5IElZQHH0uo/jwlWIXjoCNfF28WW8pttOKqjhIylj/1lcy8gMmWBJWQJ92kSsCbhO6343UPAHnAcES122LAQsAwHSVj3iRIWXsedT+0gW8gaP0c097Mi5We/iua28Nj+FLKHZrFUbyvDPPt1TNUJGja3mXSnXNHrBum2t8acyyBGdutQVa6TbbY+pqifCj/1OCFEWqfBnINlq8E9+so4T2mPfNpTDi4PHyop1+Zgn+AzVqAH2cJDRyjQ9cWAY4uWr3g5Jbd/FhE0afDnczhfTGix4cTlXXy7bsxj2vcdb8rK1yYMboauFsGMi/HomGzCWgJpgLCvhsgK7VNGeAJtFl5b5rDedoW7hOrbtLLg75JGuwFqLPLANTUth7RsvEqer/6Gvu8fdd2YuPXRl9YL7UidPTyOGMadm2n/oDof2Mu/Hn+VreVwXXANmSgdXnsveoU6GpcBv7M2TxCIjWzmkWCkM+VDPDf/AFPhHN5EZW6teKgOEtkVoxqwJISQFQlPapo5VC+rsnrkxKPlvxLseqqs4xCeASXCPHRZiuPyme3TmgQqhNOSEb2ayNpk9I9NE+HUaBe4ksgLlw2vWii30pZ2l60v6y4r4+PLZz7+Q9arjLbpWStr+L2/wmyKs5MQGJoFTa4RGGfnGQLYE/K84y4WQAuLeq6GOWmdzFUyV1cn0/GmJd9Cio+Oklwoo7tH4FhX/lKkY2HXRBD0CRrQrW22nEvDu055N7LRik0KuDE5MdjL4GUyOrINRE5iL7NWpR5qVpCny2OiqgWtP48DQu/qH9hdn7RVia4mxfQEdWJnmTu/ZnSe3aQciU/cwFbvkVfnJRcj4yFhZ5/SrrqztOl7sjWYpmJIMT4AHZXuHwbMZC7aBk2vzuMYa8HtW4eeIsM0R9VYbhl8Uv4+YKzhaCFKFImyu2VkRlGrsudkFeRWIUbBn8J58f7xsAtkshadHx5sV7W6ekZ2bS4LiM6IUZ7S4DlgiT8i8nQ47oO9D2wEZtXYAV88ROWyhYW8lgV1TNACMM1tb8QNjIGq01cS5rDT3OS+LpQjeTntoq7+w5J5G3zO3srQWRvXCNYw9s4q0SfyD8prek9Th0Zl2PggGbcZ3tLidwzGx5zg9flas2RLCCcxtq8qGkrljouzPgfXJF5Qctfy/ZJsRTgVP7yPTVtY8qpRCa6MtUTAwf+00O+H+BZmW87f/+GELKrCsQ6ce/T4LrWfxOdPT58gYEM/IxYTdKXwNTmVkcDCpo06S7wAZkttqgeD6+wSguTuMVOhPIPvz4BzadhXaTF4Lx7pXIRqQT44roX4qfQxCX7pW5psEs/t5vvM7SGpnsyD1Ofz3isHZWNahThZwJYeVNmXXjiYL7i9Pkw49R57MuoMkOf8/4gH3Ej1mgLJE5QvS9HklOSoqc+fbVZBOQzUraeh1zJRkTmGQfEhVSDQMeCuK6ViOnaiSoegjnk5z+yiK4XDmRWzUQE+MjVf56F4s5Khh00bckn3S3RBmWaKKDwEFM5MXCgPU5/F5hC0denNXXSndmpAyZE9NGgO+KLvzfVvfM4wWaYoZE3GCQ=="};
+  async function selloDeCodigo(cod){
+    const c=String(cod||'').toUpperCase().replace(/[^A-Z0-9]/g,'');if(c.length!==8)throw new Error('El código del sello tiene 8 letras y números.');
+    const u=t=>Uint8Array.from(atob(t),x=>x.charCodeAt(0)),z=SELLO_CIFRADO;
+    const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(c),'PBKDF2',false,['deriveKey']);
+    const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:u(z.s),iterations:300000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
+    try{return new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:u(z.iv)},key,u(z.d)))}catch(e){throw new Error('Ese código no es el del sello. Revísalo.')}
+  }
   const selloHtml=()=>sello()?`<div class="sello"><img alt="Sello" src="data:image/jpeg;base64,${sello()}"><span>Sello guardado en este móvil</span><button type="button" class="otra" data-psello>Cambiar</button></div>`
+    :SELLO_CIFRADO?`<div class="sello falta"><span><b>Falta el sello.</b> Escribe una vez el código del sello y queda puesto en este móvil.</span>
+<div class="cod"><input type="text" data-pcod autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" maxlength="12" placeholder="Código del sello" aria-label="Código del sello"><button type="button" data-pcodok>Poner</button></div>
+<button type="button" class="otra" data-psello>O sácalo de un PDF o una foto</button></div>`
     :`<div class="sello falta"><span><b>Falta el sello.</b> Ponlo una vez: elige un PDF de pesaje anterior (o una foto o captura donde se vea el sello) y la app lo saca de ahí. Se queda solo en este móvil.</span><button type="button" data-psello>Elegir archivo</button></div>`;
+  function enlazarSello(){
+    const bs=box.querySelector('[data-psello]');if(bs)bs.onclick=pedirSello;
+    const ok=box.querySelector('[data-pcodok]'),inp=box.querySelector('[data-pcod]');if(!ok)return;
+    const poner=async()=>{ok.disabled=true;ok.textContent='Poniendo…';
+      try{localStorage.setItem(K_SELLO,await selloDeCodigo(inp.value));showMsg('Sello puesto en este móvil: ya sale en los PDF.');P?pintar():abrirLista()}
+      catch(e){showMsg(e&&e.message||String(e),true);ok.disabled=false;ok.textContent='Poner'}};
+    ok.onclick=poner;inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();poner()}};
+  }
   // ---------- recortes (en el móvil, sin internet) ----------
   // mancha más grande de una máscara (4 vecinos), con sus huecos rellenos: el papel del ticket con el texto dentro, o el sello
   function mancha(m,w,h){
@@ -5763,18 +5786,70 @@ const Pesaje=(()=>{
     if(window.__dbgRecorte)window.__dbgRecorte.push(tmax);
     const ab=abrir(m,w,h,2);
     const r=mancha(ab,w,h);if(!r||r.area<n*0.12||r.area>n*0.93)return c; // no se distingue el papel: se deja la foto entera
-    return pegar(c,envolvente(r,w,h),w,h,k,0.004);
+    return enderezar(c,r,w,h,k)||rectangulo(c,r,k);
   }
-  function envolvente(r,w,h){ // la forma del papel sin mordiscos (texto o sombra en el borde): su envolvente convexa
-    const P=[];for(let y=0;y<h;y++){let a=-1,z=-1;for(let x=0;x<w;x++)if(r.den[y*w+x]){if(a<0)a=x;z=x}if(a>=0){P.push([a,y],[z+1,y],[a,y+1],[z+1,y+1])}}
-    P.sort((p,q)=>p[0]-q[0]||p[1]-q[1]);const cr=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]),lo=[],up=[];
-    for(const p of P){while(lo.length>1&&cr(lo[lo.length-2],lo[lo.length-1],p)<=0)lo.pop();lo.push(p)}
-    for(let i=P.length-1;i>=0;i--){const p=P[i];while(up.length>1&&cr(up[up.length-2],up[up.length-1],p)<=0)up.pop();up.push(p)}
-    const hull=lo.slice(0,-1).concat(up.slice(0,-1));
-    const cv=document.createElement('canvas');cv.width=w;cv.height=h;const x=cv.getContext('2d');x.fillStyle='#000';x.beginPath();hull.forEach(([a,b],i)=>i?x.lineTo(a,b):x.moveTo(a,b));x.closePath();x.fill();
-    const al=x.getImageData(0,0,w,h).data,den=new Uint8Array(w*h);let x0=w,y0=h,x1=-1,y1=-1;
-    for(let i=0;i<w*h;i++)if(al[i*4+3]>127){den[i]=1;const X=i%w,Y=(i-X)/w;if(X<x0)x0=X;if(X>x1)x1=X;if(Y<y0)y0=Y;if(Y>y1)y1=Y}
-    return {den,area:r.area,x0,y0,x1,y1};
+  // 18 nov (Daniel, «las fotos no las ha puesto como quiero yo»): como en su ejemplo, un rectángulo recto solo con el papel. Se buscan
+  // los cuatro bordes del papel sin hacer caso a lo que se le pega al lado (la pantalla de la báscula, los botones); los lados pueden
+  // salir algo curvados (el papel se abomba). El papel se estira a un rectángulo.
+  function ajuste(t,v,grado,tol,vale){ // curva v = a + b·t (+ c·t²) que pasa por la mayoría de los puntos (RANSAC) y afinada con esos puntos
+    // vale(q, cuántos puntos quedan más allá de la curva): si se da, solo valen las curvas que cumplan eso
+    const n=t.length,g=grado+1;if(n<g*4)return null;
+    const resol=idx=>{const A=[...Array(g)].map(()=>new Float64Array(g+1)); // mínimos cuadrados
+      for(const i of idx){const q=[1,t[i],t[i]*t[i]];for(let a=0;a<g;a++){for(let b=0;b<g;b++)A[a][b]+=q[a]*q[b];A[a][g]+=q[a]*v[i]}}
+      for(let c=0;c<g;c++){let pv=c;for(let a=c+1;a<g;a++)if(Math.abs(A[a][c])>Math.abs(A[pv][c]))pv=a;[A[c],A[pv]]=[A[pv],A[c]];if(Math.abs(A[c][c])<1e-9)return null;
+        for(let a=0;a<g;a++)if(a!==c){const f=A[a][c]/A[c][c];for(let b=c;b<=g;b++)A[a][b]-=f*A[c][b]}}
+      const q=[0,0,0];for(let a=0;a<g;a++)q[a]=A[a][g]/A[a][a];return q};
+    const f=(q,x)=>q[0]+q[1]*x+q[2]*x*x,dentro=q=>{const r=[];for(let i=0;i<n;i++)if(Math.abs(v[i]-f(q,t[i]))<tol)r.push(i);return r};
+    const pasa=q=>{if(!vale)return true;let a=0,b=0;for(let i=0;i<n;i++){const d=v[i]-f(q,t[i]);if(d<-tol*2)a++;if(d>tol*2)b++}return vale(q,a/n,b/n)};
+    let sem=12345,mejor=null,mi=[],mejor2=null,mi2=[];const azar=()=>(sem=sem*16807%2147483647)/2147483647;
+    for(let it=0;it<300;it++){const idx=[];while(idx.length<g){const i=Math.floor(azar()*n);if(!idx.includes(i))idx.push(i)}
+      const q=resol(idx);if(!q)continue;const d=dentro(q);if(d.length>mi.length&&pasa(q)){mi=d;mejor=q}if(d.length>mi2.length){mi2=d;mejor2=q}}
+    if(!mejor||mi.length<n*0.25){mejor=mejor2;mi=mi2}
+    if(!mejor||mi.length<n*0.35)return null;
+    let q=resol(mi)||mejor;const q2=resol(dentro(q));if(q2&&pasa(q2))q=q2;return {q,f:x=>f(q,x),parte:dentro(q).length/n};
+  }
+  function enderezar(c,r,w,h,k){
+    const alto=r.y1-r.y0>=r.x1-r.x0; // a = a lo ancho del papel, b = a lo largo (de pie: a = x, b = y)
+    const A=alto?w:h,M=alto?(a,b)=>r.den[b*w+a]:(a,b)=>r.den[a*w+b],b0=alto?r.y0:r.x0,b1=(alto?r.y1:r.x1)+1,a0=alto?r.x0:r.y0,a1=(alto?r.x1:r.y1)+1;
+    const tb=b=>(b-(b0+b1)/2)/((b1-b0)/2);
+    const filas=[];for(let b=b0;b<b1;b++){const tr=[];let s=-1;for(let a=a0;a<=a1;a++){const on=a<a1&&M(a,b);if(on&&s<0)s=a;if(!on&&s>=0){tr.push([s,a]);s=-1}}if(tr.length)filas.push({b,tr})}
+    if(filas.length<20)return null;
+    const an=filas.map(f=>Math.max(...f.tr.map(([p,q])=>q-p))).sort((p,q)=>p-q),anc=an[an.length>>1];
+    // el centro del papel, con las filas limpias (una tira de ancho normal)
+    const T=[],C=[];for(const f of filas){const g=f.tr.filter(([p,q])=>q-p>anc*0.3);if(g.length===1&&Math.abs(g[0][1]-g[0][0]-anc)<anc*0.15){T.push(tb(f.b+0.5));C.push((g[0][0]+g[0][1])/2)}}
+    const cen=ajuste(T,C,1,Math.max(2,anc*0.1));if(!cen)return null;
+    // los lados: en cada fila, la tira que pasa por el centro
+    const tL=[],vL=[],vR=[];for(const f of filas){const cc=cen.f(tb(f.b+0.5)),t=f.tr.find(([p,q])=>p<=cc&&cc<q);if(t){tL.push(tb(f.b+0.5));vL.push(t[0]);vR.push(t[1])}}
+    const tol=Math.max(1.2,anc*0.015),izq=ajuste(tL,vL,2,tol),der=ajuste(tL,vR,2,tol);if(!izq||!der)return null;
+    // arriba y abajo (el corte del papel es recto): la primera y la última fila del papel en las columnas del medio
+    const m0=izq.f(0),m1=der.f(0),ta=a=>(a-(m0+m1)/2)/((m1-m0)/2);
+    const tA=[],vT=[],vB=[];for(let a=Math.ceil(m0+(m1-m0)*0.12);a<m1-(m1-m0)*0.12;a++){let p=-1,q=-1;for(let b=b0;b<b1;b++)if(M(a,b)){if(p<0)p=b;q=b+1}if(p>=0){tA.push(ta(a+0.5));vT.push(p);vB.push(q)}}
+    // el corte va casi a escuadra con los lados, y no puede quedar papel más allá: lo que entra hacia dentro es texto escrito
+    // pegado al borde (el «IVECO *537291» de Daniel) o un trozo roto
+    const esc=-(izq.q[1]+der.q[1])/2/((b1-b0)/2),pend=q=>q[1]/((m1-m0)/2);
+    const arr=ajuste(tA,vT,1,tol,(q,a)=>a<=0.12&&Math.abs(pend(q)-esc)<0.12),aba=ajuste(tA,vB,1,tol,(q,a,b)=>b<=0.12&&Math.abs(pend(q)-esc)<0.12);if(!arr||!aba)return null;
+    const cruce=(lado,borde)=>{let a=lado.f(0),b=0;for(let i=0;i<8;i++){b=borde.f(ta(a));a=lado.f(tb(b))}return [a,b]}; // esquinas
+    const TL=cruce(izq,arr),TR=cruce(der,arr),BL=cruce(izq,aba),BR=cruce(der,aba),d=(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1]);
+    const An=(d(TL,TR)+d(BL,BR))/2,La=(d(TL,BL)+d(TR,BR))/2;
+    if(!(An>anc*0.6&&An<anc*1.4&&La>(b1-b0)*0.5&&La<(b1-b0)*1.1))return null;
+    // el papel estirado a un rectángulo (parche de Coons con los cuatro bordes), un poco hacia dentro para que no se cuele el fondo
+    const ins=1.2,eu=ins/An,ev=ins/La;let OW=Math.round(An*k),OL=Math.round(La*k);const z=Math.min(1,1600/Math.max(OW,OL));OW=Math.max(1,Math.round(OW*z));OL=Math.max(1,Math.round(OL*z));
+    const SW=c.width,SH=c.height,sd=c.getContext('2d').getImageData(0,0,SW,SH).data;
+    const o=document.createElement('canvas');o.width=alto?OW:OL;o.height=alto?OL:OW;const ox=o.getContext('2d'),od=ox.createImageData(o.width,o.height),D=od.data;
+    const Lv=new Float64Array(OL*2),Rv=new Float64Array(OL*2),Tu=new Float64Array(OW*2),Bu=new Float64Array(OW*2),U=new Float64Array(OW),V=new Float64Array(OL);
+    for(let j=0;j<OL;j++){const v=V[j]=ev+(j+0.5)/OL*(1-2*ev),bl=TL[1]+v*(BL[1]-TL[1]),br=TR[1]+v*(BR[1]-TR[1]);Lv[j*2]=izq.f(tb(bl));Lv[j*2+1]=bl;Rv[j*2]=der.f(tb(br));Rv[j*2+1]=br}
+    for(let i=0;i<OW;i++){const u=U[i]=eu+(i+0.5)/OW*(1-2*eu),at=TL[0]+u*(TR[0]-TL[0]),ab=BL[0]+u*(BR[0]-BL[0]);Tu[i*2]=at;Tu[i*2+1]=arr.f(ta(at));Bu[i*2]=ab;Bu[i*2+1]=aba.f(ta(ab))}
+    for(let j=0;j<OL;j++){const v=V[j];for(let i=0;i<OW;i++){const u=U[i],w1=(1-u)*(1-v),w2=u*(1-v),w3=(1-u)*v,w4=u*v;
+      const pa=(1-v)*Tu[i*2]+v*Bu[i*2]+(1-u)*Lv[j*2]+u*Rv[j*2]-(w1*TL[0]+w2*TR[0]+w3*BL[0]+w4*BR[0]),
+        pb=(1-v)*Tu[i*2+1]+v*Bu[i*2+1]+(1-u)*Lv[j*2+1]+u*Rv[j*2+1]-(w1*TL[1]+w2*TR[1]+w3*BL[1]+w4*BR[1]);
+      const x=Math.min(SW-1.001,Math.max(0,(alto?pa:pb)*k-0.5)),y=Math.min(SH-1.001,Math.max(0,(alto?pb:pa)*k-0.5)),xi=x|0,yi=y|0,fx=x-xi,fy=y-yi,s0=(yi*SW+xi)*4,s1=s0+SW*4;
+      const di=(alto?j*OW+i:i*OL+j)*4;
+      for(let ch=0;ch<3;ch++)D[di+ch]=(sd[s0+ch]*(1-fx)+sd[s0+4+ch]*fx)*(1-fy)+(sd[s1+ch]*(1-fx)+sd[s1+4+ch]*fx)*fy;D[di+3]=255}}
+    ox.putImageData(od,0,0);if(window.__dbgRecorte)window.__dbgRecorte.push({TL,TR,BL,BR,k,alto,izq:izq.parte,der:der.parte,arr:arr.parte,aba:aba.parte});return o;
+  }
+  function rectangulo(c,r,k){ // si no se encuentran bien los bordes: el rectángulo que ocupa el papel, sin tocar nada
+    const X=Math.floor(r.x0*k),Y=Math.floor(r.y0*k),W=Math.min(c.width,Math.ceil((r.x1+1)*k))-X,H=Math.min(c.height,Math.ceil((r.y1+1)*k))-Y;
+    const o=document.createElement('canvas');o.width=W;o.height=H;o.getContext('2d').drawImage(c,X,Y,W,H,0,0,W,H);return o;
   }
   function abrir(m,w,h,R){ // quitar lo fino (erosión) y volver a engordar (dilatación): separa el papel de lo que solo lo toca
     const er=new Uint8Array(w*h),di=new Uint8Array(w*h);
@@ -5783,15 +5858,6 @@ const Pesaje=(()=>{
     return di;
   }
 
-  function pegar(c,r,w,h,k,marg){ // la mancha a tamaño real, con lo de fuera en blanco
-    const mk=document.createElement('canvas');mk.width=w;mk.height=h;const mx=mk.getContext('2d'),id=mx.createImageData(w,h);
-    for(let i=0;i<w*h;i++){id.data[i*4+3]=r.den[i]?255:0}mx.putImageData(id,0,0);
-    const g=Math.round(Math.max(c.width,c.height)*marg),X=Math.max(0,Math.floor(r.x0*k)-g),Y=Math.max(0,Math.floor(r.y0*k)-g),
-      W=Math.min(c.width,Math.ceil((r.x1+1)*k)+g)-X,H=Math.min(c.height,Math.ceil((r.y1+1)*k)+g)-Y;
-    const o=document.createElement('canvas');o.width=W;o.height=H;const ox=o.getContext('2d');
-    ox.drawImage(c,X,Y,W,H,0,0,W,H);ox.globalCompositeOperation='destination-in';ox.imageSmoothingEnabled=true;ox.drawImage(mk,X/k,Y/k,W/k,H/k,0,0,W,H);
-    ox.globalCompositeOperation='destination-over';ox.fillStyle='#fff';ox.fillRect(0,0,W,H);return o;
-  }
   // sello desde una foto o captura: la mancha azul más grande (el aro del sello, juntando lo que está cerca)
   function recorteSello(c){
     const {d,w,h,k}=pequena(c,360),m=new Uint8Array(w*h);
@@ -5820,7 +5886,7 @@ const Pesaje=(()=>{
   const P_TICKET=`Eres el lector de los tickets de una báscula de pesaje de vehículos por ejes. En la foto hay uno o varios tickets impresos, uno por eje, en el orden en que se pesaron (el de arriba es el 1.er eje), y puede haber notas escritas a mano. La foto puede estar girada o de lado: léela igual.
 Cada ticket lleva RUEDA 1 y RUEDA 2 (kg), BRUTO, TARA y NETO (kg) y la fecha y la hora (dd/mm/aa hh:mm:ss).
 Si junto a un ticket pone a mano "ENGANCHE" (o "remolque", "lanza"), ese ticket NO es un eje: va en "enganche" y no en "ejes". Si pone "1º eje", "2º eje"…, es ese eje.
-Las notas a mano dicen si se pesó con conductor o sin él ("S/C" = sin conductor, "C/C" = con conductor) y cuánto combustible tenía el depósito: "1/4 combustible", "1/2", "3/4", "lleno", "vacío" o un porcentaje ("0%" = vacio, "25%" = 1/4, "50%" = 1/2, "75%" = 3/4, "100%" = lleno; otro porcentaje, el más cercano).
+Las notas a mano dicen si se pesó con conductor o sin él ("S/C" = sin conductor, "C/C" = con conductor) y cuánto combustible tenía el depósito: "1/4 combustible", "1/2", "3/4", "lleno", "vacío" o un porcentaje ("0%" = vacio, "25%" = 1/4, "50%" = 1/2, "75%" = 3/4, "100%" = lleno; otro porcentaje: deja "deposito" vacío y pon el porcentaje).
 Otras notas a mano (modelo, carrocero, un número…, p. ej. "BUCHER *028453*", "DL 320") van en "otras" tal cual.
 "giro": cuántos grados hay que girar la foto en el sentido de las agujas del reloj para que el ticket se lea derecho (0, 90, 180 o 270).
 Lee los números exactamente como están. No inventes nada: si algo no se ve, déjalo "" y explícalo en "dudas".
@@ -5847,38 +5913,136 @@ Devuelve solo JSON: {"bastidor":"","marca":"","dudas":""}`;
     }
     return o;
   }
-  async function leerTicket(blob,aviso){
-    if(FotoPunto.iaClave()){const {o}=await FotoPunto.iaPedir(blob,P_TICKET,aviso);return o}
-    aviso&&aviso('Leyendo en el móvil…');return ticketDeLineas(await lineas(blob));
+  // ---------- lectura en el móvil (18 nov, Daniel: «metiendo las dos fotos me rellene todo sin que yo rellene nada») ----------
+  // Google con la clave gratis daba error casi siempre (4 nov) y entonces no se rellenaba nada. Ahora, como la cámara de los COP:
+  // se lee en el móvil (PaddleOCR) salvo localStorage 'ia-fotos' = 'google' con clave, y si Google falla, también en el móvil.
+  const conGoogle=()=>{try{return localStorage.getItem('ia-fotos')==='google'&&!!FotoPunto.iaClave()}catch(e){return false}};
+  async function leerMovil(c,aviso){ // líneas del lector del móvil; null si no se puede cargar (primera vez sin internet)
+    if(typeof LectorLocal==='undefined'||window.__SIN_PADDLE)return null;
+    try{const k=Math.min(1,2048/Math.max(c.width,c.height));let c2=c;
+      if(k<1){c2=document.createElement('canvas');c2.width=Math.round(c.width*k);c2.height=Math.round(c.height*k);c2.getContext('2d').drawImage(c,0,0,c2.width,c2.height)}
+      return await LectorLocal.leer(c2,aviso,c,{pct:1})}catch(e){console.warn('lector del móvil',e);return null}
+  }
+  const MARCAS=[...new Set(Object.values(WMI))];
+  // El ticket leído en el móvil. Con el papel abombado los números de la derecha no caen en la fila de su nombre (en el IVECO del 18 nov
+  // «1280 kg» salía a la altura de «BRUTO» y el «0 kg» de la tara también), así que no se emparejan por filas sino por orden: cada pesada
+  // acaba en su fecha, y sus cinco números, de arriba abajo, son RUEDA 1, RUEDA 2, BRUTO, TARA y NETO.
+  function ticketLocal(lin){
+    let sx=0,sy=0;for(const l of lin){sx+=Math.cos(l.a||0)*(l.w||1);sy+=Math.sin(l.a||0)*(l.w||1)}
+    const an=Math.atan2(sy,sx),ux=Math.cos(an),uy=Math.sin(an);
+    const giro=((lin.giro||0)+Math.round(-an*2/Math.PI)*90+720)%360; // lo que hay que girar la foto leída (a la derecha) para que quede derecha
+    const T=lin.map(l=>({t:norm(l.t),u:norm(l.t).toUpperCase(),al:l.x*ux+l.y*uy,ab:-l.x*uy+l.y*ux,h:l.h||20,sc:l.sc==null?1:l.sc})).sort((a,b)=>a.ab-b.ab);
+    const hm=T.length?T.map(x=>x.h).sort((a,b)=>a-b)[T.length>>1]:20;
+    // los pesos de la báscula van de 5 en 5 kg: un 8 al final es el 0 con raya del ticket mal leído (4538 → 4530, «8 kg» de tara → 0)
+    const kgDe=s=>{const v=s.replace(/\s*K\s*[GQ9]\.?$/i,'').replace(/^[O]$/i,'0').trim();return /^\d{1,6}$|^\d{1,3}([.,\s]\d{3})+$/.test(v)?v.replace(/[.,\s]/g,'').replace(/8$/,'0'):null};
+    const ETQ=/^(RU?E?D[A-Z]?(?:\s*[12IL|]\b)?|BRUT[O0]|TARA|NET[O0])\b\s*(.*)$/; // «RUEDA» a veces sale sin su número
+    const tipo=e=>/^R/.test(e)?(/2/.test(e)?'rueda2':/[1IL|]$/.test(e)?'rueda1':'rueda'):/^B/.test(e)?'bruto':/^T/.test(e)?'tara':'neto';
+    const noms=[],nums=[],fechas=[],horas=[],notas=[];
+    for(const x of T){let m;
+      const f=/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/.exec(x.u),h=/\b(\d{1,2}:\d{2}(:\d{2})?)\b/.exec(x.u);
+      if(f||h){if(f)fechas.push({...x,v:f[0].replace(/[.\-]/g,'/')});if(h)horas.push({...x,v:h[1]});continue}
+      if((m=ETQ.exec(x.u))){noms.push({...x,k:tipo(m[1]),v:m[2]?kgDe(m[2]):null});continue}
+      const v=kgDe(x.u);if(v!=null){nums.push({...x,v});continue}
+      if(/^K\s*[GQ9]\.?$/.test(x.u))continue;
+      if(x.sc>=0.5&&x.u.replace(/[^A-Z0-9%\/]/g,'').length>=2)notas.push(x)} // las notas dudosas solo valen si son «S/C» o el combustible
+    // los números de la columna de la derecha (los de los nombres van a la izquierda)
+    const mAl=noms.length?noms.map(n=>n.al).sort((a,b)=>a-b)[noms.length>>1]:-Infinity,col=nums.filter(n=>n.al>mAl+1.5*hm);
+    // cada pesada acaba en su fecha (si no se leyó la fecha, en su NETO)
+    let cortes=fechas.map(f=>f.ab+0.6*hm);const netos=noms.filter(n=>n.k==='neto');
+    if(netos.length>fechas.length)cortes=netos.map(n=>n.ab+0.6*hm);
+    if(!cortes.length||[...col,...noms].some(x=>x.ab>cortes[cortes.length-1]))cortes.push(Infinity);
+    const bloque=x=>cortes.findIndex(c=>x.ab<=c),ORD=['rueda1','rueda2','bruto','tara','neto'];
+    const ejes=[],spans=[];
+    cortes.forEach((c,k)=>{const vs=col.filter(x=>bloque(x)===k),ns=noms.filter(x=>bloque(x)===k);if(!vs.length&&!ns.some(n=>n.v!=null))return;
+      const e={};
+      if(vs.length===5&&!ns.some(n=>n.v!=null))ORD.forEach((o,i)=>e[o]=vs[i].v);
+      else if(vs.length===3&&!ns.some(n=>/rueda/.test(n.k)))['bruto','tara','neto'].forEach((o,i)=>e[o]=vs[i].v);
+      else{let j=0;for(const n of ns){const k=n.k==='rueda'?(e.rueda1==null?'rueda1':'rueda2'):n.k;if(n.v!=null){e[k]=n.v;continue} // cada nombre con el siguiente número que le quede cerca
+        while(j<vs.length&&vs[j].ab<n.ab-1.6*hm)j++;if(j<vs.length&&Math.abs(vs[j].ab-n.ab)<=1.6*hm)e[k]=vs[j++].v}}
+      if(e.neto==null&&e.bruto==null)return;
+      const fe=fechas.find(f=>bloque(f)===k)||fechas.filter(f=>f.ab<=c).pop();
+      if(fe){e.fecha=fe.v;const ho=horas.slice().sort((a,b)=>Math.abs(a.ab-fe.ab)-Math.abs(b.ab-fe.ab))[0];if(ho&&Math.abs(ho.ab-fe.ab)<1.5*hm)e.hora=ho.v}
+      const it=[...vs,...ns];spans.push([Math.min(...it.map(x=>x.ab)),Math.max(...it.map(x=>x.ab))]);ejes.push(e)});
+    // notas a mano: «S/C», el combustible, «ENGANCHE» (esa pesada no es un eje) y lo demás (se avisa)
+    const o={ejes,conductor:'',deposito:'',porcentaje:'',enganche:'',otras:'',giroRel:giro,dudas:'Leído en el móvil: repasa los pesos.'},otras=[];
+    // a mano, la letra se lee peor: «S/C» sale «SIC», «Sc» o «St»; «0%», «Os»; y a veces van juntas en un trozo («SIC; Os.»)
+    for(const x of notas){const resto=[];
+      if(/ENGANCH/.test(x.u)){let k=-1,d=Infinity;spans.forEach(([a,b],i)=>{const di=x.ab<a?a-x.ab:x.ab>b?x.ab-b:0;if(di<d){d=di;k=i}});
+        if(k>=0&&ejes.length>1){const e=ejes.splice(k,1)[0];spans.splice(k,1);o.enganche=e.neto||e.bruto}continue}
+      for(const t of x.t.split(/[;,]|\s+(?=\S)/)){const c=t.toUpperCase().replace(/\s/g,'').replace(/\.$/,'');let m;if(!c)continue;
+        if(/^[S5][\/\\|IL1]?[CT]$|^SIN(CONDUCTOR)?$/.test(c)){o.conductor='no';continue}
+        if(/^C[\/\\|IL1]?C$|^CON(CONDUCTOR)?$/.test(c)){o.conductor='si';continue}
+        if((m=/^(\d{1,3})%$/.exec(c))||(m=/^([O0])[S5%]$/.exec(c))){o.porcentaje=(+m[1].replace('O','0'))+'%';continue}
+        if((m=/^([13])\/([24])/.exec(c))){o.deposito=m[1]+'/'+m[2];continue}
+        if(/^LLEN[O0]$/.test(c)){o.deposito='lleno';continue}
+        if(/^VAC[IÍ1L]?[O0]$/.test(c)){o.deposito='vacio';continue}
+        if(/^(CO[MN]B|DEP)/.test(c)||/^\d?[ºª°O]?EJE$/.test(c))continue;
+        resto.push(t)}
+      const r=norm(resto.join(' '));if(x.sc>=0.75&&r.replace(/[^A-Za-z0-9]/g,'').length>=3&&!/^(RU?E?D[A-Z]?|K\s*G|.*KG)$/i.test(r.replace(/\s/g,'')))otras.push(r)}
+    o.otras=otras.join(' · ');
+    return o;
+  }
+  // el bastidor de la foto de la placa (o del chasis) leída en el móvil: un texto de 17 (sin I, O ni Q), mejor si empieza por una marca conocida
+  function bastLocal(lin){
+    const vin=t=>t.toUpperCase().replace(/[\s.\-*:·]/g,'').replace(/[OQ]/g,'0').replace(/I/g,'1');
+    let v='',pt=-1;
+    for(const l of lin){const s=vin(l.t);for(let i=0;i+17<=s.length;i++){const w=s.slice(i,i+17);if(!/^[A-HJ-NPR-Z0-9]{17}$/.test(w)||!/[A-Z]/.test(w)||!/\d/.test(w))continue;
+      const p=(WMI[w.slice(0,3)]?4:0)+(s.length===17?2:0)+(/\d{5}$/.test(w)?1:0);if(p>pt){pt=p;v=w}}}
+    for(let i=0;i+1<lin.length&&!v;i++){const s=vin(lin[i].t+lin[i+1].t);if(/^[A-HJ-NPR-Z0-9]{17}$/.test(s))v=s} // partido en dos trozos
+    const marca=WMI[v.slice(0,3)]||MARCAS.find(m=>lin.some(l=>l.t.toUpperCase().includes(m.split(/[\s-]/)[0])))||'';
+    return {bastidor:v,marca,dudas:v?'':'No se ha encontrado el bastidor en la foto.'};
+  }
+  async function leerTicket(blob,aviso,c){ // c: el ticket ya recortado y de pie (se lee mejor que la foto entera)
+    if(conGoogle())try{const {o}=await FotoPunto.iaPedir(blob,P_TICKET,aviso);return o}catch(e){console.warn('Google',e)}
+    aviso&&aviso('Leyendo en el móvil…');const L=await leerMovil(c||await fotoCanvas(blob),aviso);
+    return L?ticketLocal(L):ticketDeLineas(await lineas(blob));
   }
   async function leerBast(blob,aviso){
-    if(FotoPunto.iaClave()){const {o}=await FotoPunto.iaPedir(blob,P_BAST,aviso);return o}
-    aviso&&aviso('Leyendo en el móvil…');const L=await lineas(blob);return {bastidor:vinDe(L.join(' ')),marca:'',dudas:'Leído con el lector del móvil: repasa el bastidor.'};
+    if(conGoogle())try{const {o}=await FotoPunto.iaPedir(blob,P_BAST,aviso);return o}catch(e){console.warn('Google',e)}
+    aviso&&aviso('Leyendo en el móvil…');const L=await leerMovil(await fotoCanvas(blob),aviso);
+    if(L)return bastLocal(L);
+    const L2=await lineas(blob);return {bastidor:vinDe(L2.join(' ')),marca:'',dudas:'Leído con el lector del móvil: repasa el bastidor.'};
   }
   function ponTicket(o){ // lo leído pasa al pesaje; lo que ya tocó a mano también se cambia (es una foto nueva), pero se avisa
     const ej=(o.ejes||[]).filter(e=>e&&(e.neto||e.bruto));
     const hm=e=>{const f=deTicket(e.fecha),h=norm(e.hora);return f&&h?f+' '+h.padStart(8,'0'):''};if(ej.every(hm))ej.sort((a,b)=>hm(a)<hm(b)?-1:hm(a)>hm(b)?1:0); // por la hora del ticket (si la lleva cada uno)
     if(ej.length){
-      P.ejes=ej.map(e=>{const r1=kgN(e.rueda1),r2=kgN(e.rueda2),br=kgN(e.bruto),ta=kgN(e.tara);let kg=kgN(e.neto);if(kg==null&&br!=null)kg=br-(ta||0);
+      // 18 nov: el lector del móvil a veces lee el 0 con raya del ticket como un 8 (4530 → 4538); si no cuadra, vale el que cuadra con los demás
+      const de8=(a,b)=>{const x=String(a),y=String(b);return a!=null&&b!=null&&x.length===y.length&&x!==y&&[...x].every((c,i)=>c===y[i]||c==='8'&&y[i]==='0')};
+      P.ejes=ej.map(e=>{let r1=kgN(e.rueda1),r2=kgN(e.rueda2),br=kgN(e.bruto),ta=kgN(e.tara),kg=kgN(e.neto);
+        if(br!=null&&kg!=null&&br-(ta||0)!==kg){if(ta&&br===kg&&/^8+$/.test(String(ta)))ta=0;else if(de8(kg,br-(ta||0)))kg=br-(ta||0);else if(de8(br,kg+(ta||0)))br=kg+(ta||0)}
+        if(r1!=null&&r2!=null&&br!=null&&Math.abs(r1+r2-br)>10){if(de8(r1,br-r2))r1=br-r2;else if(de8(r2,br-r1))r2=br-r1}
+        if(kg==null&&br!=null)kg=br-(ta||0);
         return {kg,r1,r2,bruto:br,tara:ta,hora:norm(e.hora)}});
       const f=deTicket(ej[0].fecha);if(f)P.fecha=f;
     }
     const c=norm(o.conductor).toLowerCase();if(c==='si'||c==='sí'||c==='no')P.conductor=c==='no'?'no':'si';
     let d=norm(o.deposito).toLowerCase().replace('vacío','vacio');
-    const pc=/(\d{1,3})\s*%/.exec(norm(o.porcentaje)+' '+norm(o.deposito));if(!DEP.some(([k])=>k===d)&&pc){const n=+pc[1];d=DEP[Math.max(0,Math.min(4,Math.round(n/25)))][0]} // 0 % vacío … 100 % lleno
+    // combustible en %: 0 vacío, 25 1/4, 50 1/2, 75 3/4, 100 lleno; otro (90 %) sin casilla y en «Otros», como lo hizo Daniel el 18 nov
+    const pc=/(\d{1,3})\s*%/.exec(norm(o.porcentaje)+' '+norm(o.deposito));
+    if(pc){const n=+pc[1];if(n%25===0&&n<=100)d=DEP[n/25][0];else{d='';P.deposito='';const t=n+'% de depósito';if(!/de dep[oó]sito/i.test(P.otros))P.otros=[norm(P.otros),t].filter(Boolean).join('. ')}}
     if(DEP.some(([k])=>k===d))P.deposito=d;
     const en=kgN(o.enganche);if(en!=null&&!/enganche/i.test(P.otros))P.otros=[norm(P.otros),'Enganche: '+miles(en)+' kg'].filter(Boolean).join('. '); // el enganche no es un eje
     P.giro=[90,180,270].includes(+o.giro)?+o.giro:0;
-    P.leido.ticket={ejes:ej.length,notas:norm(o.otras||o.notas),cond:!!c,dep:DEP.some(([k])=>k===d)};
-    const otras=norm(o.otras||'');P.leido.ticketDudas=[norm(o.dudas),otras&&`Notas a mano en el ticket: «${otras}».`].filter(Boolean).join(' ');
-    P.dudas=[P.leido.bast&&P.leido.bast.dudas,P.leido.ticketDudas].filter(Boolean).join(' ');
+    P.leido.ticket={ejes:ej.length,notas:norm(o.otras||o.notas),cond:!!c,dep:DEP.some(([k])=>k===d)||!!pc};
+    // la nota con la marca y los 6 últimos del bastidor («IVECO *537291»): sirve para comprobar el bastidor (y la marca, si no la hay)
+    const ns=norm(o.otras||'').split(/\s*·\s*/).filter(Boolean),otras=[];P.leido.ref='';
+    for(const t of ns){const m=/^([A-ZÁÉÍÓÚÑ.\- ]*?)\s*\*?\s*(\d{6})\s*\*?$/i.exec(t);
+      if(m){P.leido.ref=m[2];const ma=MARCAS.find(x=>norm(m[1]).toUpperCase().startsWith(x.split(/[\s-]/)[0]));if(ma&&!P.marca)P.marca=ma;if(ma)continue}
+      otras.push(t)}
+    P.leido.ticketDudas=[norm(o.dudas),otras.length&&`Notas a mano en el ticket: «${otras.join(' · ')}».`].filter(Boolean).join(' ');
+    dudasJuntas();
+  }
+  function dudasJuntas(){ // lo que hay que repasar: lo de las dos fotos y si el bastidor no acaba como pone el ticket
+    const r=P.leido.ref,b=norm(P.bastidor);
+    P.dudas=[P.leido.bast&&P.leido.bast.dudas,P.leido.ticketDudas,r&&b&&!b.endsWith(r)&&`En el ticket pone *${r} y el bastidor acaba en ${b.slice(-6)}.`].filter(Boolean).join(' ');
   }
   function ponBast(o){
     const v=vinDe(o.bastidor)||norm(o.bastidor).toUpperCase().replace(/\s/g,'');
     if(v)P.bastidor=v;
     const m=WMI[v.slice(0,3)]||norm(o.marca).toUpperCase();if(m)P.marca=m;
     P.leido.bast={dudas:norm(o.dudas)+(v&&v.length!==17?` El bastidor leído tiene ${v.length} caracteres (deben ser 17).`:'')};
-    P.dudas=[P.leido.bast.dudas,P.leido.ticketDudas].filter(Boolean).join(' ');
+    dudasJuntas();
   }
 
   // ---------- pantalla ----------
@@ -5924,6 +6088,7 @@ button.tile.pes{grid-column:1/-1;flex-direction:row;align-items:center;min-heigh
 #pesaje .gen{width:100%;justify-content:center;padding:15px;border-radius:14px;font-size:17px;font-weight:700}
 #pesaje .sello{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted)}#pesaje .sello img{width:44px;height:44px;border-radius:50%;background:#fff;object-fit:contain}
 #pesaje .sello.falta{padding:10px 12px;border-radius:12px;border:1.5px solid var(--warn,#e08a00);color:var(--ink);flex-wrap:wrap}#pesaje .sello.falta button{padding:8px 14px;border-radius:10px;font-weight:700;font-size:13px}
+#pesaje .sello .cod{display:flex;gap:8px;width:100%}#pesaje .sello .cod input{flex:1;min-width:0;font-size:17px;letter-spacing:.08em;text-transform:uppercase;padding:9px 10px;border-radius:10px}#pesaje .sello.falta button.otra{font-weight:600}
 #pesaje .atras{background:none;border:0;padding:0;color:var(--accent);font-size:14px;font-weight:600;justify-self:start;box-shadow:none}`;
   document.head.appendChild(st);
   const tiles=document.querySelector('#homeMain .tiles');
@@ -5941,7 +6106,7 @@ ${selloHtml()}
 <h2 class="hh">Tus pesajes</h2>${L.length?L.map(p=>`<div class="pit" data-pid="${esc(p.id)}"><b>${esc(titulo(p))}</b><span class="m">${esc([fechaCorta(p.fecha),p.ejes.length===1?'1 eje':p.ejes.length+' ejes',miles(total(p))+' kg',p.pdf?'PDF creado':''].filter(Boolean).join(' · '))}</span>
 <div class="acts"><button type="button" data-pabrir>Abrir</button><button type="button" data-ppdf>PDF</button><button type="button" class="del" data-pborrar aria-label="Borrar">Borrar</button></div></div>`).join('')
       :'<p class="vacio">Aún no hay pesajes. Se guardan solos en este móvil, con sus fotos, y no se borran: los quitas tú aquí.</p>'}`;
-    box.querySelector('[data-psello]').onclick=pedirSello;
+    enlazarSello();
     box.querySelector('[data-pnuevo]').onclick=()=>{P=nuevo();pintar();guardarYa()};
     for(const it of box.querySelectorAll('.pit')){const p=L.find(x=>x.id===it.dataset.pid);
       it.querySelector('[data-pabrir]').onclick=()=>{P=p;pintar()};
@@ -5960,7 +6125,7 @@ ${selloHtml()}
     vista('pes');cab('Pesaje',titulo(P));
     const lb=P.leido||{},tk=lb.ticket;
     const estB=P.fotoBast?(lb.bast?'Leído: '+(P.bastidor||'sin bastidor'):'Foto puesta'):'Marca y bastidor';
-    const estT=P.fotosTicket.length?(tk?`Leído: ${tk.ejes===1?'1 eje':tk.ejes+' ejes'}${tk.cond?', conductor':''}${tk.dep?', depósito':''}`:'Foto puesta'):'Pesos por eje, conductor y combustible';
+    const estT=P.fotosTicket.length?(tk?`Leído: ${tk.ejes===1?'1 eje':tk.ejes+' ejes'}${tk.cond?', conductor':''}${tk.dep?', combustible':''}`:'Foto puesta'):'Pesos por eje, conductor y combustible';
     box.innerHTML=`<button type="button" class="atras" data-patras>‹ Tus pesajes</button>
 <div class="card"><h3>Fotos</h3><div class="fotos">
  <div class="foto${P.fotoBast?' hay':''}" data-pf="bast"><b>Bastidor</b>${P.fotoBast?`<div class="mini"><img alt="Foto del bastidor" src="${url(P.fotoBast)}"></div>`:''}<span class="est">${esc(estB)}</span>
@@ -5968,7 +6133,7 @@ ${selloHtml()}
  <div class="foto${P.fotosTicket.length?' hay':''}" data-pf="ticket"><b>Ticket</b>${P.fotosTicket.length?`<div class="mini">${fotosT(P).map((b,i)=>`<img alt="Foto del ticket ${i+1}" src="${url(b)}">`).join('')}</div>`:''}<span class="est">${esc(estT)}</span>
   <div class="bb"><button type="button" class="cam" data-pcam>${CAM}${P.fotosTicket.length?'Otra':'Foto'}</button><button type="button" data-pgal aria-label="Galería">${GAL}</button></div>
   ${P.fotosTicket.length?'<button type="button" class="otra" data-pgir>↻ Girar la foto</button>'+((P.ticketEntero||[]).length===P.fotosTicket.length?`<button type="button" class="otra" data-prec>${P.sinRecorte?'✂ Recortar al ticket':'Foto entera (sin recortar)'}</button>`:'')+'<button type="button" class="otra" data-pmas>+ Añadir otro trozo del ticket</button>':''}</div>
-</div>${FotoPunto.iaClave()?'':'<p class="nota">Sin la clave de Google las fotos se leen con el lector del móvil, que con los tickets falla más. <button type="button" class="otra" data-pclave>Poner la clave</button></p><div data-pclavebox></div>'}</div>
+</div></div>
 ${P.dudas?`<div class="duda"><b>Revisa:</b> ${esc(P.dudas)}</div>`:''}
 <div class="card"><h3>Vehículo</h3><div class="dos"><label class="f">Marca<input data-pk="marca" value="${esc(P.marca)}" autocapitalize="characters"></label><label class="f">N.º de bastidor<input data-pk="bastidor" value="${esc(P.bastidor)}" autocapitalize="characters" spellcheck="false"></label></div></div>
 <div class="card"><h3>Tara por eje (kg)</h3>${P.ejes.map((e,i)=>`<div class="eje" data-pi="${i}"><span class="n">${i+1}.º eje</span><input inputmode="numeric" value="${e.kg==null?'':e.kg}" aria-label="Tara del ${i+1}.º eje en kg">${P.ejes.length>1?`<button type="button" class="x" data-px aria-label="Quitar el ${i+1}.º eje">✕</button>`:'<span></span>'}${detalle(e)}</div>`).join('')}
@@ -5989,7 +6154,6 @@ ${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>C
       const m=f.querySelector('[data-pmas]');if(m)m.onclick=()=>FotoPunto.pedirFoto(b=>foto(q,b,true));
       const gi=f.querySelector('[data-pgir]');if(gi)gi.onclick=async()=>{const p=P;p.fotosTicket=await Promise.all(p.fotosTicket.map(b=>girarBlob(b,90)));if(p.ticketEntero)p.ticketEntero=await Promise.all(p.ticketEntero.map(b=>b&&girarBlob(b,90)));guardarYa();if(P===p)pintar()};
       const rc=f.querySelector('[data-prec]');if(rc)rc.onclick=()=>{P.sinRecorte=!P.sinRecorte;guardarYa();pintar()};}
-    const ck=box.querySelector('[data-pclave]');if(ck)ck.onclick=()=>FotoPunto.formClave(box.querySelector('[data-pclavebox]'),()=>pintar());
     for(const i of box.querySelectorAll('input[data-pk]'))i.oninput=()=>{let v=i.value;if(i.dataset.pk==='bastidor'||i.dataset.pk==='marca'){v=v.toUpperCase()}P[i.dataset.pk]=i.dataset.pk==='bastidor'?v.replace(/\s/g,''):v;
       if(i.dataset.pk==='bastidor'&&!P.marca&&WMI[P.bastidor.slice(0,3)]){P.marca=WMI[P.bastidor.slice(0,3)];box.querySelector('[data-pk=marca]').value=P.marca}cab('Pesaje',titulo(P));guardar()};
     for(const r of box.querySelectorAll('.eje')){const i=+r.dataset.pi,inp=r.querySelector('input');
@@ -5998,7 +6162,7 @@ ${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>C
     box.querySelector('[data-peje]').onclick=()=>{P.ejes.push({kg:null});guardarYa();pintar();const l=box.querySelectorAll('.eje input');l[l.length-1].focus()};
     for(const s of box.querySelectorAll('[data-pseg]'))for(const b of s.querySelectorAll('button'))b.onclick=()=>{const k=s.dataset.pseg;P[k]=P[k]===b.dataset.pv?'':b.dataset.pv;marcar(s);guardar()};
     box.querySelector('[data-pcrear]').onclick=()=>crear();
-    const bs=box.querySelector('[data-psello]');if(bs)bs.onclick=pedirSello;
+    enlazarSello();
   }
   function detalle(e){ // lo del ticket, para ver que cuadra: rueda 1 + rueda 2 = bruto, bruto − tara = neto
     if(e.r1==null&&e.bruto==null)return '';
@@ -6010,19 +6174,20 @@ ${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>C
   }
   function marcar(s){const v=P[s.dataset.pseg];for(const b of s.querySelectorAll('button')){b.classList.toggle('on',b.dataset.pv===v);b.setAttribute('aria-pressed',String(b.dataset.pv===v))}}
   async function foto(q,blob,mas){
-    const p=P;let b,o2=null,hg=0;
-    try{if(q==='ticket'){const c0=await fotoCanvas(blob),cr=recorteTicket(c0);hg=cr.width>cr.height*1.1?90:0; // un ticket es alargado: si sale apaisado, de pie
-        b=await achicar(girar(cr,hg));o2=await achicar(girar(c0,hg))} // también sin recortar, por si el recorte se come algo
+    const p=P;let b,o2=null,hg=0,cr=null;
+    try{if(q==='ticket'){const c0=await fotoCanvas(blob);cr=recorteTicket(c0);hg=cr.width>cr.height*1.1?90:0; // un ticket es alargado: si sale apaisado, de pie
+        cr=girar(cr,hg);b=await achicar(cr);o2=await achicar(girar(c0,hg))} // también sin recortar, por si el recorte se come algo
       else b=await reducir(blob)}
     catch(e){showMsg('No se pudo abrir la foto. Prueba otra vez.',true);return}
     if(q==='bast')p.fotoBast=b;else{p.fotosTicket=mas?[...p.fotosTicket,b]:[b];p.ticketEntero=mas?[...(p.ticketEntero||[]),o2]:[o2]}
     guardarYa();if(P!==p)return;pintar();
     const est=box.querySelector(`.foto[data-pf="${q}"] .est`),av=t=>{if(est){est.className='est lee';est.textContent=t}};
-    av(FotoPunto.iaClave()?'Leyendo con Google…':'Leyendo en el móvil…');
+    av(conGoogle()?'Leyendo con Google…':'Leyendo en el móvil…');
     try{
       if(q==='bast')ponBast(await leerBast(blob,av));
-      else{const o=await leerTicket(blob,av);
-        const g=[0,90,180,270].includes(+o.giro)?(+o.giro-hg+360)%360:0; // Google dice cuánto girar la foto original; ya se giró hg
+      else{const o=await leerTicket(blob,av,cr);
+        // Google dice cuánto girar la foto original (ya se giró hg); el lector del móvil, cuánto girar la que ha leído (la ya girada)
+        const g=o.giroRel!=null?o.giroRel:[0,90,180,270].includes(+o.giro)?(+o.giro-hg+360)%360:0;
         if(g){const i=p.fotosTicket.length-1;p.fotosTicket[i]=await girarBlob(p.fotosTicket[i],g);if(p.ticketEntero[i])p.ticketEntero[i]=await girarBlob(p.ticketEntero[i],g)}
         if(mas&&P.leido.ticket){const ya=P.ejes;ponTicket(o);P.ejes=[...ya,...P.ejes];P.leido.ticket.ejes=P.ejes.length}else ponTicket(o)}
       guardarYa();if(P===p)pintar();
@@ -6071,11 +6236,11 @@ ${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>C
       txt(l,(X0+X1-ancho(l,B,10))/2,y+(h-10)/2,B,10);txt(v,(X1+X2-ancho(v,B,10))/2,y+(h-10)/2,B,10);
       raya(X0,y,X0,y+h);raya(X1,y,X1,y+h);raya(X2,y,X2,y+h);y+=h});
     raya(X0,y,X2,y);
-    // foto(s) del ticket, centradas en el hueco (en el ejemplo: 156 × 207 pt)
-    const fT=y+32,fH=Math.max(150,207-(n-3)*35),fW=MR-ML;
-    if(p.fotosTicket.length){
-      const ims=[];for(const b of fotosT(p))ims.push(await pdf.embedJpg(new Uint8Array(await b.arrayBuffer())));
-      const gap=8;let k=fH/Math.max(...ims.map(i=>i.height));let tw=ims.reduce((s,i)=>s+i.width*k,0)+gap*(ims.length-1);
+    // foto(s) del ticket, centradas en el hueco (en el ejemplo: 156 × 207 pt), y al lado la de la placa del bastidor (Daniel, 18 nov)
+    const fT=y+32,fH=Math.max(150,207-(n-3)*35),fW=MR-ML,fotos=[...fotosT(p),...(p.fotoBast?[p.fotoBast]:[])];
+    if(fotos.length){
+      const ims=[];for(const b of fotos)ims.push(await pdf.embedJpg(new Uint8Array(await b.arrayBuffer())));
+      const gap=12;let k=fH/Math.max(...ims.map(i=>i.height));let tw=ims.reduce((s,i)=>s+i.width*k,0)+gap*(ims.length-1);
       if(tw>fW){k*=(fW-gap*(ims.length-1))/(tw-gap*(ims.length-1));tw=fW}
       let x=(W-tw)/2;for(const im of ims){const w=im.width*k,h=im.height*k;pg.drawImage(im,{x,y:H-fT-h,width:w,height:h});x+=w+gap}
     }
@@ -6095,7 +6260,7 @@ ${sello()?'':selloHtml()}<button type="button" class="primary gen" data-pcrear>C
   }
   async function crear(){
     if(!P)return;guardarYa();const p=P;
-    const falta=[!p.marca&&'la marca',!p.bastidor&&'el bastidor',!p.ejes.some(e=>e.kg!=null)&&'los pesos',!p.conductor&&'si llevaba conductor',!p.deposito&&'el depósito',!sello()&&'el sello (ponlo en «Tus pesajes»)'].filter(Boolean);
+    const falta=[!p.marca&&'la marca',!p.bastidor&&'el bastidor',!p.ejes.some(e=>e.kg!=null)&&'los pesos',!p.conductor&&'si llevaba conductor',!p.deposito&&!/de dep[oó]sito/i.test(p.otros)&&'el depósito',!sello()&&'el sello (ponlo en «Tus pesajes»)'].filter(Boolean);
     showMsg('Preparando el PDF…');
     let blob;try{blob=await pdfDe(p)}catch(e){showMsg('No se pudo preparar el PDF: '+(e&&e.message||e),true);return}
     $('#msg').hidden=true;p.pdf=true;guardarYa();
