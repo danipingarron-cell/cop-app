@@ -3271,34 +3271,44 @@ const CocLector=(()=>{
   // y en alemán (Mercedes, MAN): «0.1 Fabrikmarke (Firmenname des Herstellers) Mercedes-Benz»
   const EN={'0.1':/^\W*(Make|Fabrikmarke|Marca)\b[^)]*\)?/i,'0.2.1':/^\W*(Commercial\s+name|Handelsbezeichnung|\S?enominaci[oó]n(es)?\s+comercial)\S*/i,'0.4':/^(Vehicle\s+cat|Fahrzeugklasse)\S*/i,'0.10':/^.*?(number|nummer)\b/i};
   const NUMERICO=/^1[678]\./;
+  const MARCAS=['ISUZU','IVECO','SCANIA','VOLVO','RENAULT','MERCEDES-BENZ','MITSUBISHI','NISSAN','TOYOTA','FORD','HINO','LECITRAILER','SCHMITZ','KRONE','PALFINGER','PUTZMEISTER'];
   function sinDosPuntos(n,t){ // dato de una línea sin «:»: «0.1 Make (trade name of manufacturer) Fuso» → «Fuso»
     if(t.includes(':'))return '';
     let r=t.replace(/^\d{1,2}(?:[.,]\d{1,2}){0,3}\.?\s*[-—–.]*\s*/,'');
     if(NUMERICO.test(n)){r=r.replace(/(?<![\p{L}\d])(?=[\dOoQDUu]{3,6}(?![\p{L}\d]))(?=(?:[OoQDUu]*\d){2})[\dOoQDUu]+/gu,w=>w.replace(/[OoQDUu]/g,'0')); // «3Qu0 kg» → 3000
-      const m=r.match(/(\d{1,2}[ .]\d{3}|\d{2,6})(?!.*\d)\s*(k[gq9]\b.*)?$/i);return m?m[1]:/(^|\s)[-–—]\s*(k[gq9]\b.*)?$/i.test(r)?'-':''}
+      const m=r.match(/(\d{1,2}[ .]\d{3}|\d{2,6})(?!.*\d)\s*(k[gq9]\b.*|[^\d\s]{1,2})?$/i);return m?m[1]:/(^|\s)[-–—]\s*(k[gq9]\b.*)?$/i.test(r)?'-':''}
     const m=EN[n]&&r.match(EN[n]);return m?r.slice(m[0].length).trim():'';
   }
   const HOMOL=/\be\s?\d{1,2}\s?\*\s?\d{2,4}\/\d{1,4}(?:\*\d{2,4}\/\d{1,4})?\s?\*\s?\d{2,6}\s?\*\s?\d{1,3}\b/i;
   // si el número del campo no se lee (pasa en fotos con tablas), se busca por el texto de la etiqueta (COC en español)
-  const ETIQ={'0.1':[/\bMarca\b|raz[oó]n\s+social\s+del\s+fabricante/i],'0.2':[/(^|\s)Tipo\s*:/i],'0.2.1':[/\S?enominaci[oó]n(es)?\s+comercial|Commercial\s+name|Handelsbezeichnung/i],'0.4':[/Categor[ií]a\s+del\s+veh/i],
-    '0.10':[/identificaci[oó]n\s+del\s+veh[ií]culo\s*:/i,/Localizaci/i],
+  const ETIQ={'0.1':[/\bMarca\b|raz[oó]n\s+social\s+del\s+fabricante|\bMake\s*\W{0,3}\(\s*Trade\s+name/i],'0.2':[/(^|\s)Tipo\s*:/i],'0.2.1':[/\S?enominaci[oó]n(es)?\s+comercial|Commercial\s+name|Handelsbezeichnung/i],'0.4':[/Categor[ií]a\s+del\s+veh/i],
+    '0.10':[/identificaci[oó]n\s+del\s+veh[ií]culo\s*:|Veh\S{0,2}cle\s+identification\s+n\S{0,2}mber/i,/Localizaci|Location/i],
     '16.1':[/m[aá]xima\s+en\s+carga\s+t[eé]cnicamente/i,/prevista/i],'16.2':[/admisible\s+en\s+cada\s+eje/i,/prevista|grupo/i],
-    '16.4':[/admisible\s+del\s+conjunto/i,/prevista/i],
+    '16.4':[/admisible\s+del\s+conjunto|Technically\s+perm\S*\s+maximum\s+mass\b(?!\s+on)|maximum\s+mass\s+of\s+the\s+combination/i,/prevista|Intended|registration|service/i],
     '17.1':[/m[aá]xima\s+en\s+carga\s+prevista|Intended\s+registration\S*\s+(?:in\s+service\s+)?maximum\s+permissible\s+laden\s+mass\s*:/i,/cada\s+eje|each\s+axle|grupo|group|conjunto|combination/i],
     '17.2':[/(?:prevista|Intended\s+registration).*(?:cada\s+eje|each\s+axle)/i,/grupo|group/i],'18.1':[/barra\s*de\s*tracci[oó]n/i,/r[ií]gida/i],'18.2':[/(^|\s)Semirremolque\s*:/i],
     '18.3':[/eje\s*central/i],'18.4':[/sin\s*frenos/i],'4.1':[/(Espacio|Separaci[oó]n)\s+entre\s+(los\s+)?ejes/i],'35':[/Combinaci[oó]n\s+de\s+neum/i]};
   function campos(T){
     // fuera las marcas de agua del COC de MAN («FOR INFORMATION PURPOSES ONLY», «COPY»)
-    T=T.map(t=>t.replace(/[|\[\]{}]/g,' ').replace(/\b(FOR\s+INFORMATION|PURPOSES\s+ONLY|COPY)\b/g,' ').replace(/\s+/g,' ').trim());
+    T=T.map(t=>t.replace(/[|\[\]{}]/g,' ').replace(/\b(FOR\s+INFORMATION|PURPOSES\s+ONLY|COPY)\b/g,' ').replace(/\s+/g,' ').trim()
+      // el OCR lee «0,2 Type» o «18. 3 Centre-axle trailer»: son el 0.2 y el 18.3 (COC de Isuzu escaneado, 19 nov)
+      .replace(/^(\d{1,2}),(\d{1,2})(?=\s+\p{L}{3})/u,'$1.$2').replace(/^(\d{1,2})\.\s(\d)(?=\s+\p{L}{3})/u,'$1.$2'));
     const pos=n=>{const re=new RegExp('^'+n.replace(/\./g,'\\.')+'\\.?\\s');let i=T.findIndex(t=>re.test(t));
+      // el 0.1 sin la palabra de la marca es otro punto mal leído («6.1 Maximum permissible width» leído «0.1 …», Isuzu 19 nov)
+      if(i>=0&&n==='0.1'&&!/Mak|Mar[ck]|Fabrik|Trade|raz[oó]n|fabricante|manufact|Hersteller/i.test(T[i])&&ETIQ[n]){const [si,no]=ETIQ[n],j=T.findIndex(t=>si.test(t)&&!(no&&no.test(t)));if(j>=0)i=j}
       if(i<0&&ETIQ[n]){const [si,no]=ETIQ[n];i=T.findIndex(t=>si.test(t)&&!(no&&no.test(t)))}return i};
     const bloque=i=>{if(i<0)return [];const b=[T[i]];for(let k=i+1;k<T.length&&k<=i+5&&!esAncla(T[k])&&!(/\p{L}{4}/u.test(T[k])&&!/^\s*(Varia|Versi)/i.test(T[k])&&k>i+3);k++)b.push(T[k]);return b};
     const valor=n=>{const i=pos(n);if(i<0)return null;let v=tras(T[i])||sinDosPuntos(n,T[i]);
-      if(!v&&T[i+1]&&!esAncla(T[i+1])&&!/:/.test(T[i+1])&&!/^\d{1,2}(?:\.\d{1,2})+\.?(\s|$)/.test(T[i+1]))v=T[i+1].trim();return nulo(v)?null:v}; // la de abajo no si es otro punto («18.2 -»: salía 182)
+      let j=i+1;if(!v&&NUMERICO.test(n)&&T[j]&&T[j+1]&&/^\W{0,2}\p{L}?\W{0,2}$/u.test(T[j]))j++; // en medio, una letra suelta del rayado («m»)
+      if(!v&&T[j]&&!esAncla(T[j])&&!/:/.test(T[j])&&!/^\d{1,2}(?:\.\d{1,2})+\.?(\s|$)/.test(T[j]))v=T[j].trim();return nulo(v)?null:v}; // la de abajo no si es otro punto («18.2 -»: salía 182)
     // los datos por eje que van en la línea de encima del número («1: 7000 kg» y debajo «16.2. … : » «2: 7000 kg»; Lecitrailer)
     const previa=i=>i>0&&!esAncla(T[i-1])&&/^\s*A?\d(?:\s*[-–]\s*A?\d)?\s*:\s*(?:\(\d\)\s*)?\d/.test(T[i-1])?T[i-1]:'';
     const r={};
     r.marca=valor('0.1');
+    // con una letra mal leída («TsUZU» por ISUZU, 19 nov), la marca conocida que más se le parece
+    if(r.marca&&/^\S{4,}$/.test(r.marca)){const u=r.marca.toUpperCase(),dis=(a,b)=>{let p=[...Array(b.length+1).keys()];
+        for(let i=1;i<=a.length;i++){const q=[i];for(let j=1;j<=b.length;j++)q[j]=Math.min(p[j]+1,q[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=q}return p[b.length]};
+      const m=MARCAS.find(x=>x.length>=5&&x!==u&&dis(u,x)===1);if(m)r.marca=m}
     const i02=pos('0.2'),b2=bloque(i02).join('\n');
     // «Tipo:» en la línea de encima del 0.2, que va en la de «Variante» (Lecitrailer)
     const a2=i02>0?T.slice(Math.max(0,i02-2),i02).filter(t=>!esAncla(t)).join('\n'):'';
@@ -3310,7 +3320,7 @@ const CocLector=(()=>{
     if(tvv){r.tipo=tvv[1];r.variante=tvv[2];r.version=tvv[3]}else{
     r.tipo=kv(/(?:^|\s)(?:Tipo|Type|Typ)\s*:\s*([^\s:]+)/i)||kv(new RegExp('(?:^|\\s)(?:[Tt]ipo|[Tt]yp\\w?)\\s+'+COD,'m'))||tipoAntes()||
       (b2&&!/^\S+\s+(Varia|Versi)/i.test(b2)?(tras(b2.split('\n')[0]).split(/\s+/)[0]||null):null); // lo de «Variante:» no es el tipo
-    r.variante=kv(/Varia(?:nte|nt)\s*:\s*([^\s:]+)/i)||kv(new RegExp('[Vv]aria(?:nte|nt)\\s+'+COD,'m'));
+    r.variante=kv(/Varia(?:nte|nt)\s*:\s*([^\s:]+)/i)||kv(new RegExp('[Vv]aria(?:nte|nt)\\s+'+COD.replace('{2,}','{1,}'),'m')); // también de dos («90», Isuzu)
     r.version=kv(/(?:Versi[oó]n|Version)\s*:\s*([^\s:]+)/i)||kv(new RegExp('[Vv]ersi(?:[oó]n|on)\\s+'+COD,'m'))}
     if(r.tipo&&nulo(r.tipo))r.tipo=null;
     if(!r.tipo){ // «Tipo - Variante - Versión  F53N3 - AN290ZD6ZZZ - 5D100…» (DAF; el número 0.2 lo tapa el logotipo)
@@ -3712,9 +3722,102 @@ async function enderezar(fo){ // los lienzos (una o dos páginas) que se pasan a
 // ---------- COC escaneado o en foto leído por Google (25 oct, Daniel: «Prepara las dos») ----------
 let COC_GOOGLE=null,COC_N=0;
 const cocGoogleSi=()=>typeof FotoPunto!=='undefined'&&!!FotoPunto.iaClave()&&navigator.onLine!==false;
+// el cero tachado (Ø) de algunas letras de máquina (COC de Isuzu, 19 nov): el lector lo toma por un 8 («11000» → «1808»).
+// En la imagen ya en blanco y negro se busca cada letra con dos huecos en diagonal (el 8 los tiene uno encima del otro)
+// y se le borra la raya de dentro, dejando el aro: un 0 normal.
+function ceroBarrado(d,W,H,gruesa){ // gruesa: mirar también los de aro roto (solo al arreglar la página, no al contarlos)
+  const N=W*H,et=new Int32Array(N),pila=new Int32Array(N),neg=j=>d[j*4]<128;let n=0,arreglados=0;
+  const comps=[];
+  for(let j=0;j<N;j++){if(et[j]||!neg(j))continue;n++;let sp=0,area=0,x0=W,x1=0,y0=H,y1=0;pila[sp++]=j;et[j]=n;
+    while(sp){const q=pila[--sp];area++;const qx=q%W,qy=(q-qx)/W;if(qx<x0)x0=qx;if(qx>x1)x1=qx;if(qy<y0)y0=qy;if(qy>y1)y1=qy;
+      for(const r of [q-1,q+1,q-W,q+W,q-W-1,q-W+1,q+W-1,q+W+1]){if(r<0||r>=N||et[r]||!neg(r))continue;const rx=r%W;if(Math.abs(rx-qx)>1)continue;et[r]=n;pila[sp++]=r}}
+    const w=x1-x0+1,h=y1-y0+1;if(h>=12&&h<=H/15&&w>=h*.35&&w<=h*.95&&area<w*h*.75)comps.push({n,x0,y0,w,h})}
+  // gruesa: la letra engordada dos puntos, para cerrar el aro cuando el rayado o el umbral lo han roto (19 nov, «3500» → «3508»)
+  const mira=(c,gruesa)=>{const {w,h}=c,M=w*h,letra=new Uint8Array(M),tipo=new Int8Array(M); // tipo: 1 = la letra, 0 = blanco sin mirar, 2 = fuera, 3.. = huecos
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(et[(c.y0+y)*W+c.x0+x]===c.n)letra[y*w+x]=1;
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){let s=letra[y*w+x];
+      if(!s&&gruesa)for(let dy=-2;dy<=2&&!s;dy++)for(let dx=-2;dx<=2&&!s;dx++){const xx=x+dx,yy=y+dy;s=xx>=0&&yy>=0&&xx<w&&yy<h&&letra[yy*w+xx]}
+      if(s)tipo[y*w+x]=1}
+    const cola=new Int32Array(M);let qa=0,qb=0;
+    const sem=i=>{if(tipo[i]===0){tipo[i]=2;cola[qb++]=i}};
+    for(let x=0;x<w;x++){sem(x);sem((h-1)*w+x)}for(let y=0;y<h;y++){sem(y*w);sem(y*w+w-1)}
+    while(qa<qb){const i=cola[qa++],x=i%w;for(const r of [i-1,i+1,i-w,i+w]){if(r<0||r>=M||(r===i-1&&x===0)||(r===i+1&&x===w-1))continue;sem(r)}}
+    const hue=[];let k=3;
+    for(let i=0;i<M;i++){if(tipo[i]!==0)continue;let a=0,sx=0,sy=0;qa=qb=0;tipo[i]=k;cola[qb++]=i;
+      let ya=h,yb=0;while(qa<qb){const q=cola[qa++],x=q%w,y=(q-x)/w;a++;sx+=x;sy+=y;if(y<ya)ya=y;if(y>yb)yb=y;for(const r of [q-1,q+1,q-w,q+w]){if(r<0||r>=M||(r===q-1&&x===0)||(r===q+1&&x===w-1))continue;if(tipo[r]===0){tipo[r]=k;cola[qb++]=r}}}
+      if(a>=M*.02)hue.push({k,a,x:sx/a,y:sy/a,ya,yb});k++}
+    if(hue.length!==2)return false;
+    const [p,q]=hue[0].y<hue[1].y?hue:[hue[1],hue[0]];
+    if(!gruesa){
+      // el 8 y la B tienen un hueco encima del otro; en el cero tachado la raya los separa en diagonal: uno a cada lado y a alturas que se pisan
+      if(Math.abs(p.x-q.x)<w*.1||Math.min(p.yb,q.yb)-Math.max(p.ya,q.ya)<h*.04)return false}
+    else{ // engordada, los huecos quedan uno encima del otro: vale si por fuera es un aro (como una O, casi toda la caja por dentro y sin
+      // la cintura del 8 en medio), no un 8 ni una S o un 5 cerrados de más
+      let den=0;for(let i=0;i<M;i++)if(tipo[i]!==2)den++;if(den<M*.7||p.a+q.a<M*.06)return false;
+      const anc=y=>{let a=0,b=w-1;while(a<w&&tipo[y*w+a]===2)a++;while(b>=0&&tipo[y*w+b]===2)b--;return b-a+1};
+      let mx=0,mn=w;for(let y=0;y<h;y++)mx=Math.max(mx,anc(y));for(let y=Math.round(h*.3);y<=h*.7;y++)mn=Math.min(mn,anc(y));
+      if(mn<mx*.85)return false;
+      // y redondo también por la izquierda: la B y la D tienen ahí el palo recto, de arriba abajo
+      const izq=y=>{let a=0;while(a<w&&!letra[y*w+a])a++;return a};let mi=w;for(let y=Math.round(h*.3);y<=h*.7;y++)mi=Math.min(mi,izq(y));
+      if(izq(Math.round(h*.04))-mi<w*.1||izq(Math.round(h*.96))-mi<w*.1)return false}
+    // grosor del aro: lo que mide de ancho el lado izquierdo y el derecho en la parte del medio (la mediana: la raya los ensancha a veces)
+    const anchos=[];for(let y=Math.round(h*.3);y<=h*.7;y++){let x=0;while(x<w&&!letra[y*w+x])x++;let a=0;while(x<w&&letra[y*w+x]){a++;x++}if(a)anchos.push(a);
+      x=w-1;while(x>=0&&!letra[y*w+x])x--;a=0;while(x>=0&&letra[y*w+x]){a++;x--}if(a)anchos.push(a)}
+    anchos.sort((a,b)=>a-b);const t=Math.max(2,Math.min(anchos[anchos.length>>1]||2,Math.round(w/3)));
+    // la letra rellena (con los huecos) y su distancia al borde de fuera (chaflán 3-4, casi la de verdad): lo que queda a más del grosor
+    // del aro es la raya y se pinta de blanco; queda un 0 limpio (engordada, el borde está un punto más fuera)
+    const D=new Int32Array(M),INF=1e9;for(let i=0;i<M;i++)D[i]=tipo[i]===2?0:INF;
+    const v=(x,y)=>x<0||y<0||x>=w||y>=h?0:D[y*w+x];
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;if(!D[i])continue;D[i]=Math.min(D[i],v(x-1,y)+3,v(x,y-1)+3,v(x-1,y-1)+4,v(x+1,y-1)+4)}
+    for(let y=h-1;y>=0;y--)for(let x=w-1;x>=0;x--){const i=y*w+x;if(!D[i])continue;D[i]=Math.min(D[i],v(x+1,y)+3,v(x,y+1)+3,v(x+1,y+1)+4,v(x-1,y+1)+4)}
+    const lim=3*t+(gruesa?6:0),pon=(i,v)=>{const x=i%w,y=(i-x)/w,o=((c.y0+y)*W+c.x0+x)*4;d[o]=d[o+1]=d[o+2]=v};
+    for(let i=0;i<M;i++)if(letra[i]&&D[i]>lim)pon(i,255);
+    // engordada, el aro roto se cierra: se pinta entero siguiendo el borde de fuera (si no, el 0 abierto se lee 6)
+    if(gruesa)for(let i=0;i<M;i++)if(tipo[i]!==2&&D[i]<=lim)pon(i,0);
+    return true};
+  for(const c of comps)if(mira(c,false)||gruesa&&mira(c,true))arreglados++;
+  return arreglados;
+}
+const copiaLienzo=(h,k)=>{const c=document.createElement('canvas');c.width=Math.round(h.width*(k||1));c.height=Math.round(h.height*(k||1));
+  const x=c.getContext('2d');x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(h,0,0,c.width,c.height);return c};
+function binLimpia(c,u){const x=c.getContext('2d'),im=x.getImageData(0,0,c.width,c.height),d=im.data; // blanco y negro con un umbral oscuro, sin más
+  for(let i=0;i<d.length;i+=4){const v=d[i]<u?0:255;d[i]=d[i+1]=d[i+2]=v}x.putImageData(im,0,0);return im}
+// los códigos largos (bastidor, versión) se releen con el lector de las fotos (PaddleOCR, el de la cámara), que lee esta letra de máquina
+// mucho mejor que el de texto: en el COC de Isuzu (19 nov) el de texto daba «JALFRASOKR7OD0028» y este «JALFRR90KR7000028», como pone.
+// g: la página en gris tal como se leyó (mismo tamaño). Si el lector de fotos no está (no descargado y sin internet), se queda lo leído
+async function releerCodigos(g,its,numeros){
+  if(typeof LectorLocal==='undefined'||!LectorLocal.linea)return;
+  const k=(g.height>g.width?595:842)/g.width;
+  // letras y cifras, o solo letras si es tan largo como un bastidor («JALFRADONRTODOOZS»)
+  const cod=i=>{const s=String(i.s).replace(/[.,:;]+$/,'');return /^[A-Za-z0-9]{8,20}$/.test(s)&&/[A-Za-z]/.test(s)&&(/\d/.test(s)||s.length>=15)&&(s.match(/[a-z]/g)||[]).length<=1?s:null};
+  // numeros (página con el cero tachado): las cifras con un 6, 8 o 9, que pueden ser un cero que no se ha podido arreglar
+  // («3508 kg», «132/138M»); se cambian solo por otras con el mismo largo
+  const NUM=/^\d[\d\/.,]{1,9}[A-Z]?$/,num=i=>{const s=String(i.s).replace(/[,:;]+$/,'');return numeros&&NUM.test(s)&&/[689]/.test(s)?s:null};
+  // alto de la letra: el de la mayoría de las palabras (la caja de una palabra coge a veces lo que tiene encima)
+  const hs=its.filter(i=>String(i.s).length>=3).map(i=>i.h).sort((a,b)=>a-b),hm=hs.length?hs[hs.length>>1]:1e9;
+  const trozo=(x0,y0,w,h)=>{const cr=document.createElement('canvas');cr.width=Math.max(8,Math.round(w));cr.height=Math.max(8,Math.round(h));
+    const x=cr.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cr.width,cr.height);x.drawImage(g,-Math.round(x0),-Math.round(y0));return cr};
+  const vale=(r,s,n)=>{const t=r.t.replace(/\s+/g,'');if(r.sc<0.9)return null;
+    if(n)return NUM.test(t)&&t.length===s.length?t:null;
+    return /^[A-Za-z0-9]+$/.test(t)&&(t.match(/[a-z]/g)||[]).length<=1&&Math.abs(t.length-s.length)<=2?t:null}; // «…A3EC3Ax» (Scania)
+  const lista=[...its.filter(cod).slice(0,16).map(i=>[i,cod(i),false]),...its.filter(i=>!cod(i)&&num(i)).slice(0,60).map(i=>[i,num(i),true])];
+  for(const [i,s,n] of lista){const a=Math.min(i.h,hm*1.5)/k,w=i.w/k;
+    try{let t=vale(await LectorLocal.linea(trozo(i.x/k-a*.6,i.y/k-a*1.35,w+a*1.2,a*1.7)),s,n);
+      // si no sale claro (la caja no estaba justa), se busca la línea en un trozo más grande, como en las fotos
+      if(!t&&!n)for(const l of await LectorLocal.leer(trozo(i.x/k-a,i.y/k-a*2.2,w+a*2,a*3.2)))if(!t)t=vale({t:l.t,sc:l.sc},s);
+      if(t)i.s=t}catch(e){console.warn('lector de fotos',e);return}}
+}
 async function ocrPagina(h,pg){ // el lector del móvil, una página ya derecha
-  // escaneo enderezado: limpio, sin la trama de puntos, y con el OCR que busca texto suelto (los datos van lejos de su etiqueta)
-  return h.escaneo?await ocrTrozos(Hoja.sinMotas(FotoPrep.escaneo(h)),pg,'11'):await ocrTrozos(FotoPrep.preparar(h),pg);
+  if(!h.escaneo)return await ocrTrozos(FotoPrep.preparar(h),pg);
+  // COC con el cero tachado (Ø) de algunas letras de máquina (Isuzu, 19 nov): se buscan en una copia limpia (fondo igualado y umbral
+  // oscuro, sin la mediana, para que el aro no se rompa con el rayado); si salen muchos, la página se lee ampliada ×1,5 con los ceros
+  // arreglados. Los demás COC escaneados se leen como antes: limpios, sin la trama de puntos, y con el OCR que busca texto suelto
+  // (los datos van lejos de su etiqueta)
+  let g=FotoPrep.plano(copiaLienzo(h)),its,cero=false;const b=copiaLienzo(g),im=binLimpia(b,120);
+  if(ceroBarrado(im.data,b.width,b.height)>=10){cero=true;g=FotoPrep.plano(copiaLienzo(h,1.5));const c=copiaLienzo(g),im2=binLimpia(c,120);
+    ceroBarrado(im2.data,c.width,c.height,true);c.getContext('2d').putImageData(im2,0,0);its=await ocrTrozos(c,pg,'11')}
+  else its=await ocrTrozos(Hoja.sinMotas(FotoPrep.escaneo(h)),pg,'11');
+  await releerCodigos(g,its,cero);return its;
 }
 function cocMitades(h){ // la página entera y sus mitades de arriba y de abajo, solapadas y ampliadas (la letra pequeña llega nítida)
   const corta=(y0,y1)=>{const c=document.createElement('canvas');c.width=h.width;c.height=Math.round(y1-y0);c.getContext('2d').drawImage(h,0,-Math.round(y0));return {img:c,max:2000}};
@@ -3854,7 +3957,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 18 nov, 16:00';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 20 nov, 15:27';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4062,7 +4165,9 @@ const LectorLocal=(()=>{
     lin.giro=(giro+360)%360; // 18 nov (pesaje): cuánto se giró la foto (a la derecha) para leerla; x, y y «a» van en la foto girada
     return lin;
   }
-  return {leer,iniciar,precargar,_:{zonas,texto,reves,recorte,gira,escala,tensor,cual:()=>carga?carga.then(M=>M.n05?'nuevo':'antes'):null}}; // «_»: para las pruebas
+  // un trozo con una sola línea de texto, ya recortado y derecho (bastidor y códigos del COC escaneado, 19 nov) → {t,sc}
+  async function linea(cr){return texto(await iniciar(),cr)}
+  return {leer,linea,iniciar,precargar,_:{zonas,texto,reves,recorte,gira,escala,tensor,cual:()=>carga?carga.then(M=>M.n05?'nuevo':'antes'):null}}; // «_»: para las pruebas
 })();
 if(navigator.serviceWorker)setTimeout(()=>LectorLocal.precargar(),15000);
 
