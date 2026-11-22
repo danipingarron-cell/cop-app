@@ -3957,7 +3957,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 20 nov, 15:27';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 22 nov, 19:24';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -7998,6 +7998,233 @@ window.ayPalPoner=function(){if(typeof TPL_ACT==='undefined'||TPL_ACT!=='pal')re
 let ayT=0;const ayLuego=()=>{if(!ayT)ayT=requestAnimationFrame(()=>{ayT=0;ayPalPoner()})};
 ayLuego();
 new MutationObserver(ayLuego).observe(document.getElementById('form'),{childList:true,subtree:true});
+})();
+
+/* ---------- Vista previa del COP en su formato original (22 nov 2026, lo pidió Daniel) ----------
+   Mientras rellena, ve el Word (general, Putzmeister, máquinas) o el PDF (Palfinger) tal y como saldría.
+   - En el PC (pantalla ancha): pantalla dividida, la app a la izquierda y el documento a la derecha; se rellena en tiempo real.
+     La raya del medio se arrastra para dar más sitio a un lado u otro.
+   - En el móvil: botón «Ver Word»/«Ver PDF» que abre el documento a pantalla completa; «Volver» regresa al mismo sitio.
+   Lo que cambia se marca en amarillo un momento y la vista se va a ese sitio.
+   El documento se hace con lo mismo que «Generar Word» (buildWord / palPdf / el Word de máquinas), así que es el mismo
+   archivo que se enviaría; se pinta con docx-preview (Word) y pdf.js (PDF). Abrir la vista no cuenta como «Word generado». */
+(function(){
+  const DOCXJS='https://cdn.jsdelivr.net/npm/docx-preview@0.3.6/dist/docx-preview.min.js';
+  const ANCHO=1100; // desde aquí, pantalla dividida
+  const K_ANCHO='cop-vista-ancho-v1',K_ZOOM='cop-vista-zoom-v1',K_LADO='cop-vista-lado-v1';
+  const lsG=(k,d)=>{try{const v=localStorage.getItem(k);return v===null?d:JSON.parse(v)}catch(e){return d}};
+  const lsS=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+  const ICO='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const css=document.createElement('style');
+  css.textContent=`
+.vpbtn{display:inline-flex;align-items:center;gap:6px}.vpbtn svg{width:18px;height:18px;flex:none}
+#vpBtnM{flex:0 0 auto}
+html:not([data-vista="cop"]) #vpBtn,html:not([data-vista="maq"]) #vpBtnM{display:none!important}
+#vp{display:none;position:fixed;z-index:40;background:#e9ebee;color:#1c2321;flex-direction:column;font-family:var(--f-ui,system-ui,sans-serif)}
+html[data-vp] #vp{display:flex}
+#vp .vph{display:flex;align-items:center;gap:8px;padding:8px 10px;padding-top:calc(8px + env(safe-area-inset-top,0px));background:#fff;border-bottom:1px solid #d6dbd8;flex:none}
+#vp .vph b{font-size:15px;white-space:nowrap}
+#vp .vph .vpe{font-size:12px;color:#5d6864;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#vp .vph .vpe.mal{color:#b3362c}
+#vp .vph button{border:1px solid #d6dbd8;background:#fff;color:#1c2321;border-radius:10px;padding:7px 11px;font-size:14px;font-weight:600;min-width:38px;cursor:pointer;box-shadow:none;line-height:1}
+#vp .vph button.vpv{color:#3a49d8;border-color:transparent;padding-left:4px}
+#vp .vpz{display:flex;gap:4px}
+#vp .vpc{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;position:relative;overscroll-behavior:contain}
+#vp .vpin{padding:12px;width:max-content;min-width:100%;box-sizing:border-box}
+#vp .vpdoc{transform-origin:0 0}
+#vp .vpdoc .docx-wrapper{background:transparent!important;padding:0!important;display:block!important}
+#vp .vpdoc .docx-wrapper>section.docx{box-shadow:0 1px 4px rgba(0,0,0,.18);margin:0 auto 14px!important}
+#vp .vpdoc .vpnew{background:#ffe766!important;outline:2px solid #f2c200;transition:background 2.2s ease,outline-color 2.2s ease}
+#vp .vpdoc .vpnew.vpfade{background:transparent!important;outline-color:transparent}
+#vp .vppag{position:relative;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.18);margin:0 auto 14px}
+#vp .vppag canvas{display:block;width:100%;height:100%}
+#vp .vpmk{position:absolute;background:rgba(255,231,102,.55);outline:2px solid #f2c200;border-radius:2px;pointer-events:none;transition:opacity 2.2s ease}
+#vp .vpmk.vpfade{opacity:0}
+#vp .vpaviso{margin:30px auto;max-width:420px;text-align:center;color:#5d6864;font-size:14px;line-height:1.45}
+#vp .vpnota{font-size:11px;color:#5d6864;text-align:center;margin:2px 0 10px}
+#vpRaya{display:none}
+/* PC: pantalla dividida */
+html[data-vp="lado"] #vp{top:0;right:0;bottom:0;width:var(--vpw,48vw);border-left:1px solid #c9ced2}
+html[data-vp="lado"] body{padding-right:var(--vpw,48vw)}
+html[data-vp="lado"] #vpRaya{display:block;position:fixed;z-index:41;top:0;bottom:0;right:calc(var(--vpw,48vw) - 5px);width:10px;cursor:col-resize;touch-action:none}
+html[data-vp="lado"] #vpRaya::after{content:"";position:absolute;left:3px;top:50%;width:4px;height:44px;margin-top:-22px;border-radius:2px;background:#9aa3a8}
+html[data-vp="lado"] #vp .vpv{display:none}
+/* móvil: pantalla completa */
+html[data-vp="pant"] #vp{inset:0}
+html[data-vp="pant"] #vp .vpx{display:none}
+html[data-vp="pant"] body{overflow:hidden}
+@media (prefers-color-scheme:dark){#vp{background:#2a2c30}#vp .vph{background:#1c1d20;border-color:#3a3c40;color:#eee}#vp .vph button{background:#2a2c30;color:#eee;border-color:#3a3c40}#vp .vph .vpe,#vp .vpnota,#vp .vpaviso{color:#a9b0b4}}
+`;
+  document.head.appendChild(css);
+  const vp=document.createElement('div');vp.id='vp';vp.setAttribute('role','region');vp.setAttribute('aria-label','Vista previa');
+  vp.innerHTML=`<div class="vph"><button type="button" class="vpv" data-vp="cerrar">‹ Volver</button><b class="vpt">Vista previa</b><span class="vpe" aria-live="polite"></span>
+<span class="vpz"><button type="button" data-vp="menos" aria-label="Alejar">−</button><button type="button" data-vp="ajustar" aria-label="Ajustar al ancho">↔</button><button type="button" data-vp="mas" aria-label="Acercar">+</button></span>
+<button type="button" class="vpx" data-vp="cerrar" aria-label="Cerrar la vista previa">✕</button></div>
+<div class="vpc"><div class="vpin"><div class="vpdoc"></div></div></div>`;
+  document.body.appendChild(vp);
+  const raya=document.createElement('div');raya.id='vpRaya';raya.title='Arrastra para cambiar el tamaño';document.body.appendChild(raya);
+  const $c=vp.querySelector('.vpc'),$doc=vp.querySelector('.vpdoc'),$e=vp.querySelector('.vpe'),$t=vp.querySelector('.vpt');
+  // botones: en el COP (junto a «Generar Word») y en el de máquinas (en la cabecera)
+  const b1=document.createElement('button');b1.type='button';b1.id='vpBtn';b1.className='vpbtn';
+  const gen=document.getElementById('gen');if(gen)gen.parentNode.insertBefore(b1,gen);
+  const b2=document.createElement('button');b2.type='button';b2.id='vpBtnM';b2.className='vpbtn';
+  const hb=document.querySelector('header.bar');if(hb)hb.appendChild(b2);
+  const tipo=()=>document.documentElement.dataset.vista==='maq'?'maq':(typeof TPL_ACT!=='undefined'&&TPL_ACT==='pal')?'pdf':'word';
+  const pinBtn=()=>{const n=tipo()==='pdf'?'PDF':'Word';const t=ancho()?(abierta()?'Quitar vista':'Vista '+n):'Ver '+n;
+    for(const b of [b1,b2]){b.innerHTML=ICO+'<span>'+t+'</span>';b.setAttribute('aria-pressed',String(abierta()))}};
+  const ancho=()=>window.innerWidth>=ANCHO;
+  const abierta=()=>!!document.documentElement.dataset.vp;
+  let Y=0; // sitio del formulario al abrir en el móvil
+  function abrir(){
+    if(abierta())return;
+    const r=document.documentElement;
+    if(ancho()){r.dataset.vp='lado';lsS(K_LADO,true)}else{Y=window.scrollY;r.dataset.vp='pant';try{history.pushState({vp:1},'')}catch(e){}}
+    pinBtn();HECHO=null;pedir(0);
+  }
+  function cerrar(desdeAtras){
+    const r=document.documentElement,era=r.dataset.vp;if(!era)return;delete r.dataset.vp;
+    if(era==='lado')lsS(K_LADO,false);else{window.scrollTo(0,Y);if(!desdeAtras&&history.state&&history.state.vp)try{history.back()}catch(e){}}
+    pinBtn();
+  }
+  b1.onclick=b2.onclick=()=>abierta()?cerrar(false):abrir();
+  vp.addEventListener('click',e=>{const b=e.target.closest('[data-vp]');if(!b)return;const a=b.dataset.vp;
+    if(a==='cerrar')cerrar(false);else if(a==='mas')zoom(ZM*1.2);else if(a==='menos')zoom(ZM/1.2);else if(a==='ajustar'){ZM=0;lsS(K_ZOOM,0);escala()}});
+  // atrás del móvil (Android) cierra la vista en vez de salir del COP
+  window.addEventListener('popstate',()=>{if(document.documentElement.dataset.vp==='pant')cerrar(true)});
+  // si se gira o se cambia el tamaño de la ventana: dividida ↔ pantalla completa
+  window.addEventListener('resize',()=>{const r=document.documentElement;if(r.dataset.vp==='lado'&&!ancho())cerrar();escala();pinBtn()});
+  // ancho del panel en el PC
+  const ponAncho=w=>{w=Math.max(30,Math.min(70,w));document.documentElement.style.setProperty('--vpw',w+'vw');return w};
+  ponAncho(lsG(K_ANCHO,48));
+  raya.addEventListener('pointerdown',e=>{e.preventDefault();raya.setPointerCapture(e.pointerId);
+    const mv=ev=>{ponAncho(100*(window.innerWidth-ev.clientX)/window.innerWidth);escala()};
+    const up=ev=>{raya.removeEventListener('pointermove',mv);raya.removeEventListener('pointerup',up);lsS(K_ANCHO,Math.round(100*(window.innerWidth-ev.clientX)/window.innerWidth))};
+    raya.addEventListener('pointermove',mv);raya.addEventListener('pointerup',up)});
+  // ---------- zoom: 0 = ajustar al ancho ----------
+  let ZM=lsG(K_ZOOM,0),BASE=794;
+  function zoom(z){const f=ZM||ajuste();ZM=Math.max(.3,Math.min(3,z||f));lsS(K_ZOOM,ZM);escala()}
+  const ajuste=()=>Math.min(1.6,Math.max(.2,($c.clientWidth-24)/BASE));
+  function escala(){
+    const z=ZM||ajuste();
+    if(TIPO==='word'){$doc.style.transform='scale('+z+')';const h=$doc.scrollHeight;$doc.parentNode.style.height=(h*z+24)+'px';$doc.parentNode.style.width=Math.max($c.clientWidth,BASE*z+24)+'px'}
+    else{$doc.style.transform='';$doc.parentNode.style.height='';$doc.parentNode.style.width='';for(const pg of $doc.querySelectorAll('.vppag')){const w=+pg.dataset.w,h=+pg.dataset.h;pg.style.width=(w*z)+'px';pg.style.height=(h*z)+'px'}
+      if(PDFZ&&Math.abs(PDFZ-z)/z>.35)pedir(0,true)} // mucho zoom: se vuelve a pintar más nítido
+  }
+  // ---------- hacer el documento (lo mismo que «Generar Word») ----------
+  async function blobDoc(){
+    if(tipo()==='maq'){const p=typeof Maquinas!=='undefined'&&Maquinas.P;if(!p)throw new Error('abre un COP de máquinas para verlo');return {blob:await Maquinas.wordDe(p),pdf:false}}
+    const L=await (typeof _buildWord==='function'?_buildWord:buildWord)(); // sin marcar el COP como «Word generado»
+    return {blob:L.blob,pdf:!!L.pdf};
+  }
+  let T=0,CORRE=false,OTRA=false,HECHO=null,TIPO=null,PDFZ=0;
+  function pedir(ms,forzar){if(!abierta())return;if(forzar)HECHO=null;clearTimeout(T);T=setTimeout(hacer,ms==null?450:ms)}
+  async function hacer(){
+    if(!abierta())return;
+    if(CORRE){OTRA=true;return}
+    CORRE=true;OTRA=false;const t0=performance.now();$e.classList.remove('mal');$e.textContent='Actualizando…';
+    try{
+      const {blob,pdf}=await blobDoc();
+      const buf=new Uint8Array(await blob.arrayBuffer());
+      const huella=buf.length+':'+suma(buf);
+      $t.textContent=pdf?'Vista del PDF':'Vista del Word';
+      if(huella!==HECHO||TIPO!==(pdf?'pdf':'word')){
+        if(pdf)await pintaPdf(buf);else await pintaWord(blob);
+        HECHO=huella;
+      }
+      window.__vistaMs=Math.round(performance.now()-t0);
+      $e.textContent='Al día · '+new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    }catch(err){console.error(err);$e.classList.add('mal');$e.textContent='No se ha podido hacer la vista: '+(err&&err.message||err)}
+    finally{CORRE=false;if(OTRA)pedir(150)}
+  }
+  function suma(a){let h=0;for(let i=0;i<a.length;i+=7)h=(h*31+a[i])|0;return h}
+  const vista0=()=>{const pos=$c.scrollTop;return pos};
+  // ---------- Word ----------
+  let DOCX=null;
+  async function docxLib(){if(!window.docx||!window.docx.renderAsync){await loadScript(DOCXJS)}return window.docx}
+  const trozos=root=>[...root.querySelectorAll('td,th,section.docx p')].filter(el=>el.tagName!=='P'||!el.closest('td,th'));
+  let ANT=null; // textos de la vista anterior, para marcar lo que cambia
+  async function pintaWord(blob){
+    const lib=await docxLib();
+    const nuevo=document.createElement('div');
+    nuevo.style.cssText='position:absolute;left:-99999px;top:0;visibility:hidden';document.body.appendChild(nuevo);
+    try{await lib.renderAsync(blob,nuevo,null,{className:'docx',inWrapper:true,ignoreWidth:false,ignoreHeight:false,ignoreFonts:false,breakPages:true,ignoreLastRenderedPageBreak:false,renderHeaders:true,renderFooters:true,renderFootnotes:true,useBase64URL:true,experimental:true})}
+    catch(e){nuevo.remove();throw e}
+    const pos=vista0(),antes=TIPO==='word'?ANT:null;
+    // docx-preview no pone el estilo «Normal» a los párrafos sin estilo (en Word sí): sin esto salen en Times en vez de Arial
+    const nor=nuevo.querySelector('style')&&/p\.docx_normal\b/.test([...nuevo.querySelectorAll('style')].map(x=>x.textContent).join(''));
+    if(nor)for(const p of nuevo.querySelectorAll('section.docx p'))if(![...p.classList].some(c=>c.startsWith('docx_')))p.classList.add('docx_normal');
+    // «Página X de Y» del pie: la vista no corta las páginas igual que Word, así que el número engañaría
+    for(const p of nuevo.querySelectorAll('section.docx footer p'))if(/^\s*P[áa]gina\s+\d+\s+de\s+\d+\s*$/i.test(p.textContent))p.style.visibility='hidden';
+    nuevo.remove();nuevo.style.cssText='';
+    $doc.replaceChildren(...nuevo.childNodes);TIPO='word';PDFZ=0;
+    const sec=$doc.querySelector('section.docx');BASE=sec?sec.offsetWidth||794:794;
+    escala();$c.scrollTop=pos;
+    const ts=trozos($doc),tx=ts.map(t=>t.textContent.replace(/\s+/g,' ').trim());
+    if(antes&&antes.length===tx.length){
+      const cam=ts.filter((t,i)=>tx[i]!==antes[i]&&tx[i]);
+      marcar(cam);
+    }
+    ANT=tx;
+  }
+  function marcar(els){
+    if(!els.length)return;
+    // la celda más pequeña (no la fila entera)
+    const hojas=els.filter(e=>!els.some(o=>o!==e&&e.contains(o)));
+    for(const e of hojas){e.classList.add('vpnew');setTimeout(()=>e.classList.add('vpfade'),900);setTimeout(()=>e.classList.remove('vpnew','vpfade'),3300)}
+    irA(hojas[hojas.length-1]);
+  }
+  function irA(el){
+    const cr=$c.getBoundingClientRect(),r=el.getBoundingClientRect();
+    if(r.top>=cr.top+30&&r.bottom<=cr.bottom-30)return; // ya se ve
+    $c.scrollTo({top:$c.scrollTop+r.top-cr.top-cr.height/3,behavior:'smooth'});
+  }
+  // ---------- PDF (Palfinger) ----------
+  let PDFVAL=null; // valores de las casillas por página, para marcar lo que cambia y pintar solo esas páginas
+  async function pintaPdf(buf){
+    const lib=await pdfLib();
+    const doc=await lib.getDocument({data:buf,isEvalSupported:false}).promise;
+    const z=ZM||Math.min(1.6,Math.max(.2,($c.clientWidth-24)/612)),dpr=Math.min(2,window.devicePixelRatio||1);
+    const pos=vista0(),reusa=TIPO==='pdf'&&PDFZ===z&&$doc.querySelectorAll('.vppag').length===doc.numPages;
+    if(!reusa){$doc.replaceChildren();$doc.style.transform='';$doc.parentNode.style.height='';$doc.parentNode.style.width=''}
+    const vals=[],marcas=[];
+    for(let n=1;n<=doc.numPages;n++){
+      const pg=await doc.getPage(n),v1=pg.getViewport({scale:1}),vw=pg.getViewport({scale:z*dpr});
+      const an=(await pg.getAnnotations()).filter(a=>a.subtype==='Widget');
+      const val={};for(const a of an)val[a.id]=[a.fieldName,String(a.fieldValue==null?'':a.fieldValue)+(a.checkBox||a.radioButton?'|'+(a.fieldValue===a.exportValue):''),a.rect];
+      vals.push(val);
+      const ant=PDFVAL&&PDFVAL[n-1],cambia=!reusa||!ant||Object.keys(val).some(k=>!ant[k]||ant[k][1]!==val[k][1]);
+      let box=reusa?$doc.children[n-1]:null;
+      if(!box){box=document.createElement('div');box.className='vppag';box.dataset.w=v1.width;box.dataset.h=v1.height;box.style.width=(v1.width*z)+'px';box.style.height=(v1.height*z)+'px';$doc.appendChild(box)}
+      if(cambia){
+        const cv=document.createElement('canvas');cv.width=Math.round(vw.width);cv.height=Math.round(vw.height);
+        await pg.render({canvasContext:cv.getContext('2d'),viewport:vw}).promise;
+        const old=box.querySelector('canvas');if(old)old.replaceWith(cv);else box.prepend(cv);
+        if(ant&&reusa)for(const k of Object.keys(val))if(!ant[k]||ant[k][1]!==val[k][1]){
+          const [x1,y1,x2,y2]=pg.getViewport({scale:1}).convertToViewportRectangle(val[k][2]);
+          const m=document.createElement('div');m.className='vpmk';
+          Object.assign(m.style,{left:(100*Math.min(x1,x2)/v1.width)+'%',top:(100*Math.min(y1,y2)/v1.height)+'%',width:(100*Math.abs(x2-x1)/v1.width)+'%',height:(100*Math.abs(y2-y1)/v1.height)+'%'});
+          box.appendChild(m);marcas.push(m);
+        }
+      }
+      pg.cleanup();
+    }
+    doc.destroy();
+    PDFVAL=vals;TIPO='pdf';PDFZ=z;BASE=612;$c.scrollTop=pos;
+    if(marcas.length){for(const m of marcas){setTimeout(()=>m.classList.add('vpfade'),900);setTimeout(()=>m.remove(),3300)}irA(marcas[marcas.length-1])}
+  }
+  // ---------- en tiempo real: cada vez que se guarda algo o se toca la pantalla ----------
+  if(typeof save==='function'){const s0=save;save=function(){const r=s0.apply(this,arguments);pedir();return r}}
+  for(const ev of ['input','change'])document.addEventListener(ev,e=>{if(!vp.contains(e.target))pedir(700)},true); // al escribir, espera a que pare un poco
+  document.addEventListener('click',e=>{if(!vp.contains(e.target)&&e.target!==b1&&e.target!==b2&&!b1.contains(e.target)&&!b2.contains(e.target))pedir(600)},true);
+  // al cambiar de COP o de pantalla: si se sale del COP se cierra; si se abre otro, se rehace
+  new MutationObserver(()=>{const v=document.documentElement.dataset.vista;
+    if(abierta()&&v!=='cop'&&v!=='maq')cerrar();
+    else if(abierta()){HECHO=null;ANT=null;PDFVAL=null;pedir(200)}
+    pinBtn()}).observe(document.documentElement,{attributes:true,attributeFilter:['data-vista']});
+  // en el PC se queda abierta la próxima vez si se dejó abierta
+  new MutationObserver(()=>{const v=document.documentElement.dataset.vista;if((v==='cop'||v==='maq')&&!abierta()&&ancho()&&lsG(K_LADO,false))abrir()}).observe(document.documentElement,{attributes:true,attributeFilter:['data-vista']});
+  pinBtn();
+  window.__vista={abrir,cerrar,hacer:()=>hacer()};
 })();
 </script>
 </body></html>
