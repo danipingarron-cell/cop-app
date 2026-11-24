@@ -4010,7 +4010,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 24 nov, 14:02';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 24 nov, 21:08';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -8054,7 +8054,7 @@ new MutationObserver(ayLuego).observe(document.getElementById('form'),{childList
 })();
 
 /* ---------- Vista previa del COP en su formato original (22 nov 2026, lo pidió Daniel) ----------
-   Mientras rellena, ve el Word (general, Putzmeister, máquinas) o el PDF (Palfinger) tal y como saldría.
+   Mientras rellena, ve el Word (general, Putzmeister, máquinas) o el PDF (Palfinger; informe de pesada y «Datos para proyecto» de reformas desde el 24 nov) tal y como saldría.
    - En el PC (pantalla ancha): pantalla dividida, la app a la izquierda y el documento a la derecha; se rellena en tiempo real.
      La raya del medio se arrastra para dar más sitio a un lado u otro.
    - En el móvil: botón «Ver Word»/«Ver PDF» que abre el documento a pantalla completa; «Volver» regresa al mismo sitio.
@@ -8072,7 +8072,7 @@ new MutationObserver(ayLuego).observe(document.getElementById('form'),{childList
   css.textContent=`
 .vpbtn{display:inline-flex;align-items:center;gap:6px}.vpbtn svg{width:18px;height:18px;flex:none}
 #vpBtnM{flex:0 0 auto}
-html:not([data-vista="cop"]) #vpBtn,html:not([data-vista="maq"]) #vpBtnM{display:none!important}
+html:not([data-vista="cop"]) #vpBtn,html:not([data-vista="maq"]):not([data-vista="pes"]):not([data-vista="ref"]) #vpBtnM,html.vpsin #vpBtnM{display:none!important}
 #vp{display:none;position:fixed;z-index:40;background:#e9ebee;color:#1c2321;flex-direction:column;font-family:var(--f-ui,system-ui,sans-serif)}
 html[data-vp] #vp{display:flex}
 #vp .vph{display:flex;align-items:center;gap:8px;padding:8px 10px;padding-top:calc(8px + env(safe-area-inset-top,0px));background:#fff;border-bottom:1px solid #d6dbd8;flex:none}
@@ -8122,8 +8122,8 @@ html[data-vp="pant"] body{overflow:hidden}
   const gen=document.getElementById('gen');if(gen)gen.parentNode.insertBefore(b1,gen);
   const b2=document.createElement('button');b2.type='button';b2.id='vpBtnM';b2.className='vpbtn';
   const hb=document.querySelector('header.bar');if(hb)hb.appendChild(b2);
-  const tipo=()=>document.documentElement.dataset.vista==='maq'?'maq':(typeof TPL_ACT!=='undefined'&&TPL_ACT==='pal')?'pdf':'word';
-  const pinBtn=()=>{const n=tipo()==='pdf'?'PDF':'Word';const t=ancho()?(abierta()?'Quitar vista':'Vista '+n):'Ver '+n;
+  const tipo=()=>document.documentElement.dataset.vista==='maq'?'maq':document.documentElement.dataset.vista==='pes'?'pes':document.documentElement.dataset.vista==='ref'?'ref':(typeof TPL_ACT!=='undefined'&&TPL_ACT==='pal')?'pdf':'word';
+  const pinBtn=()=>{const n=tipo()==='pdf'||tipo()==='pes'||tipo()==='ref'?'PDF':'Word';const t=ancho()?(abierta()?'Quitar vista':'Vista '+n):'Ver '+n;
     for(const b of [b1,b2]){b.innerHTML=ICO+'<span>'+t+'</span>';b.setAttribute('aria-pressed',String(abierta()))}};
   const ancho=()=>window.innerWidth>=ANCHO;
   const abierta=()=>!!document.documentElement.dataset.vp;
@@ -8165,6 +8165,8 @@ html[data-vp="pant"] body{overflow:hidden}
   }
   // ---------- hacer el documento (lo mismo que «Generar Word») ----------
   async function blobDoc(){
+    if(tipo()==='ref'){const p=typeof Reformas!=='undefined'&&Reformas.P;if(!p)throw new Error('abre una reforma para verla');return {blob:await Reformas.pdfDe(p),pdf:true}}
+    if(tipo()==='pes'){const p=typeof Pesaje!=='undefined'&&Pesaje.P;if(!p)throw new Error('abre un pesaje para verlo');return {blob:await Pesaje.pdfDe(p),pdf:true}}
     if(tipo()==='maq'){const p=typeof Maquinas!=='undefined'&&Maquinas.P;if(!p)throw new Error('abre un COP de máquinas para verlo');return {blob:await Maquinas.wordDe(p),pdf:false}}
     const L=await (typeof _buildWord==='function'?_buildWord:buildWord)(); // sin marcar el COP como «Word generado»
     return {blob:L.blob,pdf:!!L.pdf};
@@ -8172,7 +8174,7 @@ html[data-vp="pant"] body{overflow:hidden}
   let T=0,CORRE=false,OTRA=false,HECHO=null,TIPO=null,PDFZ=0;
   function pedir(ms,forzar){if(!abierta())return;if(forzar)HECHO=null;clearTimeout(T);T=setTimeout(hacer,ms==null?450:ms)}
   async function hacer(){
-    if(!abierta())return;
+    if(!abierta()||!hayForm())return;
     if(CORRE){OTRA=true;return}
     CORRE=true;OTRA=false;const t0=performance.now();$e.classList.remove('mal');$e.textContent='Actualizando…';
     try{
@@ -8244,8 +8246,13 @@ html[data-vp="pant"] body{overflow:hidden}
       const pg=await doc.getPage(n),v1=pg.getViewport({scale:1}),vw=pg.getViewport({scale:z*dpr});
       const an=(await pg.getAnnotations()).filter(a=>a.subtype==='Widget');
       const val={};for(const a of an)val[a.id]=[a.fieldName,String(a.fieldValue==null?'':a.fieldValue)+(a.checkBox||a.radioButton?'|'+(a.fieldValue===a.exportValue):''),a.rect];
+      // PDF sin casillas (informe de pesada): se compara el texto escrito; la página se pinta siempre (puede cambiar una foto)
+      const sinCampos=!an.length;
+      // (por palabra y sin la posición: si se mueve una línea justificada no se marca entera, solo lo nuevo)
+      if(sinCampos){const vez={};for(const it of (await pg.getTextContent()).items){if(!it.str||!it.str.trim())continue;const x=it.transform[4],y=it.transform[5],h=Math.abs(it.transform[3])||it.height||10;
+        vez[it.str]=(vez[it.str]||0)+1;const k='t:'+it.str+'#'+vez[it.str];val[k]=[k,'1',[x,y-h*.2,x+it.width,y+h*.95]]}}
       vals.push(val);
-      const ant=PDFVAL&&PDFVAL[n-1],cambia=!reusa||!ant||Object.keys(val).some(k=>!ant[k]||ant[k][1]!==val[k][1]);
+      const ant=PDFVAL&&PDFVAL[n-1],cambia=sinCampos||!reusa||!ant||Object.keys(val).some(k=>!ant[k]||ant[k][1]!==val[k][1]);
       let box=reusa?$doc.children[n-1]:null;
       if(!box){box=document.createElement('div');box.className='vppag';box.dataset.w=v1.width;box.dataset.h=v1.height;box.style.width=(v1.width*z)+'px';box.style.height=(v1.height*z)+'px';$doc.appendChild(box)}
       if(cambia){
@@ -8271,11 +8278,21 @@ html[data-vp="pant"] body{overflow:hidden}
   document.addEventListener('click',e=>{if(!vp.contains(e.target)&&e.target!==b1&&e.target!==b2&&!b1.contains(e.target)&&!b2.contains(e.target))pedir(600)},true);
   // al cambiar de COP o de pantalla: si se sale del COP se cierra; si se abre otro, se rehace
   new MutationObserver(()=>{const v=document.documentElement.dataset.vista;
-    if(abierta()&&v!=='cop'&&v!=='maq')cerrar();
+    if(abierta()&&v!=='cop'&&v!=='maq'&&v!=='pes'&&v!=='ref')cerrar();
     else if(abierta()){HECHO=null;ANT=null;PDFVAL=null;pedir(200)}
     pinBtn()}).observe(document.documentElement,{attributes:true,attributeFilter:['data-vista']});
   // en el PC se queda abierta la próxima vez si se dejó abierta
-  new MutationObserver(()=>{const v=document.documentElement.dataset.vista;if((v==='cop'||v==='maq')&&!abierta()&&ancho()&&lsG(K_LADO,false))abrir()}).observe(document.documentElement,{attributes:true,attributeFilter:['data-vista']});
+  // máquinas y pesaje tienen lista y formulario en la misma pantalla: el botón solo con un COP o pesaje abierto
+  const hayForm=()=>{const v=document.documentElement.dataset.vista;return v==='cop'||(v==='maq'&&!!document.querySelector('#maquinas [data-mcrear]'))||(v==='pes'&&!!document.querySelector('#pesaje [data-pcrear]'))||(v==='ref'&&!!document.querySelector('#reformas [data-rcrear]'))};
+  let FORM=null;
+  const mira=()=>{const h=hayForm();document.documentElement.classList.toggle('vpsin',!h);
+    if(h&&!abierta()&&ancho()&&lsG(K_LADO,false))abrir();
+    else if(h&&abierta()&&FORM===false){HECHO=null;ANT=null;PDFVAL=null;pedir(200)}
+    else if(!h&&abierta()&&FORM!==false){clearTimeout(T);HECHO=null;ANT=null;PDFVAL=null;TIPO=null;$doc.style.transform='';$doc.parentNode.style.height='';$doc.parentNode.style.width='';
+      $doc.innerHTML='<p class="vpaviso">'+({pes:'Abre un pesaje',ref:'Abre una reforma'}[document.documentElement.dataset.vista]||'Abre un COP')+' y aquí verás cómo queda.</p>';$e.textContent=''}
+    FORM=h};
+  new MutationObserver(mira).observe(document.documentElement,{attributes:true,attributeFilter:['data-vista']});
+  for(const id of ['maquinas','pesaje','reformas']){const el=document.getElementById(id);if(el)new MutationObserver(mira).observe(el,{childList:true})}
   pinBtn();
   window.__vista={abrir,cerrar,hacer:()=>hacer()};
 })();
