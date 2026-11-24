@@ -3538,9 +3538,17 @@ const CocLector=(()=>{
     r.bastidor=vin?vin[0]:vinDe(tE)||vinDe(its.map(i=>i.s).join(' '));
     const hk=(dato('K')||'').match(HOMOL)||its.map(i=>i.s).join(' ').match(HOMOL);
     r.homologacion=hk?hk[0].replace(/\s/g,''):null;
-    // homologación nacional en la K («e9*NKS*11364*03», Volvo, 24 nov): en la ficha española siempre e9 (el OCR lee «eINKS*…»)
-    if(!r.homologacion){const t=[dato('K'),...its.map(i=>i.s)].filter(Boolean).map(String),re=/(?:^|\s)e?\s?[9Il1|]?\s?\*?\s?([A-Z]{2,4})\s?\*\s?(\d{3,6})(?:\s?\*\s?(\d{1,3}))?(?!\d)/;
-      for(const x of t){const m=x.match(re);if(m&&/^e/i.test(x.trim())){r.homologacion=`e9*${m[1]}*${m[2]}${m[3]?'*'+m[3]:''}`;break}}}
+    // homologación nacional en la K («e9*NKS*11364*03», Volvo, 24 nov): en la ficha española siempre e9. El OCR la lee de muchas
+    // maneras: «eINKS*11364*03», «e9*NK5*11364*03», «9*NKS*…», «e9 * NKS * 11364 * 03», partida en dos trozos…
+    if(!r.homologacion){const RE=/(?:^|[\s:;(])(?:[eE€][\s.]?)?[9gSsIl1|]?\s?[*xX×]?\s?([A-Z][A-Z0-9]{1,3})\s?[*xX×]\s?([0-9OoIlS]{3,6})(?:\s?[*xX×]\s?([0-9OoIl]{1,3}))?(?![\dA-Za-z])/;
+      const dig=x=>x.replace(/[Oo]/g,'0').replace(/[Il]/g,'1').replace(/S/g,'5'),let_=x=>x.replace(/5/g,'S').replace(/0/g,'O').replace(/1/g,'I').replace(/8/g,'B');
+      const cands=[[dato('K'),false],...filasTexto(its,paso*.5).map(t=>[t,true])].filter(c=>c[0]);
+      for(const [x,lin] of cands){const m=String(x).match(RE);if(!m)continue;
+        const pre=String(x).slice(0,m.index+m[0].length);
+        // en una línea cualquiera tiene que llevar delante la «e» o el 9 del país (en la K no hace falta)
+        if(lin&&!/(?:^|[\s:;(])[eE€][\s.]?[9gSsIl1|]?\s?[*xX×]?\s?[A-Z]|(?:^|[\s:;(])9\s?[*xX×]/.test(pre.slice(Math.max(0,m.index-1))))continue;
+        const l=let_(m[1]);if((l.match(/[A-Z]/g)||[]).length<2)continue;
+        r.homologacion=`e9*${l}*${dig(m[2])}${m[3]?'*'+dig(m[3]).padStart(2,'0'):''}`;break}}
     r.mmta_total=kg(dato('F.1'),60000);
     const ej=nums(dato('F.1.1'),1000,30000);r.mmta_ejes=ej.length>=2?ej.slice(0,6):null;
     // F.2 y F.2.1: masas en circulación (las del 17.1 y 17.2 del COC), las que usa el COP de Palfinger (Daniel, 13 nov)
@@ -3757,7 +3765,7 @@ async function enderezar(fo){ // los lienzos (una o dos páginas) que se pasan a
   hs.forEach(h=>h.escaneo=true);return hs;
 }
 // ---------- COC escaneado o en foto leído por Google (25 oct, Daniel: «Prepara las dos») ----------
-let COC_GOOGLE=null,COC_N=0;
+let COC_GOOGLE=null,COC_N=0,COC_NOMBRE='';
 const cocGoogleSi=()=>typeof FotoPunto!=='undefined'&&!!FotoPunto.iaClave()&&navigator.onLine!==false;
 // el cero tachado (Ø) de algunas letras de máquina (COC de Isuzu, 19 nov): el lector lo toma por un 8 («11000» → «1808»).
 // En la imagen ya en blanco y negro se busca cada letra con dos huecos en diagonal (el 8 los tiene uno encima del otro)
@@ -3865,7 +3873,7 @@ async function cocGoogle(pags,items){
   const pr=COC_PROMPT+`
 
 Las imágenes son las páginas del COC, escaneadas o en foto (${ps.length}). De cada página van tres imágenes seguidas: la página entera y, ampliadas, su mitad de arriba y su mitad de abajo (solapadas). Usa la página entera para saber a qué punto pertenece cada dato y las mitades para leer bien las cifras y las letras (en el bastidor no confundas S con 5, B con 8, O con 0 ni I con 1).
-Si en lugar del COC es la ficha técnica (tarjeta ITV), saca los mismos datos de sus casillas con código (D.1, D.2, D.3, E, J, K, F.1, F.3, O.1…).
+Si en lugar del COC es la ficha técnica (tarjeta ITV), saca los mismos datos de sus casillas con código (D.1, D.2, D.3, E, J, K, F.1, F.3, O.1…): F.1 → mmta_total, F.1.1 → mmta_ejes, F.2 → mma_total, F.2.1 → mma_ejes, M.1 → distancia_ejes, K → homologacion (también la nacional de serie corta, tal cual, por ejemplo e9*NKS*11364*03), neumáticos de L.2 y de Observaciones, depósito de Observaciones (si trae varios, la suma).
 Añade también la clave "dudas": una frase corta con los datos que no se lean seguros ("" si ninguno).`+(txt?`
 
 Además, texto de los PDF que sí lo traen:
@@ -3888,13 +3896,21 @@ async function cocRepasar(n,pags,its0,g){ // el lector del móvil repasa lo que 
       items.push(...await ocrPagina(pags[k],++pg))}
   }catch(e){linea('El lector del móvil no ha podido repasarlo.');return}finally{OCR_AVISO=null}
   if(n!==COC_N)return;
-  const l=CocLector.esFichaC(items)?CocLector.fichaC(items):CocLector.leer(items),difs=[],igual=[];
-  for(const [key,name] of cocTargets()){const a=cocValue(g,key),b=cocValue(l,key);if(!a||!b||/^null$/i.test(b))continue;
+  const l=CocLector.esFichaC(items)?CocLector.fichaC(items):CocLector.leer(items),difs=[],igual=[],mas=[];
+  // lo que Google no ha dado y el lector del móvil sí (la contraseña nacional «e9*NKS*11364*03» de la ficha C de Volvo, 24 nov):
+  // se añade a lo leído y el panel se vuelve a pintar con ello
+  for(const k of ['mma_total','mma_ejes'])if((g[k]===null||g[k]===undefined)&&l[k]!==null&&l[k]!==undefined)g[k]=l[k];
+  for(const [key,name] of cocTargets()){const a=cocValue(g,key),b=cocValue(l,key);if(a||!b||/^null$/i.test(b))continue;
+    if(Array.isArray(key)){if(!Array.isArray(g[key[0]]))g[key[0]]=[];g[key[0]][key[1]]=l[key[0]][key[1]]}else g[key]=l[key];mas.push(name)}
+  {const d=$('#dlg'),t=d&&!d.hidden&&d.querySelector('[data-cocrep]')?$('#dlgT').textContent.trim():'';
+    if(mas.length&&t==='COC leído'){COC_HOME=true;showCoc(g,COC_NOMBRE)}else if(mas.length&&t==='Rellenar desde el COC')showCoc(g,COC_NOMBRE)}
+  for(const [key,name] of cocTargets()){if(mas.includes(name))continue;const a=cocValue(g,key),b=cocValue(l,key);if(!a||!b||/^null$/i.test(b))continue;
     (cocNorm(a)===cocNorm(b)?igual:difs).push({name,a,b})}
   const d=$('#dlg'),abierto=d&&!d.hidden&&d.querySelector('[data-cocrep]');
   if(abierto){
     abierto.innerHTML=difs.length?`<b>El lector del móvil lee distinto ${difs.length===1?'1 dato':difs.length+' datos'}</b> (marcados con ⚠ abajo): míralos en el COC.${igual.length?` Coinciden ${igual.length}.`:''}`
       :`El lector del móvil lo ha repasado: ${igual.length?`coinciden ${igual.length===1?'el dato':'los '+igual.length+' datos'} que ha podido leer`:'no ha podido leer ningún dato para comparar'}.`;
+    if(mas.length)abierto.innerHTML+=` <b>Añadido${mas.length>1?'s':''} por el lector del móvil</b> (Google no ${mas.length>1?'los':'lo'} ha leído): ${esc(mas.join(', '))}.`;
     abierto.classList.toggle('mal',!!difs.length);
     // la fila de cada dato: «<b>Nombre:</b> valor» (Rellenar desde el COC) o «Nombre: <b>valor</b>» (COC leído, sin COP abierto)
     const filas=[...d.querySelectorAll('#dlgB label, #dlgB ul.cocl li')];
@@ -3930,7 +3946,7 @@ readCoc=async function(files){
       const pags=[];for(const fo of fotos){nf++;showMsg(`Mirando la foto ${nf} de ${fotos.length}…`);const av=OCR_AVISO;pags.push(...await enderezar(fo));OCR_AVISO=av}
       // con la clave de Google (la de las fotos) lo lee Google, más rápido y más fiable que el lector del móvil; el del móvil lo
       // repasa después y marca lo que lee distinto. Sin clave, sin internet o si Google falla, lo lee el móvil como antes.
-      if(cocGoogleSi()){const n=++COC_N;
+      if(cocGoogleSi()){const n=++COC_N;COC_NOMBRE=nombre;
         showMsg(`Leyendo el COC con Google (${pags.length} ${pags.length>1?'páginas':'página'})…`);
         let g=null,err=null;try{g=await cocGoogle(pags,items)}catch(e){err=e}
         if(g&&CocLector.cuantos(g)){COC_GOOGLE=g;showCoc(g,nombre);$('#msg').hidden=true;cocRepasar(n,pags,items,g);return}
@@ -3994,7 +4010,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 24 nov, 13:17';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 24 nov, 14:02';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
