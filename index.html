@@ -3507,10 +3507,22 @@ const CocLector=(()=>{
     return out.map(f=>f.its.sort((a,b)=>a.x-b.x).map(i=>String(i.s).trim()).join(' '))}
   function fichaC(items){
     const {its,k:{cols,paso}}=fichaPagina(items);
-    const dato=code=>{const g=cols.findIndex(c=>c.cod.includes(code)),c=cols[g];if(!c||c.x===null||!c.y)return null;
-      const y=c.y[c.cod.indexOf(code)];if(y===null||y===undefined)return null;
+    // cada línea de datos con su casilla. Los datos van impresos encima del impreso y a veces descolocados: en la ficha de Volvo
+    // (C561622, 24 nov) suben poco a poco hasta media casilla (FMX entre D.2 y D.3). Se reparten en orden de arriba abajo, una
+    // línea por casilla, con la más cercana (hasta 0,8 casillas), y no solo las que caen a la misma altura
+    const datos=cols.map((c,g)=>{const out={};if(c.x===null||!c.y)return out;
       const fin=cols.slice(g+1).map(o=>o.x).find(x=>x!==null&&x>c.x)??Infinity;
-      const v=its.filter(i=>i.x>c.x+paso*1.6&&i.x<fin-paso*.5&&Math.abs(i.y-y)<=paso*.45).sort((a,b)=>a.x-b.x).map(i=>String(i.s).trim()).join(' ').replace(/[|\[\]{}]/g,' ').replace(/\s+/g,' ').trim();
+      const filas=[];for(const i of its.filter(i=>i.x>c.x+paso*1.6&&i.x<fin-paso*.5).sort((a,b)=>a.y-b.y)){
+        const f=filas.find(f=>Math.abs(f.y-i.y)<=paso*.4);if(f){f.its.push(i);f.y=f.its.reduce((a,j)=>a+j.y,0)/f.its.length}else filas.push({y:i.y,its:[i]})}
+      filas.sort((a,b)=>a.y-b.y);
+      const cs=c.cod.map((cod,k)=>({cod,y:c.y[k]})).filter(o=>o.y!==null&&o.y!==undefined).sort((a,b)=>a.y-b.y);
+      const n=filas.length,m=cs.length,tol=paso*.8,F=[...Array(n+1)].map(()=>new Array(m+1).fill(0)),P=[...Array(n+1)].map(()=>new Array(m+1).fill(0));
+      for(let i=1;i<=n;i++)for(let j=1;j<=m;j++){let b=F[i-1][j],p=1;if(F[i][j-1]>b){b=F[i][j-1];p=2}
+        const d=Math.abs(filas[i-1].y-cs[j-1].y);if(d<=tol&&F[i-1][j-1]+paso-d>b){b=F[i-1][j-1]+paso-d;p=3}F[i][j]=b;P[i][j]=p}
+      for(let i=n,j=m;i>0&&j>0;){const p=P[i][j];if(p===3){out[cs[j-1].cod]=filas[i-1].its.sort((a,b)=>a.x-b.x).map(i=>String(i.s).trim()).join(' ');i--;j--}else if(p===2)j--;else i--}
+      return out});
+    const dato=code=>{const g=cols.findIndex(c=>c.cod.includes(code));if(g<0)return null;
+      const v=String(datos[g][code]||'').replace(/[|\[\]{}]/g,' ').replace(/\s+/g,' ').trim();
       return nulo(v)?null:v};
     const kg=(v,max)=>{const n=num(v);return n!==null&&n>=100&&n<=max?n:null};
     const nums=(v,a,b)=>[...String(v||'').matchAll(/\d[\d.]*\d|\d/g)].map(m=>+m[0].replace(/\./g,'')).filter(n=>n>=a&&n<=b);
@@ -3526,8 +3538,14 @@ const CocLector=(()=>{
     r.bastidor=vin?vin[0]:vinDe(tE)||vinDe(its.map(i=>i.s).join(' '));
     const hk=(dato('K')||'').match(HOMOL)||its.map(i=>i.s).join(' ').match(HOMOL);
     r.homologacion=hk?hk[0].replace(/\s/g,''):null;
+    // homologación nacional en la K («e9*NKS*11364*03», Volvo, 24 nov): en la ficha española siempre e9 (el OCR lee «eINKS*…»)
+    if(!r.homologacion){const t=[dato('K'),...its.map(i=>i.s)].filter(Boolean).map(String),re=/(?:^|\s)e?\s?[9Il1|]?\s?\*?\s?([A-Z]{2,4})\s?\*\s?(\d{3,6})(?:\s?\*\s?(\d{1,3}))?(?!\d)/;
+      for(const x of t){const m=x.match(re);if(m&&/^e/i.test(x.trim())){r.homologacion=`e9*${m[1]}*${m[2]}${m[3]?'*'+m[3]:''}`;break}}}
     r.mmta_total=kg(dato('F.1'),60000);
     const ej=nums(dato('F.1.1'),1000,30000);r.mmta_ejes=ej.length>=2?ej.slice(0,6):null;
+    // F.2 y F.2.1: masas en circulación (las del 17.1 y 17.2 del COC), las que usa el COP de Palfinger (Daniel, 13 nov)
+    r.mma_total=kg(dato('F.2'),60000);
+    const ea=nums(dato('F.2.1'),1000,30000);r.mma_ejes=ea.length>=2?ea.slice(0,6):null;
     r.mmtc=kg(dato('F.3'),60000);
     r.mmr_barra=kg(dato('O.1.1'),45000);
     r.mmr_semirremolque=kg(dato('O.1.2'),45000);
@@ -3536,6 +3554,11 @@ const CocLector=(()=>{
     const txt=filasTexto(its,paso*.5).join('\n');
     const dep=txt.match(/Dep[oó]sito\s*:?\s*(\d{2,4}?)\s*(?:[lL](?![\p{L}])|1(?=\.))/u)||txt.match(/Dep[oó]sito\s*:?\s*(\d{2,4})/i);
     r.capacidad_deposito=dep?+dep[1]:null;
+    // «Depósitos de combustible: Derecho 0 lts, izquierdo 275 lts.» (Volvo) o «depósito de combustible de 390 L» (Mercedes):
+    // los litros que siguen, sumados
+    if(r.capacidad_deposito===null){const m=txt.replace(/\n/g,' ').match(/Dep[oó]sitos?\b(.{0,90})/i);
+      if(m){const ls=[...m[1].matchAll(/(?<![\d.,])(\d{1,4})\s*(?:l(?:ts?|itros)?|1ts)(?![\p{L}\d])/giu)].map(x=>+x[1]),t=ls.reduce((a,b)=>a+b,0);
+        if(t>=20&&t<=3000)r.capacidad_deposito=t}}
     const de=nums(dato('M.1'),500,15000);r.distancia_ejes=de.length?de.slice(0,3):null;
     // neumáticos en Observaciones: «Eje1: 2 / 385/65R22.5 (164 K)»; el texto va en un recuadro estrecho, se junta por líneas
     const nd=[],ni=[],ejes=its.filter(i=>/^Eje\s*\d/i.test(String(i.s).trim()));
@@ -3543,6 +3566,20 @@ const CocLector=(()=>{
       const t=filasTexto(its.filter(i=>i.x>=x0&&i.y>=y0&&i.y<=y1),paso*.5).join(' ');
       for(const m of t.matchAll(/Eje\s*([1-6])\s*:?\s*(?:\d{1,2}\s*\/\s*)?(\d{3}\s*\/\s*\d{2,3}\s*Z?R\s*\d{2}(?:[.,]\d)?)\s*\(?\s*(\d{2,3}(?:\s*\/\s*\d{2,3})?)?\s*([A-Z])?/g)){
         const e=+m[1]-1;if(nd[e])continue;nd[e]=m[2].replace(/\s+/g,'').replace(',','.').replace(/R(\d)/,'R $1');if(m[3])ni[e]=m[3].replace(/\s+/g,'')+'K'}} // Daniel: la letra siempre K
+    // L.2 y Observaciones con el eje delante de cada medida: «12 - Eje 1º y 2º 385/65R22.5 164K» (Volvo; el OCR lee «19 y 29»),
+    // «** Eje 3º y 4º: 315/80R22,5 156/150 K», «Neum. Eje 2. 04 315/80 R 22,5 ---/145 G»; L.2 sin eje es el eje 1 («02 385/65 R
+    // 22,5 160/--- G», Mercedes). Las medidas sin eje delante («Neumáticos opcionales: …») no cuentan
+    if(!nd.length){const MED=/(\d{3})\s*\/\s*(\d{2,3})\s*Z?R\s*(\d{2})(?:\s*[.,]\s*(\d))?/g;
+      const IX=/^[\s,:;*]*(?:(\d{2,3})\s*\/\s*(\d{2,3})|(\d{2,3})\s*\/\s*-+|-+\s*\/\s*(\d{2,3})|(\d{2,3}))(?!\d)\s*([A-Z])?/;
+      const eje=a=>{const m=a.match(/Ejes?\s*\.?\s*(\d)(?:[º°o9](?!\d))?\.?\s*(?:(?:y|e|,|-|a)\s*(\d)(?:[º°o9](?!\d))?)?[\s.:;,*-]*(?:\d{1,2}\s*)?$/i);
+        if(!m)return null;const a1=+m[1],a2=m[2]?+m[2]:a1;return a1>=1&&a2>=a1&&a2<=6?[a1,a2]:null};
+      const poner=(t,def)=>{const ms=[...t.matchAll(MED)];ms.forEach((m,k)=>{
+        const antes=t.slice(k?ms[k-1].index+ms[k-1][0].length:0,m.index).slice(-30);let ej=eje(antes);
+        if(!ej&&def&&!k)ej=def;if(!ej)return;
+        const med=`${m[1]}/${m[2]}R ${m[3]}${m[4]?'.'+m[4]:''}`,ix=t.slice(m.index+m[0].length).match(IX);
+        const ind=ix&&(ix[1]?ix[1]+'/'+ix[2]:ix[3]||ix[4]||ix[5]);
+        for(let e=ej[0];e<=ej[1];e++)if(!nd[e-1]){nd[e-1]=med;if(ind)ni[e-1]=ind+'K'}})};
+      poner(dato('L.2')||'',[1,1]);poner(txt.replace(/\n/g,' '),null)}
     r.neumaticos=nd.length?Array.from(nd,v=>v||null):null;
     r.indices_carga=ni.length?Array.from(ni,v=>v||null):null;
     return r;
@@ -3957,7 +3994,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 22 nov, 19:24';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 24 nov, 13:17';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
