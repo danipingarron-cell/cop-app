@@ -4010,7 +4010,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 24 nov, 21:52';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 24 nov, 22:09';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -5620,6 +5620,226 @@ ${a.info?`<small class="${a.mal?'mal':''}">${escH(a.info)}</small>`:''}${ya&&ya!
     return {sin:r.sin,items:r.items.map(it=>({pn:it.t.pn||it.t.nombre,v:it.nada?'(nada)':valTxt(it,true),dud:!!it.dud,revisa:!!it.revisa,mal:!!(it.mal||it.nada)}))}}
   function pistas(scope){return objetivos(scope).map(t=>(t.pn||'·')+' '+t.pista+'   ['+t.units.map(u=>u.id).join('|')+']'+(t.subs.size?' sub:'+[...t.subs].join(','):''))}
   return {tokens,numeros,piezas,texto,entender,preparar,probar,pistas,decorar,escuchar:escucharG,juntar,analizar,objetivos}
+})();
+
+/* Medir con cinta y fotos (idea de Daniel, 24 nov 2026): cinta métrica larga estirada en el suelo a lo largo del camión;
+   cada punto (frontal, centro de cada eje, inicio de caja, inicio de máquina…) se baja con la plomada a la cinta y se hace una foto
+   donde se vea el número. La app lee el número de la foto en el móvil (sin Google) y saca las cotas de masas y dimensiones
+   restando lecturas. Da igual dónde esté el 0 de la cinta (delante o detrás): cada cota es la diferencia entre dos lecturas.
+   Solo masas y dimensiones (general y Palfinger). Va después de lector-local.js y foto-punto.js (usa LectorLocal y fotoCanvas). */
+const MedirCinta=(()=>{
+  const pal=()=>typeof TPL_ACT!=='undefined'&&TPL_ACT==='pal';
+  const putz=()=>typeof TPL_ACT!=='undefined'&&TPL_ACT==='putz';
+  const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmt=x=>String(Math.round(x));
+  const numDe=v=>{const t=String(v||'').replace(/\s/g,'').replace(',','.');if(!/^\d+(\.\d+)?$/.test(t))return NaN;return +t};
+  // ---------- puntos que se marcan sobre la cinta ----------
+  const PUNTOS=()=>{const ej=nEjes(),p=[{k:'fr',n:'Frontal del vehículo',d:'Lo más delantero (paragolpes o balizado delantero)'}];
+    for(let i=1;i<=ej;i++)p.push({k:'e'+i,n:'Centro del eje '+i,d:i===1?'El eje de delante':i===ej?'El último eje':''});
+    p.push({k:'tr',n:'Trasera del vehículo',d:'Lo más trasero (paragolpes, protección o caja)'});
+    if(!pal())p.push({k:'cab',n:'Final de la cabina',d:'La parte de atrás de la cabina',op:1});
+    p.push({k:'ic',n:pal()?'Inicio de la carrocería (frente de la caja)':'Inicio de la caja',d:'La pared delantera de la caja'});
+    p.push({k:'fc',n:'Final de la caja',d:'La pared trasera de la caja (para la longitud de caja)'});
+    if(pal()){p.push({k:'im',n:'Inicio de la máquina (grúa)',d:'El principio de la base de la grúa'});
+      p.push({k:'est',n:'Centro del estabilizador adicional',d:'Solo si lleva estabilizador adicional',op:1});
+      p.push({k:'pv',n:'Punto de volteo',d:'Solo volquetes y polibrazos: el bulón sobre el que bascula la caja',op:1});
+      p.push({k:'dcd',n:'Centro del depósito de combustible derecho',op:1},{k:'dci',n:'Centro del depósito de combustible izquierdo',op:1},
+        {k:'dad',n:'Centro del depósito de aceite derecho',op:1},{k:'dai',n:'Centro del depósito de aceite izquierdo',op:1});
+    }else p.push({k:'dc',n:'Centro del depósito de combustible',op:1},{k:'da',n:'Centro del depósito de aceite auxiliar',op:1});
+    return p};
+  const st=()=>{state.cinta=state.cinta||{p:{},ejes:pal()?2:2};return state.cinta};
+  const nEjes=()=>Math.max(2,Math.min(pal()?5:4,(state.cinta&&state.cinta.ejes)||2));
+  const guardar=()=>{try{if(typeof save==='function')save()}catch(e){}};
+  // ---------- cotas: a qué casilla va cada una y de qué dos puntos sale ----------
+  const slotPal=f=>PAL_MODEL&&PAL_MODEL.slots.find(s=>s.f&&s.f[0]===f);
+  const slotGen=(row,lab)=>{const m=window.__cop&&window.__cop.model;if(!m)return null;
+    return m.slots.find(s=>/^MASAS/.test(s.sec)&&!s.hidden&&(row?s.rowLabel===row&&s.label===lab:!s.rowLabel&&s.label===lab))};
+  function cotas(){const ej=nEjes(),L=[],u='e'+ej;
+    const add=(n,a,b,slot,extra)=>L.push({n,a,b,slot,extra});
+    if(pal()){const K=PAL_MODEL.key;
+      add('Vd · Voladizo delantero','fr','e1',K.vd);
+      for(let i=1;i<ej;i++)add(`D${i}${i+1} · Distancia eje ${i}-${i+1}`,'e'+i,'e'+(i+1),K['d'+i+(i+1)]);
+      add('Vt · Voladizo trasero',u,'tr',K.vt);
+      add('Lt · Longitud total (medida)','fr','tr',K.lt);
+      add('Im · Inicio máquina','e1','im',slotPal('DEL TRASInicio máquina'));
+      add('Ic · Inicio carrocería','e1','ic',K.ic);
+      add('Lc · Longitud caja','ic','fc',K.lc);
+      add('Dg · Último eje a estabilizador adicional',u,'est',slotPal('DEL TRASDistancia último eje centro estabilizador adicional'));
+      add('Pv · Punto de volteo','pv',u,slotPal('DEL TRASPunto de volteo respecto al centro del último eje volquetepolibrazo'));
+      add('Xdg · Eje 1 a depósito combustible derecho','e1','dcd',slotPal('Xdg'));add('Xig · Eje 1 a depósito combustible izquierdo','e1','dci',slotPal('Xig'));
+      add('Xda · Eje 1 a depósito aceite derecho','e1','dad',slotPal('Xda'));add('Xia · Eje 1 a depósito aceite izquierdo','e1','dai',slotPal('Xia'));
+    }else{
+      add('Voladizo delantero','fr','e1',slotGen('','Voladizo delantero'));
+      for(let i=1;i<ej;i++)add(`Distancia entre ejes ${i}-${i+1}`,'e'+i,'e'+(i+1),slotGen('Distancia entre ejes',`${i}-${i+1}`));
+      add('Voladizo trasero',u,'tr',slotGen('','Voladizo trasero'));
+      add('Longitud total (medida)','fr','tr',null,'#ltMedida');
+      add('1er eje al inicio de la caja','e1','ic',slotGen('','Distancia entre 1er eje y el inicio de la caja'));
+      add('1er eje al depósito de combustible','e1','dc',slotGen('','Distancia entre 1er eje y el depósito combustible'));
+      add('1er eje al depósito de aceite auxiliar','e1','da',slotGen('','Distancia entre 1er eje y el depósito de aceite auxiliar'));
+      add('Final de la cabina al inicio de caja','cab','ic',slotGen('','Distancia desde final de la cabina al inicio de caja'));
+      add('Longitud de la caja','ic','fc',slotGen('','Longitud de la caja'));
+    }
+    const P=st().p;
+    for(const c of L){const a=numDe(P[c.a]),b=numDe(P[c.b]);c.v=isNaN(a)||isNaN(b)?NaN:Math.abs(a-b);
+      c.el=c.extra?document.querySelector(c.extra):c.slot?document.querySelector(`[data-slot="${c.slot.id}"]`):null;
+      c.ya=c.el?String(c.el.value||'').trim():''}
+    return L}
+  // la cinta tiene que ir en orden: el frontal y la trasera en los extremos y los ejes de delante a atrás
+  function avisos(){const P=st().p,v=k=>numDe(P[k]),out=[],ej=nEjes();
+    const fr=v('fr'),tr=v('tr');if(isNaN(fr)||isNaN(tr))return out;const s=tr>fr?1:-1;
+    let ant=fr;for(let i=1;i<=ej;i++){const x=v('e'+i);if(isNaN(x))continue;if((x-ant)*s<=0)out.push(`El eje ${i} no queda detrás del ${i===1?'frontal':'eje '+(i-1)}: revisa las lecturas.`);ant=x}
+    for(const p of PUNTOS()){if(/^(fr|tr)$/.test(p.k))continue;const x=v(p.k);if(!isNaN(x)&&((x-fr)*s<0||(x-tr)*s>0))out.push(`«${p.n}» queda fuera del camión (antes del frontal o después de la trasera).`)}
+    return out}
+  // ---------- leer el número de la cinta en la foto ----------
+  // Se hace la foto con la plomada en el centro: vale el número más cercano al centro. Las cintas llevan los centímetros
+  // («140» = 1,40 m = 1400 mm); algunas ponen el metro aparte («1m40», «1 40»): se juntan.
+  // El lector junta en una línea toda la fila de números («135 136 137 …»): cada número se sitúa en su sitio de la línea
+  // (las cifras de la cinta son todas del mismo ancho) y con todos se ajusta una regla «píxel → centímetro».
+  // Así la lectura sale al milímetro en el punto de la plomada, aunque caiga entre dos números.
+  function numeros(lin){const out=[];
+    for(const l of lin){const t=String(l.t).replace(/[Oo]/g,'0').replace(/[Il|]/g,'1');const N=t.length;if(!N)continue;
+      const re=/(\d{1,2})\s?m\s?(\d{1,2})|\d+/gi;let m;
+      while((m=re.exec(t))){let cm=m[1]?+m[1]*100+ +m[2]:+m[0];const dig=m[0].replace(/\D/g,'');
+        if(!m[1]&&(dig.length<2||dig.length>4))continue;if(cm<1||cm>3000)continue;
+        const f=(m.index+m[0].length/2)/N-0.5,x=l.x+f*l.w*Math.cos(l.a||0),y=l.y+f*l.w*Math.sin(l.a||0);
+        out.push({cm,t:m[0],x,y,w:l.w*m[0].length/N,h:l.h,a:l.a||0})}}
+    return out}
+  // regla píxel → cm con los números que cuadran entre sí (un número mal leído se queda fuera)
+  function regla(ns){if(ns.length<2)return null;let best=null;
+    for(let i=0;i<ns.length;i++)for(let j=i+1;j<ns.length;j++){const A=ns[i],B=ns[j];if(A.cm===B.cm)continue;
+      const dx=B.x-A.x,dy=B.y-A.y,L=Math.hypot(dx,dy);if(L<5)continue;const ux=dx/L,uy=dy/L,k=(B.cm-A.cm)/L;
+      const inl=ns.filter(n=>Math.abs(A.cm+k*((n.x-A.x)*ux+(n.y-A.y)*uy)-n.cm)<0.4);
+      if(!best||inl.length>best.inl.length)best={inl,ux,uy,x0:A.x,y0:A.y}}
+    if(!best||best.inl.length<2)return null;
+    const S=best.inl.map(n=>(n.x-best.x0)*best.ux+(n.y-best.y0)*best.uy),C=best.inl.map(n=>n.cm),n=S.length;
+    const ms=S.reduce((a,b)=>a+b,0)/n,mc=C.reduce((a,b)=>a+b,0)/n;let sxx=0,sxy=0;for(let q=0;q<n;q++){sxx+=(S[q]-ms)**2;sxy+=(S[q]-ms)*(C[q]-mc)}
+    const k=sxx?sxy/sxx:0;if(!k)return null;
+    return {...best,n,k,b:mc-k*ms,cm:(x,y)=>mc+k*(((x-best.x0)*best.ux+(y-best.y0)*best.uy)-ms)}}
+  function lectura(F){const r=F.regla;if(!r){const c=F.nums&&F.nums.slice().sort((a,b)=>Math.hypot(a.x-F.px,a.y-F.py)-Math.hypot(b.x-F.px,b.y-F.py))[0];return c?{mm:c.cm*10,est:'rev'}:null}
+    const cm=r.cm(F.px,F.py);if(!(cm>0))return null;return {mm:Math.round(cm*10),est:r.n>=3?'lei':'rev'}}
+  async function leerCinta(blob,aviso){
+    const c0=await fotoCanvas(blob),k=Math.min(1,2048/Math.max(c0.width,c0.height));let c=c0;
+    if(k<1){c=document.createElement('canvas');c.width=Math.round(c0.width*k);c.height=Math.round(c0.height*k);c.getContext('2d').drawImage(c0,0,0,c.width,c.height)}
+    if(typeof LectorLocal==='undefined')throw new Error('No hay lector en el móvil');
+    const lin=await LectorLocal.leer(c,aviso,c0);
+    const W=c.width,H=c.height,g=lin.giro||0;
+    // el lector pudo girar la foto (cinta de arriba abajo): se vuelve a la foto como se ve
+    if(g)for(const l of lin){const x=l.x,y=l.y;if(g===90){l.x=y;l.y=H-x;l.a=(l.a||0)-Math.PI/2}else if(g===270){l.x=W-y;l.y=x;l.a=(l.a||0)+Math.PI/2}}
+    const nums=numeros(lin);return {nums,regla:regla(nums),W,H,px:W/2,py:H/2}}
+  let input=null;
+  function pedirFoto(cb){if(input)input.remove();input=document.createElement('input');input.type='file';input.accept='image/*';input.setAttribute('capture','environment');
+    input.style.cssText='position:fixed;left:-9999px;opacity:0';document.body.appendChild(input);
+    input.onchange=async()=>{const f=input.files&&input.files[0];if(!f)return;let b;try{b=new Blob([await f.arrayBuffer()],{type:f.type||'image/jpeg'})}catch(e){showMsg('No se pudo abrir la foto. Prueba otra vez.',true);return}cb(b)};
+    input.click()}
+  // ---------- panel ----------
+  const FOTOS={}; // fotos de esta sesión (no se guardan en el COP: ocuparían mucho en el móvil)
+  const CSS=`.cinta-bar{margin:6px 0 10px}.cinta-btn{display:flex;align-items:center;gap:8px;width:100%;justify-content:center;padding:11px 14px;border-radius:12px;border:1.5px dashed #e0a800;background:#fff8e1;color:#5d4300;font-weight:700;font-size:15px}
+.cinta-btn{flex-wrap:wrap}.cinta-btn small{font-weight:500;opacity:.8;width:100%;text-align:center}
+#cintaDlg{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.45);display:flex;justify-content:center;align-items:stretch}
+#cintaDlg .cz{background:#fff;color:#1b1b1b;width:100%;max-width:760px;overflow:auto;-webkit-overflow-scrolling:touch;padding:0 0 90px}
+#cintaDlg header{position:sticky;top:0;background:#ffc400;padding:12px 16px;display:flex;align-items:center;gap:10px;z-index:2}
+#cintaDlg header b{font-size:17px;flex:1}#cintaDlg header button{border:0;background:#fff;border-radius:10px;padding:7px 12px;font-weight:700}
+#cintaDlg .ci{padding:10px 16px 0;font-size:14px;line-height:1.4;color:#333}
+#cintaDlg .ci ol{margin:6px 0 0 18px;padding:0}#cintaDlg h4{margin:16px 16px 6px;font-size:15px}
+#cintaDlg .cp{display:grid;grid-template-columns:1fr auto auto;gap:6px 8px;align-items:center;margin:0 12px;padding:9px 6px;border-bottom:1px solid #eee}
+#cintaDlg .cp .cn b{display:block;font-size:14.5px}#cintaDlg .cp .cn span{font-size:12px;color:#666}
+#cintaDlg .cp input{width:92px;font-size:16px;padding:8px;border:1.5px solid #bbb;border-radius:9px;text-align:right;font-variant-numeric:tabular-nums}
+#cintaDlg .cp input.lei{border-color:#2e7d32;background:#f1f8e9}#cintaDlg .cp input.rev{border-color:#e65100;background:#fff3e0}
+#cintaDlg .cp .cam{border:0;background:#263238;color:#fff;border-radius:10px;width:44px;height:40px;font-size:19px}
+#cintaDlg .cp .cf{grid-column:1/-1;display:flex;gap:10px;align-items:flex-start}
+#cintaDlg .cp .cf .fi{position:relative;flex:0 0 132px;height:98px;border-radius:8px;overflow:hidden;background:#000;border:0;padding:0}
+#cintaDlg .cp .cf img{width:100%;height:100%;object-fit:cover}#cintaDlg .cp .cf .mk{position:absolute;border:2.5px solid #00e676;border-radius:4px;box-shadow:0 0 0 1px #000}
+#cintaDlg .cp .cf .mira{position:absolute;left:50%;top:0;bottom:0;border-left:1.5px dashed #ff1744}
+#cintaDlg .cp .cf .ct{font-size:12.5px;color:#333;flex:1}#cintaDlg .cp .cf .ct button{margin:4px 4px 0 0;border:1px solid #999;background:#fafafa;border-radius:14px;padding:3px 9px;font-size:13px}
+#cintaDlg .cp .cf .ct button.on{background:#2e7d32;color:#fff;border-color:#2e7d32}
+#cintaDlg .cp.op{opacity:.92}#cintaDlg .mas{margin:8px 16px;font-size:14px;border:0;background:none;color:#1565c0;font-weight:600;padding:4px 0}
+#cintaDlg .ejes{display:flex;gap:8px;align-items:center;margin:8px 16px}#cintaDlg .ejes button{border:1.5px solid #999;background:#fff;border-radius:9px;padding:6px 12px;font-weight:700}
+#cintaDlg table{border-collapse:collapse;margin:0 12px;width:calc(100% - 24px);font-size:14px}
+#cintaDlg td{padding:7px 5px;border-bottom:1px solid #eee;vertical-align:top}#cintaDlg td.v{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+#cintaDlg td small{display:block;color:#777;font-size:11.5px}#cintaDlg td.ya{font-size:12px;color:#555;text-align:right;white-space:nowrap}
+#cintaDlg .av{margin:8px 16px;padding:8px 10px;border-radius:9px;background:#fff3e0;color:#8a3b00;font-size:13.5px}
+#cintaDlg .pie{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:center;pointer-events:none}
+#cintaDlg .pie div{pointer-events:auto;background:#fff;width:100%;max-width:760px;padding:10px 16px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -2px 10px rgba(0,0,0,.15);display:flex;gap:10px}
+#cintaDlg .pie button{flex:1;padding:13px;border-radius:12px;border:0;font-weight:700;font-size:15px}#cintaDlg .pie .ok{background:#2e7d32;color:#fff}#cintaDlg .pie .ok:disabled{background:#9e9e9e}#cintaDlg .pie .no{background:#eceff1}
+#cintaVer{position:fixed;inset:0;z-index:9100;background:#000;display:flex;flex-direction:column;color:#fff}
+#cintaVer .vh{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#222}#cintaVer .vh b{font-size:15px}#cintaVer .vh span{flex:1;font-size:13px;opacity:.85}
+#cintaVer .vh button{border:0;background:#ffc400;border-radius:10px;padding:8px 14px;font-weight:700}
+#cintaVer .vw{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}#cintaVer .vi{position:relative;max-width:100%;max-height:100%}
+#cintaVer .vi img{display:block;max-width:100vw;max-height:calc(100vh - 110px)}#cintaVer .mira{position:absolute;top:0;bottom:0;border-left:2px solid #ff1744}
+#cintaVer .pto{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #ff1744;border-radius:50%}
+#cintaVer .vl{padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:#222;font-size:16px;text-align:center}
+#cintaDlg .leyendo{font-size:12.5px;color:#1565c0;grid-column:1/-1}`;
+  let verOp=false;
+  function abrir(){if(putz())return;st();
+    if(!document.getElementById('cintaCss')){const s=document.createElement('style');s.id='cintaCss';s.textContent=CSS;document.head.appendChild(s)}
+    let d=document.getElementById('cintaDlg');if(!d){d=document.createElement('div');d.id='cintaDlg';document.body.appendChild(d)}
+    verOp=verOp||PUNTOS().some(p=>p.op&&st().p[p.k]);pintar();document.documentElement.style.overflow='hidden'}
+  function cerrar(){const d=document.getElementById('cintaDlg');if(d)d.remove();document.documentElement.style.overflow=''}
+  function filaPunto(p){const P=st().p,F=FOTOS[p.k];
+    let h=`<div class="cp${p.op?' op':''}" data-ck="${p.k}"><div class="cn"><b>${esc(p.n)}</b>${p.d?`<span>${esc(p.d)}</span>`:''}</div>
+      <input inputmode="numeric" placeholder="mm" value="${esc(P[p.k]||'')}" class="${F&&F.est?F.est:''}" aria-label="${esc(p.n)}: lectura de la cinta en mm">
+      <button type="button" class="cam" title="Foto de la cinta" aria-label="Foto de la cinta en ${esc(p.n)}">📷</button>`;
+    if(F&&F.leyendo)h+=`<div class="leyendo">Leyendo el número de la cinta en el móvil…</div>`;
+    if(F&&F.url){const n=F.nums||[],L=lectura(F),r=F.regla;
+      h+=`<div class="cf"><button type="button" class="fi" data-ver aria-label="Ver la foto y marcar la plomada"><img alt="" src="${F.url}">${F.W?`<i class="mira" style="left:${F.px/F.W*100}%"></i>`:''}</button>
+      <div class="ct">${F.leyendo?'':!n.length?'No he visto números de la cinta en la foto. Escribe la lectura a mano o haz otra foto más cerca.':
+        L?`Plomada en <b>${L.mm} mm</b>${r?` · con ${r.n} números de la cinta (${Math.min(...r.inl.map(x=>x.cm))}–${Math.max(...r.inl.map(x=>x.cm))} cm)`:' · solo con un número: revísalo'}.`:'No se pudo sacar la lectura: escríbela a mano.'}
+        <br><span style="color:#666">Raya roja = plomada. Si no cae ahí, toca la foto.</span></div></div>`}
+    return h+'</div>'}
+  function pintar(){const d=document.getElementById('cintaDlg');if(!d)return;const sc=d.querySelector('.cz')?d.querySelector('.cz').scrollTop:0;
+    const ps=PUNTOS(),base=ps.filter(p=>!p.op),op=ps.filter(p=>p.op),L=cotas(),av=avisos(),hay=L.filter(c=>!isNaN(c.v)&&c.el);
+    let h=`<div class="cz"><header><b>📏 Medir con cinta y fotos</b><button type="button" data-cx>Cerrar</button></header>
+    <div class="ci">Estira la cinta en el suelo a lo largo del camión, de punta a punta. En cada punto baja la plomada hasta la cinta y haz la foto con la plomada <b>en el centro</b>, que se vea el número. La app lee el número y resta. Da igual si el 0 está delante o detrás.</div>
+    <div class="ejes">Ejes: <button type="button" data-ej="-1" aria-label="Un eje menos">−</button><b>${nEjes()}</b><button type="button" data-ej="1" aria-label="Un eje más">+</button></div>
+    <h4>Lecturas de la cinta (mm)</h4>${base.map(filaPunto).join('')}
+    <button type="button" class="mas" data-op>${verOp?'▾ Menos puntos':'▸ Más puntos (cabina, depósitos'+(pal()?', estabilizador, volteo':'')+')'}</button>${verOp?op.map(filaPunto).join(''):''}
+    ${av.map(a=>`<div class="av">⚠ ${esc(a)}</div>`).join('')}
+    <h4>Cotas que salen</h4><table>${L.map(c=>`<tr><td>${esc(c.n)}<small>${esc(nombre(c.a))} → ${esc(nombre(c.b))}</small></td><td class="v">${isNaN(c.v)?'—':fmt(c.v)+' mm'}</td><td class="ya">${!isNaN(c.v)&&c.ya?(numDe(c.ya)===Math.round(c.v)?'✓ ya está':'En el COP: '+esc(c.ya)):''}</td></tr>`).join('')}</table>
+    </div><div class="pie"><div><button type="button" class="no" data-cx>Cerrar</button><button type="button" class="ok" data-pasar ${hay.length?'':'disabled'}>Pasar ${hay.length||''} al COP</button></div></div>`;
+    d.innerHTML=h;d.querySelector('.cz').scrollTop=sc}
+  const nombre=k=>{const p=PUNTOS().find(x=>x.k===k);return p?p.n.replace(/^Centro del e/,'E').replace(/^Centro del /,'').replace(/ \(.*\)$/,''):k};
+  function escribir(el,v){el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));el.classList.add('dic-ok');setTimeout(()=>el.classList.remove('dic-ok'),2600)}
+  function pasar(){const L=cotas().filter(c=>!isNaN(c.v)&&c.el);let n=0,cam=[];
+    for(const c of L){const v=fmt(c.v);if(c.ya===v)continue;if(c.ya)cam.push(`${c.n}: ${c.ya} → ${v}`);escribir(c.el,v);n++}
+    guardar();cerrar();
+    showMsg(n?`Puestas ${n} cotas de la cinta en el COP.${cam.length?' Cambiadas: '+cam.join('; ')+'.':''}`:'Las cotas ya estaban en el COP.')}
+  function ponLectura(k){const F=FOTOS[k],L=F&&lectura(F);if(!L)return;st().p[k]=String(L.mm);F.est=L.est;guardar()}
+  async function foto(k){pedirFoto(async blob=>{if(FOTOS[k]&&FOTOS[k].url)URL.revokeObjectURL(FOTOS[k].url);
+    const F=FOTOS[k]={url:URL.createObjectURL(blob),leyendo:1};pintar();
+    try{Object.assign(F,await leerCinta(blob,()=>{}),{leyendo:0});ponLectura(k)}
+    catch(e){F.leyendo=0;F.nums=[];console.warn('cinta',e)}
+    pintar()})}
+  // foto en grande: tocar donde cae la plomada
+  function ver(k){const F=FOTOS[k];if(!F||!F.W)return;const p=PUNTOS().find(x=>x.k===k);
+    const v=document.createElement('div');v.id='cintaVer';v.innerHTML=`<div class="vh"><b>${esc(p?p.n:'')}</b><span>Toca donde cae la plomada sobre la cinta</span><button type="button" data-vx>Listo</button></div><div class="vw"><div class="vi"><img alt="" src="${F.url}"><i class="mira"></i><i class="pto"></i></div></div><div class="vl"></div>`;
+    document.body.appendChild(v);const vi=v.querySelector('.vi'),mi=v.querySelector('.mira'),pt=v.querySelector('.pto'),vl=v.querySelector('.vl');
+    const pon=()=>{mi.style.left=pt.style.left=F.px/F.W*100+'%';pt.style.top=F.py/F.H*100+'%';const L=lectura(F);vl.innerHTML=L?`Lectura: <b>${L.mm} mm</b>`:'Sin lectura'};pon();
+    vi.addEventListener('click',e=>{const r=vi.getBoundingClientRect();F.px=(e.clientX-r.left)/r.width*F.W;F.py=(e.clientY-r.top)/r.height*F.H;ponLectura(k);pon()});
+    v.querySelector('[data-vx]').onclick=()=>{v.remove();pintar()}}
+  document.addEventListener('click',e=>{const t=e.target;if(!t.closest)return;
+    const b=t.closest('.cinta-btn');if(b){e.preventDefault();abrir();return}
+    const d=t.closest('#cintaDlg');if(!d)return;
+    if(t.closest('[data-cx]')){cerrar();return}
+    if(t.closest('[data-pasar]')){pasar();return}
+    if(t.closest('[data-op]')){verOp=!verOp;pintar();return}
+    const ej=t.closest('[data-ej]');if(ej){st().ejes=Math.max(2,Math.min(pal()?5:4,nEjes()+ +ej.dataset.ej));guardar();pintar();return}
+    const row=t.closest('[data-ck]');if(!row)return;const k=row.dataset.ck;
+    if(t.closest('.cam')){foto(k);return}
+    if(t.closest('[data-ver]')){ver(k);return}});
+  document.addEventListener('input',e=>{const i=e.target;if(!i.closest||!i.closest('#cintaDlg [data-ck]')||i.tagName!=='INPUT')return;
+    const k=i.closest('[data-ck]').dataset.ck;st().p[k]=i.value.replace(/[^\d.,]/g,'');i.classList.remove('lei','rev');if(FOTOS[k])FOTOS[k].est='';guardar();
+    clearTimeout(i._t);i._t=setTimeout(()=>{const f=document.activeElement===i;pintar();if(f){const n=document.querySelector(`#cintaDlg [data-ck="${k}"] input`);if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length)}}},700)});
+  // ---------- botón en el apartado de masas y dimensiones ----------
+  const BTN='<div class="cinta-bar"><button type="button" class="cinta-btn">📏 Medir con cinta y fotos <small>La app lee la cinta en cada foto y saca voladizos, ejes y caja</small></button></div>';
+  function decorar(){if(putz())return;
+    if(!document.getElementById('cintaCss')){const s=document.createElement('style');s.id='cintaCss';s.textContent=CSS;document.head.appendChild(s)}
+    if(pal()){if(typeof PAL_MODEL==='undefined'||!PAL_MODEL)return;const i=document.querySelector(`[data-slot="${PAL_MODEL.key.vd.id}"]`);if(!i)return;
+      const r=i.closest('.row');if(r&&!(r.previousElementSibling&&r.previousElementSibling.classList.contains('cinta-bar')))r.insertAdjacentHTML('beforebegin',BTN);return}
+    const i=document.querySelector('[data-slot="38"]');if(!i)return;const sb=i.closest('.secbody');if(!sb||sb.querySelector('.cinta-bar'))return;
+    const t=sb.querySelector('.micg-bar')||sb.querySelector('.sectools');if(t)t.insertAdjacentHTML('afterend',BTN);else sb.insertAdjacentHTML('afterbegin',BTN)}
+  let pend=false;
+  new MutationObserver(()=>{if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;try{decorar()}catch(e){console.warn('Cinta',e)}})}).observe(document.body,{childList:true,subtree:true});
+  return {abrir,cotas,numeros,_:{leerCinta}};
 })();
 
 /* Fotos de la revisión (lo pidió Daniel, 14 oct): en el apartado Fotografías de los dos COP, un solo botón «Fotos revisión» para hacer
