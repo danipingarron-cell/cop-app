@@ -132,6 +132,17 @@ details.sec>summary .count{color:inherit;opacity:.75}
 .ltsum{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;font-weight:600;font-size:14px;background:var(--warn-soft);color:var(--warn)}
 .ltsum[hidden]{display:none} .ltsum span{flex:1 1 12em} .ltsum button{border:1.5px solid var(--warn);background:var(--panel);color:var(--warn);border-radius:8px;padding:6px 12px;font:inherit;font-weight:700;cursor:pointer}
 .ltnota{flex-basis:100%;font-size:12px;color:var(--muted);margin:-2px 0 0}
+.pctc{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;border:1px dashed var(--line,#ccc);border-radius:12px;padding:8px 10px;margin-top:4px}.pctc .pctt{flex-basis:100%;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}.pctc .fld{flex:1 1 140px}.pctc input.t{width:100%}
+/* luces laterales del general como en Palfinger (23 nov) */
+.lattab{border:2px solid var(--accent);border-radius:16px;padding:10px 12px;margin:10px 0;background:var(--panel)}.lattab h4{margin:2px 0 4px;font-size:15px}.lattab>.ltnota{margin:4px 0}
+.latt{width:calc(100% + 12px);border-collapse:separate;border-spacing:6px;margin:4px -6px 0;table-layout:fixed}.latt th{text-align:left;padding:0 2px}
+.latt thead th{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;line-height:1.25;color:var(--muted);vertical-align:bottom}.latt thead th:first-child{width:4.4em}
+.latt tbody th{font-weight:700;font-size:14px;white-space:nowrap}.latt input.t{width:100%;min-width:0;box-sizing:border-box}
+.latt input.t.latmal{border:2px solid var(--bad)!important;color:var(--bad);background:var(--bad-soft)}
+.latb{width:100%;margin-top:8px;border:1.5px solid var(--accent);border-radius:12px;background:var(--accent-soft,var(--panel));color:var(--accent);font:inherit;font-weight:700;padding:9px}.lattab [data-lat60n]{margin-top:4px}
+.latw{margin-top:12px;border-top:1px dashed var(--line);padding-top:8px;font-size:13.5px;line-height:1.5}.latw b{font-family:ui-monospace,monospace}.latw .latwt{font-weight:700;margin-bottom:2px}
+.row.latauto input.t[data-slot]{background-image:repeating-linear-gradient(135deg,transparent 0 6px,rgba(127,127,127,.09) 6px 12px)}.ltnota.latsrc{color:var(--accent);font-weight:600;margin-top:2px}
+.fld.latz{flex:1 1 100%}.fld.latz input.t{width:100%}
 .pnum{display:inline-flex;align-items:center;justify-content:center;margin-right:8px;padding:2px 7px;border-radius:6px;background:var(--ink);color:var(--panel);font:700 12px var(--f-mono);vertical-align:1px}
 .lbl{min-width:0;font-size:14px}
 .lbl.first{flex:1 1 240px;font-weight:500}
@@ -769,9 +780,18 @@ function applyPrefs(m,rels){
     for(const b of sec.blocks){if(!b.row)continue;const f=firstLbl(b.row),it=b.row.items.find(i=>i.t==='slot');
       if(!it&&isHeading(f)){parte=f;continue}
       if(it&&/^(ALUMBRADO LATERAL|CATADI[OÓ]PTRICO LATERAL)$/.test(parte)&&/^Altura borde superior \(h\)$/.test(f)){const sl=m.slots[it.id];sl.split=['Máx.','Mín.'];sl.splitApp=['Altura máxima','Altura mínima']}}}
-  // distancias entre luces de posición laterales = las de los catadióptricos + 60 mm, con un botón junto a los catadióptricos (solo en la app)
-  {const z=m.slots.filter(s=>/^INSTALACI[OÓ]N DE DISPOSITIVOS DE ALUMBRADO/.test(s.sec)&&!s.hidden&&/^Distancia máxima entre dispositivos laterales consecutivos/.test(s.label));
-   if(z.length===2){m.latPos={pos:z[0].id,cat:z[1].id};z[1].latBtn=true}}
+  // luces laterales como en Palfinger (Daniel, 23 nov): los puntos que rellena la tabla de medidas (h y Nº, x, z, y) de las luces de
+  // posición laterales y de los catadióptricos laterales. Sustituye al botón «Pasar a luces de posición (+60 mm)» del 7.30
+  {const T={};
+   for(const sec of m.sections)if(/^INSTALACI[OÓ]N DE DISPOSITIVOS DE ALUMBRADO/.test(sec.title)){let parte='';
+    for(const b of sec.blocks){if(!b.row)continue;const f=firstLbl(b.row),sl=b.row.items.filter(i=>i.t==='slot'&&!m.slots[i.id].hidden).map(i=>m.slots[i.id]);
+      if(!sl.length&&isHeading(f)){parte=f;continue}
+      const g=/^ALUMBRADO LATERAL$/.test(parte)?'pos':/^CATADI[OÓ]PTRICO LATERAL$/.test(parte)?'cat':'';if(!g||!sl.length)continue;const t=T[g]=T[g]||{};
+      if(/^Altura borde superior \(h\)$/.test(f)&&sl[0].split&&!t.h){t.h=sl[0].id;const n=sl.find(x=>x.ph==='Nº');if(n)t.n=n.id}
+      else if(/^Distancia del principio de veh/.test(f)&&!t.x)t.x=sl[0].id;
+      else if(/^Distancia m.xima entre dispositivos laterales consecutivos/.test(f)&&!t.z)t.z=sl[0].id;
+      else if(/^Distancia entre .ltimo dispositivo lateral/.test(f)&&!t.y)t.y=sl[0].id}}
+   if(['pos','cat'].every(g=>T[g]&&['h','x','z','y'].every(k=>T[g][k]!==undefined)))m.latT=T}
   // medidas en % o en grados: al salir de la casilla se pone el % o el º detrás de cada número
   for(const sec of m.sections)for(const b of sec.blocks){const r=b.row;if(!r)continue;const f=firstLbl(r);
     const u=/^[ÁA]ngulos? |^Recubrimiento interior/.test(f)?'º':/longitud acumulada de las marcas|% de marcado/.test(f)?'%':'';
@@ -865,21 +885,7 @@ function bnCalc(){ // 5.10: (anchura del eje − anchura del dispositivo) / 2; s
   state.auto=state.auto||{};state.auto.bn=val;state.v['s'+B.out]=val;
   const el=document.querySelector(`[data-slot="${B.out}"]`);if(el){el.value=val;if(ROW_OF[B.out])autoCumple(ROW_OF[B.out])}
 }
-// luces de posición laterales: cada distancia entre catadióptricos + 60 mm (lo pidió Daniel: 1000+1200+1300 → 1060+1260+1360)
 const ptoDe=id=>{const r=ROW_OF[id],p=r&&r.querySelector('.pnum');return p?p.textContent:''};
-function latNota(t){const n=document.querySelector('.latnota'),L=model.latPos;if(!n||!L)return;
-  n.textContent=t||`Pone en el ${ptoDe(L.pos)} (distancia entre luces de posición laterales) estas mismas distancias con 60 mm más cada una.`}
-function latPasar(){
-  const L=model.latPos;if(!L)return;
-  const v=String(state.v['s'+L.cat]||'').trim();
-  if(!/\d/.test(v)){latNota(`Primero escribe aquí las distancias entre catadióptricos, por ejemplo 1000+1200+1300.`);return}
-  const val=v.replace(/\d[\d.,]*/g,t=>{const x=num(t);return isNaN(x)?t:fmtMm(x+60)});
-  const el=document.querySelector(`[data-slot="${L.pos}"]`);
-  state.v['s'+L.pos]=val;if(el){el.value=val;el.classList.toggle('pend',isPending(val))}
-  if(ROW_OF[L.pos])autoCumple(ROW_OF[L.pos]);save();refresh();
-  latNota(`✓ Puesto en el ${ptoDe(L.pos)}: ${val}`);
-}
-document.addEventListener('click',e=>{if(e.target.closest('[data-latpos]'))latPasar()});
 // piloto trasero (lo pidió Daniel, 14 oct): marcha atrás, intermitente, freno, antiniebla, posición y catadióptrico suelen llevar la misma
 // contraseña; un botón bajo la marcha atrás la copia a las otras cinco (solo a las vacías). Matrícula, gálibo y 3ª luz de freno no: cambian.
 const PILOTO=[/^Luz de marcha atr/,/^Luz indicadora de direcci/,/^Luz de freno:/,/^Luz antiniebla trasera/,/^Luz de posici.n trasera/,/^Catadi.ptrico trasero no triangular/];
@@ -922,12 +928,95 @@ function latMisma(){
   i.readOnly=on;i.classList.toggle('pilcop',on);
   const n=a.querySelector('.latmnota');if(on&&!n)a.insertAdjacentHTML('beforeend','<div class="pilnota latmnota">⧉ La misma que la luz de posición lateral</div>');else if(!on&&n)n.remove();
 }
+// % de marcado (8.9 trasero y 8.22 lateral) como en Palfinger (Daniel, 23 nov): se mete el ancho del vehículo o la longitud de la carrocería
+// y la longitud de las láminas (vale «1200+1300+…»), y el % sale solo. Esas dos medidas son solo de la app: al Word va el %, como siempre.
+const PCT_FILAS=[{k:'tr',re:/longitud acumulada de las marcas/i,base:'Ancho del vehículo (A)',de:/^Anchura total/,pn:'4.7'},
+  {k:'la',re:/% de marcado/i,base:'Longitud de la carrocería sin cabina (Lc)',de:/^Longitud de la caja/,pn:'4.12'}];
+function pctFila(P){const i=[...document.querySelectorAll('input.t[data-slot]')].find(x=>P.re.test(x.getAttribute('aria-label')||''));return i?{i,r:i.closest('.row')}:null}
+function pctBtn(){for(const P of PCT_FILAS){const f=pctFila(P);if(!f||f.r.querySelector('[data-pct]'))continue;
+  f.r.insertAdjacentHTML('beforeend',`<div class="pctc" data-pct="${P.k}"><div class="pctt">Calcular el %</div><span class="fld stk"><label>${P.base}</label><input class="t" data-pctb inputmode="decimal" autocomplete="off" placeholder="mm"></span><span class="fld stk"><label>Longitud de las láminas (LA)</label><input class="t" data-pctl inputmode="text" autocomplete="off" placeholder="mm (o 1200+1300…)"></span><p class="ltnota" data-pctn></p></div>`)}}
+const pctSuma=v=>{const xs=String(v||'').match(/\d[\d.,]*/g);return xs?xs.map(num).filter(x=>!isNaN(x)).reduce((a,b)=>a+b,0):NaN};
+function pctCalc(){state.marc=state.marc||{};
+  for(const P of PCT_FILAS){const f=pctFila(P),box=f&&f.r.querySelector('[data-pct]');if(!box)continue;const m=state.marc[P.k]||{};
+    const fb=box.querySelector('[data-pctb]'),fl=box.querySelector('[data-pctl]'),n=box.querySelector('[data-pctn]');
+    const de=filaPor(P.de),dv=de&&de.querySelector('input.t[data-slot]')?de.querySelector('input.t[data-slot]').value.trim():'';
+    if(document.activeElement!==fb)fb.value=m.b||'';if(document.activeElement!==fl)fl.value=m.l||'';fb.placeholder=dv?dv+' (del '+P.pn+')':'mm';
+    const base=pctSuma(m.b||dv),la=pctSuma(m.l),val=base&&!isNaN(base)&&!isNaN(la)&&m.l?Math.round(la/base*100)+'%':'';
+    const id=f.i.dataset.slot,cur=state.v['s'+id]||'',prev=(state.auto&&state.auto['pct'+P.k])||'';
+    if(!cur||cur===prev||cur===val){state.auto=state.auto||{};state.auto['pct'+P.k]=val;if(cur!==val){state.v['s'+id]=val;f.i.value=val;f.i.classList.toggle('pend',isPending(val));autoCumple(f.r)}}
+    n.textContent=val?`${fmtMm(la)} / ${fmtMm(base)} × 100 = ${val}${!m.b&&dv?` (con la medida del ${P.pn})`:''}. Al Word va solo el %.`+(cur&&cur!==val&&cur!==prev?' Lo has cambiado a mano: se respeta.':''):
+      `Mete ${m.b||dv?'la longitud de las láminas':'las dos medidas'} y el % sale solo.${dv&&!m.b?` Si no pones nada, uso la del ${P.pn} (${dv}).`:''}`}}
+document.addEventListener('input',e=>{const t=e.target;if(!t.matches)return;
+  if(t.matches('[data-pctb],[data-pctl]')){const k=t.closest('[data-pct]').dataset.pct;state.marc=state.marc||{};state.marc[k]=state.marc[k]||{};state.marc[k][t.matches('[data-pctb]')?'b':'l']=t.value.trim();pctCalc();save();refresh();return}
+  if(t.dataset&&t.dataset.slot!==undefined&&document.querySelector('[data-pct]'))pctCalc()});
+// luces laterales como en Palfinger (Daniel, 23 nov): encima del 7.19, una tabla con las medidas de delante a atrás de las luces de
+// posición laterales y de los catadióptricos laterales a la vez, como la 10.2 del PDF de Palfinger (allí van en filas; en el móvil, una
+// columna cada una): d1, d1-2, d2-3… (al llenar la última sale otra fila, hasta d9-10), df y las alturas de abajo y de arriba, con el
+// requisito de fondo en cada casilla y en rojo lo que se pasa; «+60 mm» pasa las distancias de los catadióptricos a las luces de posición.
+// Con ella se rellenan solos los puntos del Word como los escribe Daniel en sus COP: x = d1, z = todas las distancias entre luces
+// («2520+2970+490»), y = df, h = «Máx.» la de arriba y «Mín.» la de abajo, Nº = luces de cada lado («4+4»: los dos lados iguales).
+// La tabla es solo de la app (state.lat); lo que se cambie a mano en esos puntos se respeta (como el %). Sustituye al botón
+// «Pasar a luces de posición laterales (+60 mm)» del 7.30.
+const LAT_G=['pos','cat'],LAT_ZMAX=9,LAT_K=['h','n','x','z','y'];
+const LAT_REQ={pos:{d:3000,df:1000,hb:250,ha:1500},cat:{d:3000,df:1000,hb:250,ha:900}};
+const latV=v=>String(v==null?'':v).trim();
+function latDe(g){state.lat=state.lat||{};const d=state.lat[g]=state.lat[g]||{};if(!Array.isArray(d.z))d.z=[];return d}
+function latVals(g){const d=latDe(g),zs=d.z.map(latV).filter(Boolean),n=zs.length||latV(d.d1)||latV(d.df)?zs.length+1:0;
+  return {h:joinSplit(model.slots[model.latT[g].h],[latV(d.ha),latV(d.hb)]),n:n?n+'+'+n:'',x:latV(d.d1),z:zs.join('+'),y:latV(d.df)}}
+function latZn(g){let u=-1;latDe(g).z.forEach((v,k)=>{if(latV(v))u=k});return Math.min(LAT_ZMAX,Math.max(4,u+2))}
+const latFilas=()=>Math.max(latZn('pos'),latZn('cat'));
+function latReq(g,c){const R=LAT_REQ[g];return c==='hb'?{min:R.hb}:c==='ha'?{max:R.ha}:c==='df'?{max:R.df}:{max:R.d}}
+function latMal(g,c,v){const x=num(latV(v));if(!latV(v)||isNaN(x))return false;const r=latReq(g,c);return r.min!=null?x<r.min:x>r.max}
+const latIn=(g,c,lab,v)=>{const r=latReq(g,c);return `<td><input class="t${latMal(g,c,v)?' latmal':''}" data-latg="${g}" data-latc="${c}" inputmode="decimal" autocomplete="off" placeholder="${r.min!=null?'≥ '+r.min:'≤ '+r.max}" value="${esc(v||'')}" aria-label="${g==='cat'?'Catadióptricos':'Luces de posición'} laterales · ${lab}"></td>`};
+function latFila(c,lab){const k=c[0]==='z'?+c.slice(1):null,val=g=>k==null?latDe(g)[c]:latDe(g).z[k];
+  return `<tr data-latf="${c}"><th scope="row">${lab}</th>${latIn('pos',c,lab,val('pos'))}${latIn('cat',c,lab,val('cat'))}</tr>`}
+function latCuerpo(){let h=latFila('d1','d1');for(let k=0,n=latFilas();k<n;k++)h+=latFila('z'+k,`d${k+1}-${k+2}`);
+  return h+latFila('df','df')+latFila('hb','h abajo')+latFila('ha','h arriba')}
+function latTabla(){const T=model.latT;if(!T||document.getElementById('latTab'))return;
+  const r19=[...document.querySelectorAll('.row')].find(r=>/^Instala luces de posici.n laterales/.test(((r.querySelector('.ptxt')||{}).textContent||'').trim()))||ROW_OF[T.pos.h];if(!r19)return;
+  const pts=`${ptoDe(T.pos.h)} a ${ptoDe(T.pos.y)} y ${ptoDe(T.cat.h)} a ${ptoDe(T.cat.y)}`;
+  r19.insertAdjacentHTML('beforebegin',`<div class="lattab" id="latTab"><h4>Medidas de las luces laterales · como en Palfinger</h4><p class="ltnota">Mides de delante a atrás. Con esto se rellenan solos los puntos ${pts}; el Word sale como siempre.</p>`+
+    `<table class="latt"><thead><tr><th></th><th scope="col">Luces de posición</th><th scope="col">Catadióptricos</th></tr></thead><tbody>${latCuerpo()}</tbody></table>`+
+    `<p class="ltnota">En gris, el requisito de cada casilla; en rojo, lo que se pasa.</p>`+
+    `<button type="button" class="latb" data-lat60>Luces de posición = catadióptricos + 60 mm</button><p class="ltnota" data-lat60n>Copia d1-2, d2-3… de los catadióptricos a las luces de posición con 60 mm más cada una. d1, df y las alturas no se tocan.</p>`+
+    `<div class="latw" data-latw></div></div>`);
+  for(const g of ['pos','cat'])document.querySelectorAll(`input[data-slot="${T[g].z}"]`).forEach(i=>{i.classList.add('wide');i.closest('.fld').classList.add('latz')});
+}
+function latPintar(force){const tb=document.querySelector('#latTab tbody');if(!tb)return;
+  if(tb.querySelectorAll('tr[data-latf^="z"]').length!==latFilas()&&(force||!tb.contains(document.activeElement))){tb.innerHTML=latCuerpo();return}
+  for(const i of tb.querySelectorAll('input[data-latc]')){const g=i.dataset.latg,c=i.dataset.latc,d=latDe(g);
+    if(i!==document.activeElement)i.value=c[0]==='z'?(d.z[+c.slice(1)]||''):(d[c]||'');i.classList.toggle('latmal',latMal(g,c,i.value))}}
+function latCalc(){const T=model.latT,box=document.getElementById('latTab');if(!T||!box)return;state.auto=state.auto||{};latPintar();
+  const res=[],lin=v=>esc(v).replace(/M[áa]x\.:\s*/g,'máx ').replace(/M[íi]n\.:\s*/g,'mín ').replace(/\n/g,' · ');
+  for(const g of ['pos','cat']){const o=latVals(g),filas=new Map();
+    for(const k of LAT_K){const id=T[g][k];if(id===undefined)continue;const val=o[k],key='lat'+g+k,prev=state.auto[key]||'';let cur=String(state.v['s'+id]||'');
+      if(!cur||cur===prev||cur===val){state.auto[key]=val;if(cur!==val){state.v['s'+id]=val;cur=val;
+        document.querySelectorAll(`[data-slot="${id}"]`).forEach(i=>{i.value=i.dataset.part!==undefined?splitVal(model.slots[id],val)[+i.dataset.part]:val;i.classList.toggle('pend',isPending(i.value))});
+        if(ROW_OF[id])autoCumple(ROW_OF[id])}}
+      const r=ROW_OF[id];if(r){if(!filas.has(r))filas.set(r,[]);filas.get(r).push({k,val,cur})}
+      if(cur){const t=`<b>${lin(cur)}</b>${val&&cur!==val?' <i>(no es el de la tabla)</i>':''}`;
+        if(k==='n'&&res.length&&res[res.length-1].id===T[g].h)res[res.length-1].t+=' · Nº '+t;else res.push({id,t:`${ptoDe(id)} ${k==='n'?'Nº':k}: ${t}`})}}
+    for(const [r,xs] of filas){const conVal=xs.filter(x=>x.val),mano=conVal.filter(x=>x.cur!==x.val);
+      const auto=conVal.length&&!mano.length;r.classList.toggle('latauto',!!auto);let n=r.querySelector('.latsrc');
+      const t=auto?'↑ Sale de «Medidas de las luces laterales». Si lo cambias a mano, se respeta.':mano.length?`Tiene otro valor y se respeta. La tabla daría ${mano.map(x=>lin(x.val).replace(/<[^>]+>/g,'')).join(' · ')}: bórralo si quieres ese.`:'';
+      if(!t){if(n)n.remove();continue}if(!n){r.insertAdjacentHTML('beforeend','<p class="ltnota latsrc"></p>');n=r.querySelector('.latsrc')}n.textContent=t}}
+  const w=box.querySelector('[data-latw]');w.innerHTML=res.length?`<div class="latwt">Al Word van:</div>${res.map(x=>x.t).join('<br>')}`:'<div class="latwt">Al Word van:</div>Aún nada. Escribe las medidas y se rellenan solos los puntos de abajo.';
+}
+document.addEventListener('input',e=>{const t=e.target;if(!t.dataset||!t.dataset.latg)return;const g=t.dataset.latg,c=t.dataset.latc,d=latDe(g);
+  if(c[0]==='z')d.z[+c.slice(1)]=t.value.trim();else d[c]=t.value.trim();
+  const zs=[...t.closest('tbody').querySelectorAll('tr[data-latf^="z"]')];
+  if(zs.length<latFilas()){const k=zs.length;zs[k-1].insertAdjacentHTML('afterend',latFila('z'+k,`d${k+1}-${k+2}`))}
+  latCalc();save();refreshSoon()});
+document.addEventListener('click',e=>{if(!e.target.closest('[data-lat60]'))return;const c=latDe('cat'),p=latDe('pos'),n=document.querySelector('[data-lat60n]'),hecho=[];
+  c.z.forEach((v,k)=>{const x=num(latV(v));if(!latV(v)||isNaN(x))return;p.z[k]=fmtMm(x+60);hecho.push(p.z[k])});
+  if(!hecho.length){n.textContent='Primero escribe las distancias entre catadióptricos (d1-2, d2-3…).';return}
+  latPintar(true);latCalc();save();refresh();n.textContent='✓ Puesto en luces de posición: '+hecho.join(' / ')+'. d1, df y las alturas, mídelas.'});
 function extrasSync(){ // al cargar o cambiar el COP: qué botones están marcados
   document.querySelectorAll('[data-marcado]').forEach(b=>{const i=b.closest('.row').querySelector('input.t[data-slot]');b.setAttribute('aria-pressed',!!i&&i.value.trim()===MARCADO_SIEMPRE)});
-  latMisma();
+  latMisma();pctCalc();latCalc();
 }
-document.addEventListener('click',e=>{if(!e.target.closest('[data-latmisma]'))return;state.latMisma=!state.latMisma;latMisma();save();refresh();
-  showMsg(state.latMisma?'El catadióptrico lateral lleva la misma contraseña que la luz de posición lateral.':'El catadióptrico lateral ya no copia la contraseña.')});
+// 23 nov (Daniel): al marcarlo la app subía arriba del todo (el aviso de arriba se ponía a la vista); ahora no se mueve: lo dice la nota de la fila
+document.addEventListener('click',e=>{if(!e.target.closest('[data-latmisma]'))return;state.latMisma=!state.latMisma;latMisma();save();refresh()});
 // % y º: al salir de la casilla, detrás de cada número que no lo lleve (85 → 85%, -5/-5/2 → -5º/-5º/2º)
 const conUnidad=(v,u)=>v.replace(/-?\d+(?:[.,]\d+)?(?!\s*[\d.,%º°])/g,x=>x+u);
 document.addEventListener('change',e=>{
@@ -1049,7 +1138,7 @@ function render(){
           if(s.cjOut)h+=`<div class="cjdif" hidden></div><p class="ltnota cjnota" hidden></p>`;
           // al final de la fila, después del límite y del Cumple
           if(s.bnOut)tail+=`<p class="ltnota">Se calcula sola: (anchura del eje − anchura del dispositivo) / 2. Si la cambias a mano, se respeta.</p>`;
-          if(s.latBtn)tail+=`<div class="latpos"><button type="button" data-latpos>Pasar a luces de posición laterales (+60 mm)</button><p class="ltnota latnota" aria-live="polite"></p></div>`}
+}
         else if(it.t==='grp'){h+=`<span class="grp" role="group"${it.nofill?' data-nofill':''}>`+it.opts.map(o=>`<button type="button" class="v-${o.label.toLowerCase().replace(/[^a-z]/g,'')}" data-cb="${o.cb}" aria-pressed="false">${esc(o.label)}</button>`).join('')+`</span>`}
       }
       h+=tail+`</div>`;
@@ -1064,7 +1153,7 @@ function render(){
     grps.forEach(g=>g.forEach(cb=>CB_GROUP[cb]=g));
     row.querySelectorAll('[data-slot]').forEach(i=>ROW_OF[i.dataset.slot]=row);
   });
-  pilotoBtn();marcadoBtn();latMismaBtn();
+  pilotoBtn();marcadoBtn();latMismaBtn();pctBtn();latTabla();
   fillUI();
 }
 let CB_GROUP={},ROW_OF={};
@@ -1163,7 +1252,7 @@ function fillUI(){
   document.querySelectorAll('[data-slot]').forEach(i=>{const v=state.v['s'+i.dataset.slot];i.value=i.dataset.part!==undefined?splitVal(model.slots[i.dataset.slot],typeof v==='string'?v:'')[+i.dataset.part]:typeof v==='string'?v:'';i.classList.toggle('pend',isPending(i.value))});
   document.querySelectorAll('[data-cb]').forEach(b=>{const on=!!state.v['c'+b.dataset.cb];b.setAttribute('aria-pressed',on);b.classList.toggle('auto',on&&!state.manual['c'+b.dataset.cb])});
   lucesUI();lucesCalc();
-  {const mi=$('#ltMedida');if(mi)mi.value=(state.lt&&state.lt.medida)||''}ltCalc();cjDif();bnCalc();latNota();
+  {const mi=$('#ltMedida');if(mi)mi.value=(state.lt&&state.lt.medida)||''}ltCalc();cjDif();bnCalc();
   plegarFijos();refresh();hereSoon();
 }
 // protección lateral: «Instala elementos fijos…» y sus cotas 1-4 (6.7-6.12) en un desplegable cerrado que se abre al tocarlo
@@ -2107,6 +2196,14 @@ render=function(){
   // 10.1: luz de posición y catadióptrico con la misma marca y contraseña (Daniel, 12 oct): un botón y se copian al catadióptrico
   const l1=palRowEl('lat1');if(l1&&!l1.querySelector('[data-palmisma]'))l1.insertAdjacentHTML('beforeend','<span class="grp palmisma" role="group"><button type="button" data-palmisma aria-pressed="false">Misma marca y contraseña en el catadióptrico</button></span>');
   palMisma();
+  // 8.5.2 (Daniel, 23 nov): casilla «Anchura del eje» (solo en la app, no va al PDF) y la distancia al borde del neumático sale sola
+  // = (anchura del eje − ancho de la protección) / 2, como el 5.10 del general
+  {const s=palEjeSlots(),el=s&&document.querySelector(`[data-slot="${s.out.id}"]`),r=el&&el.closest('.row');
+    if(r&&!r.querySelector('[data-paleje]')){const f=el.closest('.fld')||el;
+      f.insertAdjacentHTML('beforebegin','<span class="fld stk paleje"><label for="palEje">Anchura del eje</label><input class="t" id="palEje" data-paleje inputmode="decimal" autocomplete="off" placeholder="Anchura del eje" aria-label="Anchura del eje (de fuera a fuera de los neumáticos)"></span>');
+      r.insertAdjacentHTML('beforeend','<p class="ltnota">Mete la anchura del eje (de fuera a fuera de los neumáticos): la distancia se calcula sola, (anchura del eje − ancho de la protección) / 2. La anchura del eje no va al PDF. Si cambias la distancia a mano, se respeta.</p>');
+      el.placeholder='Se calcula sola'}
+    const i=document.querySelector('[data-paleje]');if(i)i.value=state.palEje||''}
   for(const [c,q] of [['catI','posI'],['catD','posD']]){const r=palRowEl(c);if(r&&!r.querySelector('[data-pal60]'))r.insertAdjacentHTML('beforeend',`<span class="latpos"><button type="button" data-pal60="${c}|${q}">Poner en luces de posición: distancias entre luces + 60 mm</button><span class="latnota" data-pal60n="${c}">Copia d1-2, d2-3, d3-4 y d4-5 a las luces de posición de este lado con 60 mm más cada una. d1, df y las alturas no se tocan.</span></span>`)}
   for(const s of PAL_MODEL.slots)if(s.select&&s.selPh){const sel=document.querySelector(`select[data-slot="${s.id}"]`);if(sel){sel.options[0].textContent=s.selPh;sel.setAttribute('aria-label',s.rowLabel||s.label);sel.classList.remove('col')}}
   document.querySelectorAll('.row.pt').forEach(r=>{const l=[...r.querySelectorAll(':scope>.lbl:not(.first)')].map(x=>x.textContent.trim());if(/^(Aplica\|Cumple|Altura\|Distancia\|Ángulo)$/.test(l.join('|')))r.classList.add('apcu');if(l[0]==='Altura')r.classList.add('luz3')});
@@ -2116,6 +2213,9 @@ render=function(){
   palCalc();refresh(); // las cajas de aviso ya existen: que salgan con lo que haya
 };
 // número de apartado como en el PDF (el 5 y el 6 no salen: firmas y equipos de medida se quedan como vienen en la plantilla)
+function palEjeSlots(){if(!PAL_MODEL)return null;const f=re=>PAL_MODEL.slots.find(s=>re.test(s.rowLabel||''));
+  const disp=f(/^Ancho protecci.n trasera/),out=f(/^Distancia respecto borde exterior de los neum/);return disp&&out?{disp,out}:null}
+document.addEventListener('input',e=>{if(!e.target.matches||!e.target.matches('[data-paleje]'))return;state.palEje=e.target.value.trim();palCalc();save()});
 function palRowEl(key){const r=PAL_MODEL&&PAL_MODEL.rowKey[key];if(!r)return null;const i=RL.indexOf(r);return i<0?null:document.querySelector(`.row[data-r="${i}"]`)}
 function palTextos(){
   const pal=TPL_ACT==='pal';
@@ -2131,8 +2231,7 @@ function palMisma(){
     if(i){i.readOnly=on;i.classList.toggle('copiado',on)}}
 }
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-palmisma]');if(!b)return;
-  state.palMisma=!state.palMisma;palMisma();save();refreshSoon();
-  showMsg(state.palMisma?'El catadióptrico lleva la misma marca y contraseña que la luz de posición.':'El catadióptrico ya no copia la marca y la contraseña.')});
+  state.palMisma=!state.palMisma;palMisma();save();refreshSoon()}); // sin aviso arriba: subía la app al principio (Daniel, 23 nov); el botón marcado y las casillas en gris ya lo dicen
 document.addEventListener('input',e=>{if(TPL_ACT==='pal'&&state.palMisma&&e.target.dataset&&e.target.dataset.slot!==undefined)palMisma()});
 /* ---------- cálculos de Palfinger ---------- */
 const palV=s=>s?String(state.v['s'+s.id]||'').trim():'';
@@ -2176,6 +2275,8 @@ function palCalc(){
   {const a=palN(k.check1),b=palN(k.check2),box=document.querySelector('[data-pcmp]');PAL_CMP=null;
     if(box){if(isNaN(a)||isNaN(b))box.hidden=true;else{const d=b-a;PAL_CMP=d||null;box.hidden=false;box.className='ltdif '+(d?'mal':'ok');
       box.textContent=d?`⚠ Check1 y Check2 no coinciden: Check2 ${palFmt(b)} − Check1 ${palFmt(a)} = ${d>0?'+':''}${palFmt(d)} mm`:'✓ Check1 y Check2 coinciden'}}}
+  {const s=palEjeSlots();if(s){const e=num(String(state.palEje||'').replace(/[^\d.,]/g,'')),d=palN(s.disp),x=(e-d)/2;
+    palSet(s.out,isNaN(x)||!state.palEje?'':palFmt(Math.round(x*10)/10),'palEjeOut')}}
   // 10.3 % de marcado; el ancho del vehículo y la longitud de carrocería se copian de masas mientras no los cambie
   palSet(k.mpA,palV(k.anch),'mpA',true);palSet(k.pp4,palV(k.vd),'pp4'); // 14.2 cota 4 = voladizo delantero de masas (Daniel, 27 oct); si la cambia a mano se respeta
   palSet(k.mlLc,palV(k.check1)||palV(k.check2),'mlLc',true); // 10.3.1.5 = anchura de masas; 10.3.2.5 = longitud de los Check1/Check2 (Daniel, 13 oct)
@@ -2199,8 +2300,13 @@ function palCalc(){
   // 10.2 luces laterales: Cumple de posición y catadióptricos con los límites de cada columna (y el lado derecho si no coinciden)
   const lados=cbOn('lados','Sí');
   for(const [key,rows] of [['cumPos',['posI',...(lados?[]:['posD'])]],['cumCat',['catI',...(lados?[]:['catD'])]]]){
-    let res=[];for(const rk of rows){const r=PAL_MODEL.rowKey[rk];r.items.filter(i=>i.t==='slot').forEach((i,j)=>{const v=palV(PAL_MODEL.slots[i.id]);if(v)res.push(evalLimit(parseLimit(r.lims[j]),v))})}
-    palCumple(key,!res.length||res.some(x=>x===null)?null:res.every(Boolean));
+    let res=[],fuera=[];for(const rk of rows){const r=PAL_MODEL.rowKey[rk];r.items.filter(i=>i.t==='slot').forEach((i,j)=>{const v=palV(PAL_MODEL.slots[i.id]);if(!v)return;const x=evalLimit(parseLimit(r.lims[j]),v);res.push(x);
+      if(x===false)fuera.push(`${/D$/.test(rk)?'derecho':'izquierdo'} ${PAL_COLS[j]} ${v} (${r.lims[j]})`)})}
+    let ok=!res.length||res.some(x=>x===null)?null:res.every(Boolean);
+    // 10.11 catadióptricos (Daniel, 23 nov: «siempre sale no cumple»): la app nunca pone «No» sola; si algo se pasa lo deja vacío y dice qué
+    if(key==='cumCat'){if(ok===false)ok=null;const el=palRowEl(key);if(el){let n=el.querySelector('.cumnota');if(!n){el.insertAdjacentHTML('beforeend','<p class="ltnota cumnota"></p>');n=el.querySelector('.cumnota')}
+      n.textContent=fuera.length?`No lo marco yo: se pasa${fuera.length>1?'n':''} del límite ${fuera.join(', ')}. Márcalo tú.`:'Sale «Sí» solo si todas las medidas de los catadióptricos cumplen; nunca pone «No» sola.'}}
+    palCumple(key,ok);
   }
   palLuces();
   palVer();
@@ -2374,7 +2480,8 @@ document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest
   save();refreshSoon();n.textContent='✓ Puesto en luces de posición: '+hecho.join(' / ')});
 
 // marcados de visibilidad (10.3.1 y 10.3.2): marca y contraseña de siempre con un toque (Daniel, 22 oct; las de su COP Renault)
-const PAL_MARCADO={marca:'ORAFOL',contr:'104R-000001'};
+const PAL_COLS=['d1','d1-2','d2-3','d3-4','d4-5','df','h3','h1'];
+const PAL_MARCADO={marca:'ORAFOL',contr:'E4 104R-000001'}; // 23 nov: con la E4 delante, como en el general (Daniel)
 function palSiempre(){if(TPL_ACT!=='pal'||!PAL_MODEL)return;const k=PAL_MODEL.key;
   document.querySelectorAll('[data-palsiempre]').forEach(b=>{const m=b.dataset.palsiempre;b.setAttribute('aria-pressed',palV(k[m+'.marca'])===PAL_MARCADO.marca&&palV(k[m+'.contr'])===PAL_MARCADO.contr)})}
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-palsiempre]');if(!b||TPL_ACT!=='pal')return;const k=PAL_MODEL.key,m=b.dataset.palsiempre;
@@ -4010,7 +4117,7 @@ if('serviceWorker' in navigator&&(location.protocol==='https:'||/^(localhost|127
       document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})})}).catch(()=>{});
   }catch(e){}
 // «Pregúntale a Claude» quitado (lo pidió Daniel, 25 oct); queda la versión bajo el inicio
-{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 24 nov, 22:09';$('#homeNote').after(v);}
+{const v=document.createElement('p');v.className='hint homever';v.id='homeVer';v.textContent='Versión del 25 nov, 12:25';$('#homeNote').after(v);}
 // COC compartido desde otra app del móvil (Archivos, Outlook, WhatsApp…: «Compartir» → COP). El service worker lo deja en la
 // caché «cop-compartido» y abre la app con ?compartido=N; aquí se recoge y sigue igual que «Añadir COC» desde el inicio
 async function recibirCompartido(){
@@ -4400,7 +4507,7 @@ const FotoPunto=(()=>{
     D:'valor D en kN, solo el número',U:'valor U en t, solo el número',clase:'clase',carga:'carga máxima con su unidad',marca:'marca o fabricante (nombre o logotipo)',
     tipo:'tipo o modelo',texto:'el texto principal',
     luz:'contraseña del piloto o catadióptrico como se escribe en el COP: la E con su número y el número de homologación, sin las letras de la función ni su serie (R 02, IA 02, S1, AR, F, 2a…). Ej.: "E20 R 02 19011" → "E20 19011"; "E20 IA 02 19009" → "E20 19009"; la luz de matrícula "E9 00 4127" se queda "E9 00 4127"',
-    banda:'contraseña de la banda o lámina reflectante: solo el código 104R con su número, sin la E del país (ej.: "104R-000001")',
+    banda:'contraseña de la banda o lámina reflectante: la E del país con su número, un espacio y el código 104R con su número (ej.: "E4 104R-000001")',
     categoria:'categoría del vehículo: N1, N2, N3, O1, O2, O3 u O4 (con G si es todoterreno, como "N3G"); si no se ve, ""',
     denom:'denominación comercial: el nombre comercial del modelo (como "Canter" o "XD 450 FAN"), no la marca; si no se ve, ""',
     variante:'código de la variante (no el del tipo ni el de la versión)',version:'código de la versión (no el del tipo ni el de la variante)',
@@ -4411,7 +4518,7 @@ Lee las marcas exactamente como están, aunque estén en relieve, troqueladas co
 Hay que rellenar estas casillas, en este orden:
 ${ins.map((x,k)=>{const n=nombreDe(x),t=info(x).pt;return `${k+1}. ${n}${t&&!n.includes(t)?' ('+t+')':''}: ${QUE[clase(x)]||QUE.texto}`}).join('\n')}
 Contraseñas: la E (o e) con el número del círculo o rectángulo, un espacio y el código tal cual, conservando * y - (ej.: "E11 73R-011025*3", "E2 58R-0319194", "E9 30003"); en pilotos y bandas, como diga su casilla. Si hay varias, en la casilla va la que corresponde a lo que pide la casilla y las demás en "textos".
-Si la foto es la placa del fabricante del vehículo (la que lleva bastidor, contraseña y masas en kg), rellena también "placa"; si no, "placa": null. En esas placas la 1.ª masa es la del vehículo, la 2.ª la del conjunto y las que empiezan por "1-", "2-"… son las de cada eje. Si la placa tiene dos columnas de masas (por ejemplo la permitida y la "technically permissible"), usa SIEMPRE la columna de la IZQUIERDA (la de menor valor) para todas: vehículo, conjunto y ejes. Masas solo con el número de kg.
+Si la foto es la placa del fabricante del vehículo (la que lleva bastidor, contraseña y masas en kg), rellena también "placa" (la contraseña tal cual, también la nacional de serie corta, como "e9*NKS*11364"); si no, "placa": null. En esas placas la 1.ª masa es la del vehículo, la 2.ª la del conjunto y las que empiezan por "1-", "2-"… son las de cada eje. Si la placa tiene dos columnas de masas (por ejemplo la permitida y la "technically permissible"), usa SIEMPRE la columna de la IZQUIERDA (la de menor valor) para todas: vehículo, conjunto y ejes. Masas solo con el número de kg.
 Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":["los demás textos que se lean en la foto, cortos"],"dudas":"","placa":{"marca":"","bastidor":"","contrasena":"","mma":"","mmtc":"","ejes":[""]}}`;
   // foto + instrucciones → el JSON que devuelve Google (también lo usan el pesaje, el plano de Putzmeister y el COC escaneado).
   // blob puede ser una lista de fotos o lienzos, o de {img, max}: la hoja entera y trozos ampliados de ella (25 oct: así le llega
@@ -4451,7 +4558,7 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
       if(cl==='indice'){const m=v.match(/\d{2,3}/);v=m?m[0]+'K':''} // Daniel: la letra de velocidad siempre K
       if((cl==='D'||cl==='U')&&v)v=v.replace(/[^\d.,]/g,'').replace('.',',');
       if(cl==='vin')v=v.replace(/[\s.\-]/g,'').toUpperCase();
-      if(cl==='banda')v=v.replace(/^[Ee]\s?\d{1,2}\s+(?=104R)/i,'');
+      if(cl==='banda')v=bandaE(v);
       if(cl==='categoria')v=v.toUpperCase();
       return v});
     return {val,lin:(o.textos||[]).map(x=>({t:norm(x),h:0})).filter(x=>x.t),dudas:norm(o.dudas),modelo,placa:o.placa&&typeof o.placa==='object'?o.placa:null};
@@ -4501,7 +4608,8 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
     const der=c.filter(x=>x.al>0&&Math.abs(x.ab)<0.8*Math.max(1,x.l.h/lab.h)).sort((a,b)=>a.al-b.al)[0];if(der)return der.l.t.trim();
     const deb=c.filter(x=>x.ab>0.3&&x.ab<3&&Math.abs((x.al-(x.l.w||0)/lab.h/2)-(-lw/2))<Math.max(1.5,lw/2)).sort((a,b)=>a.ab-b.ab)[0];return deb?deb.l.t.trim():''}
   // «e1*2018/858*00045» de las placas (la homologación del vehículo); la «e» a veces no sale: «1*2007/46*1060»
-  const WVTA=/(?:^|[^0-9A-Za-z])\(?[eE]?\s?(\d{1,2})\s?\*\s?(20\d\d\s?\/\s?\d{1,4})\s?\*\s?(\d{3,5})(?!\d)/;
+  // 23 nov (placas de Volvo de Daniel): también la homologación nacional de serie corta, «e9*NKS*11364» (y «KS»); la «e» a veces no sale: «9*NKS*11364»
+  const WVTA=/(?:^|[^0-9A-Za-z])\(?[eE]?\s?(\d{1,2})\s?\*\s?(20\d\d\s?\/\s?\d{1,4}|N?KS(?:\s?\d{2}\s?\/\s?\d{1,4})?)\s?\*\s?(\d{3,6})(?!\d)/;
   const wvta=t=>{const m=limpia(t).match(WVTA);return m?`E${m[1]}*${m[2].replace(/\s/g,'')}*${m[3]}`:''};
   // «58 R-0312092», «73R-011025*3», «104 R-000001», «58R - 03/03 2225»… con su E delante si va en la misma línea («E11)73R-011025:3»)
   const HOM=/(?:\(?\b[Ee]\s?(\d{1,2}|m)\s?\)?\s?|(?:^|[^0-9A-Za-z]))([0-9OIlT]{2,3})\s?R\s?[-=:.]?\s?(\d{2}\/\d{2}\s?\d{4}|\d{2}\s\d{4,6}(?!\d)|[0-9O]{5,8})(?:\s?[*:]\s?(\d)(?!\d))?/;
@@ -4562,13 +4670,15 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
   function marcaVeh(lin){
     for(const [re,n] of MARCAS)if(lin.some(l=>re.test(l.t)))return n;
     const b=bastidorDe(lin);return b&&WMI[b.slice(0,3)]||''}
+  // contraseña de las bandas reflectantes como la quiere Daniel (23 nov): «E4 104R-000001» (la E del país delante; si no se lee, E4)
+  function bandaE(v){v=norm(v);const m=v.match(/^(?:[Ee]\s?(\d{1,2})\W{0,3})?104\s?R\s?-?\s?(\S+)/i);return m?'E'+(m[1]||'4')+' 104R-'+m[2]:v}
   function proponer(cl,lin){
     const all=lin.map(l=>l.t).join('\n'),una=all.replace(/\n/g,' ');let m;
     if(cl==='marca'){const v=marcaVeh(lin);if(v)return v}
     switch(cl){
       case 'contr':return contrasena(lin,true);
       case 'luz':case 'ultfase':return contrasena(lin);
-      case 'banda':m=una.match(/104\s?R\s?-?\s?(\d{6})/i);return m?'104R-'+m[1]:'';
+      case 'banda':m=una.match(/(?:\b[Ee]\s?(\d{1,2})\W{0,3})?104\s?R\s?-?\s?(\d{5,6})/i);return m?'E'+(m[1]||'4')+' 104R-'+m[2]:'';
       case 'categoria':m=una.match(/\b([NO][1-4]G?)\b/);return m?m[1]:'';
       case 'cabina':m=una.match(/\b(CORTA|MEDIA|CON LITERA|DOBLE)\b/i);return m?m[1].toUpperCase():'';
       case 'vin':return bastidorDe(lin);
@@ -4609,7 +4719,11 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
     if(/zug|combina/i.test(s))return 'mmtc';if(/achsgruppe|axlegroup|grupo/i.test(s))return 'grupo';
     if(m=s.match(/(?:achse|ax[il]e|eje),?(\d)/i))return 'eje'+m[1];if(/gesamtgewicht|totalweight|m\.?m\.?a|^total\W*$/i.test(s))return 'mma';return ''}
   function placaLocal(lin){
-    const L=lin.map(l=>({...l,t:limpia(l.t)})),bastidor=bastidorDe(lin);
+    let L=lin.map(l=>({...l,t:limpia(l.t)}));const bastidor=bastidorDe(lin);
+    // placa fotografiada del revés (Volvo del 23 nov): el lector lee bien cada texto, pero las filas salen de abajo arriba y las masas
+    // se cogían al revés (MMA 10000). Si la mayoría de los textos va girada media vuelta, se da la vuelta a los sitios y al orden
+    {let sx=0,sy=0;for(const l of L)if(l.a!=null&&l.x!=null){sx+=Math.cos(l.a)*(l.w||1);sy+=Math.sin(l.a)*(l.w||1)}
+      if(sx<0&&Math.abs(sy)<-sx){L=L.map(l=>l.x==null?l:{...l,x:-l.x,y:-l.y}).reverse()}}
     const pl={bastidor,marca:marcaVeh(lin),contrasena:'',mma:'',mmtc:'',ejes:[]};
     for(const l of L){const w=wvta(l.t);if(w){pl.contrasena=w;break}}
     // lo que está a la misma altura que l: su etiqueta a la izquierda, su «kg» a la derecha (lo más cercano primero)
@@ -4678,6 +4792,14 @@ Devuelve solo JSON: {"valores":["uno por casilla, en el mismo orden"],"textos":[
     // la foto lee solo su casilla, como en Palfinger (si es la placa, los demás datos salen abajo en «También en la foto»);
     // tipo, variante y versión sí van juntos
     if(!pal()&&/^IDENTIFICACI/.test(x.sec)&&!/^(tipo|variante|versi.n)$/i.test(x.lab))return [i];
+    // general y Putzmeister (Daniel, 23 nov): marca y contraseña van en dos puntos seguidos (5.5-5.6, 6.2-6.3, 9.2-9.3); con una foto
+    // se leen las dos y se ponen con un toque (también en Palfinger: 8.2.2-8.2.3, 10.3.x.2-10.3.x.3). En los enganches (10.x), marca, tipo y homologación del mismo dispositivo.
+    if(r){const sec=r.closest('details.sec'),rows=sec?[...sec.querySelectorAll('.row')]:[r],k=rows.indexOf(r);
+      const cam=w=>w?[...w.querySelectorAll('input[data-camfoto]')]:[],pt=w=>norm(w&&w.querySelector('.ptxt')&&w.querySelector('.ptxt').textContent),pn=w=>!!(w&&w.querySelector('.pnum'));
+      if(/^marca/i.test(pt(r))&&/^contrase/i.test(pt(rows[k+1]))&&cam(rows[k+1]).length)return [...cam(r),...cam(rows[k+1])];
+      if(/^contrase/i.test(pt(r))&&/^marca/i.test(pt(rows[k-1]))&&cam(rows[k-1]).length)return [...cam(rows[k-1]),...cam(r)];
+      if(!pal()&&!pn(r)&&/MEC.NICOS DE ACOPLAMIENTO/.test(x.sec)){let a=k,b=k;while(a>0&&!pn(rows[a-1]))a--;while(b<rows.length-1&&!pn(rows[b+1]))b++;
+        return rows.slice(a,b+1).flatMap(cam)}}
     return [...r.querySelectorAll('input[data-camfoto]')]}
   function cerrar(r){const p=r.querySelector('.fotop');if(p){const im=p.querySelector('img');if(im&&im.src.startsWith('blob:'))URL.revokeObjectURL(im.src);p.remove()}}
   async function hacer(i,galeria){
@@ -4785,6 +4907,7 @@ const Dictar=(()=>{
 .mic-band{display:flex!important;align-items:center;gap:8px}
 .mic-band>.micg{margin-left:auto;flex:none;background:var(--panel);font-size:13px;padding:5px 10px 5px 8px;border-radius:999px}
 .mic-band>.micg svg{width:17px;height:17px}
+.micg.mic1{margin-left:auto;flex:none;width:30px;height:30px;padding:0;border-radius:50%;border-width:1.5px;background:transparent}.micg.mic1 svg{width:16px;height:16px}.micg.mic1.on{background:var(--accent);color:#fff}.mic1~.ay-q{margin-left:6px}
 .micg-sh{position:fixed;left:0;right:0;bottom:0;z-index:9000;max-height:84vh;max-height:84dvh;display:flex;flex-direction:column;gap:9px;padding:14px 14px calc(12px + env(safe-area-inset-bottom));background:var(--panel);color:var(--ink);border-radius:18px 18px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.28);border-top:3px solid var(--accent);box-sizing:border-box;max-width:640px;margin:0 auto;font-weight:400;text-transform:none;letter-spacing:0}
 .micg-sh .gh{display:flex;gap:10px;align-items:center}
 .micg-sh .pulso{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#fff;animation:micP 1.3s ease-in-out infinite}
@@ -4944,7 +5067,7 @@ const Dictar=(()=>{
     let s=codigo(R).toUpperCase().replace(/\s+/g,'');
     if(s.includes('*'))return (pre?pre.toLowerCase():'')+s; // e3*2007/46*0187*15
     s=s.replace(/^(\d{2,3})R-?(?=\d)/,'$1R-');
-    if(cls==='banda'){const m=(pre+s).match(/104R-?(\d+)/);if(m)return '104R-'+m[1]}
+    if(cls==='banda'){const m=s.match(/104R-?(\d+)/);if(m)return (pre||'E4')+' 104R-'+m[1]} // 23 nov: con la E delante (E4 si no la dice)
     return pre?pre+(s?' '+s:''):s}
   // el valor de una casilla de texto, como lo escribe Daniel
   function texto(cls,tk,raw){
@@ -5280,7 +5403,7 @@ const Dictar=(()=>{
         let dev=it.previousElementSibling;while(dev&&!dev.matches('h4'))dev=dev.previousElementSibling;if(dev&&!dev.matches('h4.dev'))dev=null;
         const nom=norm((dev?norm(dev.textContent)+' ':'')+(norm(lt)||tit.split(' · ').pop()));
         T.push({cont:it,pn:'',titulo:tit,corto:tit,nombre:nom,els,extra:'',sep:dev,sepT:dev?norm(dev.textContent):''})}}
-    else for(const r of scope.querySelectorAll('.row')){
+    else for(const r of (scope.matches&&scope.matches('.row')?[scope]:scope.querySelectorAll('.row'))){ // un punto solo: su micro (23 nov)
       if(r.closest('[hidden]')||r.classList.contains('band1')||r.classList.contains('band2'))continue;
       const pn=r.querySelector('.pnum'),els=[...r.querySelectorAll(SEL)];
       if(pn){const pt0=norm(r.querySelector('.ptxt')?.textContent).replace(/[¿?]/g,' ').trim(),pt=pt0.replace(/:\s*$/,''),ok=els.filter(dictable);
@@ -5372,7 +5495,12 @@ const Dictar=(()=>{
       const ok=m>=2||mnc===nc||[...us].some(q=>U[q].unico&&!ADJ.has(U[q].k[0])&&!U[q].cod);
       return ok||debil?{m,mnc,nc,sb,fin,ladoV,full:mnc===nc,orden:us.has(0)||us.has(1)&&/^\d$/.test(U[0].id),ids:[...us].map(q=>U[q].id)}:null};
     const aliasEn=k=>{let mejor=null;for(const t of T)for(const fr of t.alias||[]){const L=fr.length;if(k+L>n||!esNum(tk[k+L]||''))continue;
-      if(fr.every((st,j)=>st.has(tk[k+j]))&&(!mejor||L>mejor.L))mejor={t,L}}return mejor?{t:mejor.t,fin:k+mejor.L}:null};
+      if(fr.every((st,j)=>st.has(tk[k+j]))&&(!mejor||L>mejor.L))mejor={t,L}}if(!mejor)return null;
+      // «distancia entre ejes 2 y 3, 1000» (Daniel, 23 nov): los dos ejes que dice eligen la medida (D23), no siempre D12
+      let t=mejor.t,fin=k+mejor.L;const dg=w=>{const v=CIFW[w]!=null?String(CIFW[w]):w;return /^[1-5]$/.test(v)?+v:0};
+      const a=dg(tk[fin]);let j=fin+1;if(a&&/^(y|a|e|al|-)$/.test(tk[j]||''))j++;const b=a&&dg(tk[j]);
+      if(a&&b===a+1&&esNum(tk[j+1]||'')){const o=T.find(x=>new RegExp('^D'+a+b+':').test(String(x.nombre)));if(o){t=o;fin=j+1}}
+      return {t,fin}};
     const puntoN=k=>{const sec=(T.find(t=>t.pn)||{}).pn;if(!sec)return null;const s0=sec.split('.')[0];
       for(let len=3;len>=1;len--){const ws=tk.slice(k+1,k+1+len);if(ws.length<len||!ws.every(w=>esNum(w)))continue;
         const it=numeros(ws).items;let pn=null;
@@ -5426,6 +5554,8 @@ const Dictar=(()=>{
     const raw=norm(txt);ACC={};for(const w of raw.split(/[^A-Za-zÀ-ÿ0-9ñÑ]+/))if(w)ACC[llano(w)]=w;
     let tk=tokens(raw);const t2=[];for(let k=0;k<tk.length;k++){if(tk[k]==='ad'&&tk[k+1]==='blue'){t2.push('adblue');k++;continue}t2.push(tk[k])}tk=t2;
     const T=g.T,M=menciones(T,tk),items=new Map(),sin=[];
+    // micro de un punto (Daniel, 23 nov): todo lo que diga va a ese punto, aunque no lo nombre (si empieza nombrándolo, eso se salta)
+    if(g.uno&&T.length===1){const m0=M[0];M.length=0;M.push({k:0,fin:m0&&m0.k<=1&&m0.t===T[0]?m0.fin:0,t:T[0],dud:false})}
     const ante=tk.slice(0,M.length?M[0].k:tk.length).filter(w=>!RELLENO.has(w)&&!NEXO.has(w)&&!LADO[w]&&!/^(perfil|lado|parte|apartado|bloque)$/.test(w));
     if(ante.length)sin.push(acentos(tk.slice(0,M.length?M[0].k:tk.length).join(' ')));
     M.forEach((m,j)=>{const t=m.t,fin=j+1<M.length?M[j+1].k:tk.length;let seg=tk.slice(m.fin,fin);
@@ -5478,11 +5608,12 @@ const Dictar=(()=>{
       const it=por.get(t),v=it&&!it.nada?valTxt(it):'';
       h+=`<div class="gi${v?(it.dud||it.revisa?' dud':' si'):''}" data-t="${g.T.indexOf(t)}"><span class="pn${t.pn?'':' nada'}">${escH(t.pn||'·')}</span><span class="gn"><b>${escH(t.pista)}</b>${norm(t.nombre+' '+(t.det||'')).toLowerCase()!==t.pista.toLowerCase()?`<small>${escH(norm(t.nombre+' '+(t.det||'')))}</small>`:''}</span><span class="gv">${v?escH(v):'—'}</span></div>`}
     return h}
-  function ejemploG(g){const T=g.T.filter(t=>!t.preg),a=T[0],b=T[1];if(!a)return 'Di el nombre de cada punto y su respuesta: <b>«instala dispositivo sí»</b>.';
+  function ejemploG(g){const T=g.T.filter(t=>!t.preg),a=T[0],b=T[1];
+    if(g.uno&&a){const C=a.ctx.campos.filter(f=>f.kind!=='sel');return C.length>1?`Todo lo que digas va solo a este punto. Por ejemplo: <b>«${escH(C.slice(0,2).map(f=>f.nom.toLowerCase()+(f.kind==='num'?' 450':' …')).join(', '))}»</b>`:'Todo lo que digas va solo a este punto: di solo el dato'+(C[0]&&C[0].kind==='num'?', por ejemplo <b>«450»</b>.':'.')}if(!a)return 'Di el nombre de cada punto y su respuesta: <b>«instala dispositivo sí»</b>.';
     const ej=t=>t.ctx.campos.some(f=>f.kind==='num')?(t.ladoF?' derecha 450 izquierda 460':' 450'):' …';
     return `Por ejemplo: <b>«${escH(a.pista)}${ej(a)}${b?', '+escH(b.pista)+ej(b):''}»</b>`}
   function pintarEscuchaG(a){
-    const g=a.g,h=hoja(`<div class="gh"><span class="pulso">${MIC}</span><div class="mt"><b>Te escucho · ${escH(g.nombre)}</b>Di el punto y su dato. Puedes ir midiendo: escucho hasta que toques «Listo».</div><button type="button" class="x" data-gx aria-label="Cancelar">✕</button></div>
+    const g=a.g,h=hoja(`<div class="gh"><span class="pulso">${MIC}</span><div class="mt"><b>Te escucho · ${escH(g.nombre)}</b>${g.uno?'Di el dato de este punto.':'Di el punto y su dato.'} Puedes ir midiendo: escucho hasta que toques «Listo».</div><button type="button" class="x" data-gx aria-label="Cancelar">✕</button></div>
 <div class="ej">${ejemploG(g)}</div>
 <div class="txt"><i>…</i></div>
 <div class="gl">${listaPuntos(g,null)}</div>
@@ -5590,6 +5721,9 @@ ${a.info?`<small class="${a.mal?'mal':''}">${escH(a.info)}</small>`:''}${ya&&ya!
     g.b=b;b._g=g;
     b.onclick=e=>{e.preventDefault();e.stopPropagation();if(G&&G.g===g){listoG();return}escucharG(g)};
     return b}
+  // micro de cada punto (Daniel, 23 nov: «10.1.2 su micro, 10.1.3 otro, y que solo rellene ese punto»): redondo, al lado del «?»
+  function boton1(r){const pn=norm(r.querySelector('.pnum').textContent),pt=norm(r.querySelector('.ptxt')?r.querySelector('.ptxt').textContent:'');
+    const g={scope:r,nombre:(pn+' '+pt).trim(),uno:true},b=botonG(g,'');b.classList.add('mic1');b.innerHTML=MIC;b.title='Dictar solo el '+pn;b.setAttribute('aria-label','Dictar solo el punto '+pn);return b}
   function cuantos(scope){try{return objetivos(scope).length}catch(e){return 0}}
   function decorar(){
     // COP general, Putzmeister y Palfinger: arriba de cada apartado
@@ -5605,6 +5739,11 @@ ${a.info?`<small class="${a.mal?'mal':''}">${escH(a.info)}</small>`:''}${ya&&ya!
       const h=bk.querySelector(':scope>h3.sub,:scope>.row.band1,:scope>.row.band2');if(!h)continue;bk.dataset.micg='';
       if(cuantos(bk)<2)continue;
       h.classList.add('mic-band');h.appendChild(botonG({scope:bk,nombre:bk.dataset.title},'Dictar'))}
+    // cada punto con casillas para escribir: su micro en la cabecera
+    for(const r of document.querySelectorAll('details.sec .row:not([data-mic1])')){
+      if(r.closest('[hidden]'))continue;r.dataset.mic1='';const lb=r.querySelector('.lbl.first');if(!lb||!lb.querySelector('.pnum'))continue;
+      if(![...r.querySelectorAll(SEL)].some(dictable))continue;
+      const q=lb.querySelector('.ay-q'),b=boton1(r);if(q)q.before(b);else lb.appendChild(b)}
     // COP de máquinas: arriba de cada apartado
     for(const s of document.querySelectorAll('#maquinas details.msec:not([data-micg])')){
       if(!s.querySelector('.it'))continue;s.dataset.micg='';
@@ -7890,6 +8029,15 @@ window.ayFicha=function(d,titulo,svg){
  const vb=sh.querySelector('.vid'),vv=vb&&vb.querySelector('video');if(vv){vb.onclick=()=>{vb.classList.add('on');vv.controls=true;vv.play().catch(e=>console.log('PLAY',e+''))};vv.onended=()=>{vb.classList.remove('on');vv.controls=false;vv.load()}}
  const cerrar=()=>{bg.remove();sh.remove()};bg.onclick=cerrar;sh.querySelector('.ok').onclick=cerrar;
  sh.querySelector('.of').onclick=()=>{try{localStorage.setItem('ayuda-oculta','1')}catch(e){}document.querySelectorAll('.ay-q').forEach(b=>b.remove());cerrar()};
+ // 23 nov (Daniel): también se cierra arrastrándola hacia abajo (desde arriba de la ficha, también encima del vídeo)
+ let y0=null,dy=0;
+ sh.addEventListener('touchstart',e=>{if(sh.scrollTop>2||e.touches.length>1){y0=null;return}y0=e.touches[0].clientY;dy=0;sh.style.transition='none'},{passive:true});
+ sh.addEventListener('touchmove',e=>{if(y0==null)return;dy=e.touches[0].clientY-y0;
+  if(dy<=0){if(dy<-8){y0=null;sh.style.transform='';bg.style.opacity=''}return}
+  sh.style.transform=`translateY(${dy}px)`;bg.style.opacity=String(Math.max(0.15,1-dy/450));if(e.cancelable)e.preventDefault()},{passive:false});
+ const suelta=()=>{if(y0==null)return;y0=null;sh.style.transition='transform .2s ease-out,opacity .2s';
+  if(dy>80){sh.style.transform='translateY(105%)';bg.style.opacity='0';const v=sh.querySelector('video');if(v)try{v.pause()}catch(e){}setTimeout(cerrar,190)}else{sh.style.transform='';bg.style.opacity=''}};
+ sh.addEventListener('touchend',suelta);sh.addEventListener('touchcancel',suelta);
  document.body.append(bg,sh)};
 window.ayAbrir=function(pt,row){const d=A[pt];if(!d)return;const svg=row.querySelector('svg.dg');
  ayFicha({...d,dib:window.ayDib?.[pt]},`<b>${pt}</b>${row.querySelector('.ptxt').textContent}`,svg?svg.cloneNode(true):null)};
